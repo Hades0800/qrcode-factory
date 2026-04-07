@@ -448,7 +448,22 @@ $('closeScannerBtn').onclick = closeScanner;
 async function onScanSuccess(decodedText) {
   if (scanMode === 'order') {
     await closeScanner();
-    setOrder(decodedText);
+    // 顯示掃到的原始內容讓使用者確認/編輯
+    let raw = String(decodedText || '').trim();
+    // 嘗試從常見格式抽出工單號（URL 路徑最後一段、key=value 等）
+    let extracted = raw;
+    try {
+      if (/^https?:\/\//i.test(raw)) {
+        const u = new URL(raw);
+        // 先看 query 有沒有 order/no/id
+        const q = u.searchParams;
+        extracted = q.get('order') || q.get('orderNo') || q.get('no') || q.get('id') ||
+                    u.pathname.split('/').filter(Boolean).pop() || raw;
+      }
+    } catch (e) {}
+    $('orderInput').value = extracted;
+    toast('掃到：' + raw.slice(0, 40) + (raw.length > 40 ? '…' : '') + '，請確認後按確定', 'success');
+    $('orderInput').focus();
     return;
   }
 
