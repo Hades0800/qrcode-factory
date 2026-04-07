@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <title>工項 QR Code 列印</title>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <style>
   body { font-family: -apple-system, "Microsoft JhengHei", sans-serif; padding: 20px; background: #f4f6f8; }
   h1 { font-size: 18px; }
@@ -21,10 +20,10 @@
     text-align: center;
     page-break-inside: avoid;
   }
-  .qr-card canvas { display: block; margin: 8px auto; }
-  .qr-card .num { font-size: 28px; font-weight: 800; color: #1f3a5f; }
-  .qr-card .title { font-size: 15px; font-weight: 700; margin: 4px 0; }
-  .qr-card .hint { font-size: 11px; color: #666; min-height: 28px; }
+  .qr-card img { display: block; margin: 8px auto; width: 200px; height: 200px; }
+  .qr-card .num { font-size: 32px; font-weight: 800; color: #1f3a5f; line-height: 1; }
+  .qr-card .title { font-size: 16px; font-weight: 700; margin: 6px 0; }
+  .qr-card .hint { font-size: 12px; color: #666; min-height: 30px; }
   .qr-card .code { font-size: 11px; color: #999; margin-top: 4px; }
   @media print {
     body { background: #fff; padding: 0; }
@@ -38,32 +37,64 @@
 <h1>工項 QR Code（列印後貼於現場）</h1>
 <p class="tip">瀏覽器按 Ctrl/⌘+P 即可列印。建議印 A4，剪下後護貝貼在機台旁。</p>
 
-<div class="grid" id="grid"></div>
+<div class="grid">
 
-<script>
-const STEPS = [
-  { id: '1', title: '原料準備與設置',      hint: '' },
-  { id: '2', title: '模刀具準備與安裝',    hint: '' },
-  { id: '3', title: '試模與規格品質確認',  hint: '' },
-  { id: '4', title: '斷續試稼生產製造',    hint: '※超過5分鐘停滯需備註' },
-  { id: '5', title: '穩定連續生產製造',    hint: '' },
-  { id: '6', title: '後工程接續生產',      hint: '軋平／捲網／波浪網等' },
-  { id: '7', title: '生產異常或註記事項',  hint: '※需填寫異常內容' },
-];
+  <div class="qr-card">
+    <div class="num">1</div>
+    <div class="title">原料準備與設置</div>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=STEP%3A1" alt="STEP:1">
+    <div class="hint">&nbsp;</div>
+    <div class="code">STEP:1</div>
+  </div>
 
-const grid = document.getElementById('grid');
-STEPS.forEach(s => {
-  const card = document.createElement('div');
-  card.className = 'qr-card';
-  card.innerHTML =
-    '<div class="num">' + s.id + '</div>' +
-    '<div class="title">' + s.title + '</div>' +
-    '<canvas id="qr-' + s.id + '"></canvas>' +
-    '<div class="hint">' + s.hint + '</div>' +
-    '<div class="code">STEP:' + s.id + '</div>';
-  grid.appendChild(card);
-  QRCode.toCanvas(document.getElementById('qr-' + s.id), 'STEP:' + s.id, { width: 180, margin: 1 });
-});
-</script>
+  <div class="qr-card">
+    <div class="num">2</div>
+    <div class="title">模刀具準備與安裝</div>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=STEP%3A2" alt="STEP:2">
+    <div class="hint">&nbsp;</div>
+    <div class="code">STEP:2</div>
+  </div>
+
+  <div class="qr-card">
+    <div class="num">3</div>
+    <div class="title">試模與規格品質確認</div>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=STEP%3A3" alt="STEP:3">
+    <div class="hint">&nbsp;</div>
+    <div class="code">STEP:3</div>
+  </div>
+
+  <div class="qr-card">
+    <div class="num">4</div>
+    <div class="title">斷續試稼生產製造</div>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=STEP%3A4" alt="STEP:4">
+    <div class="hint">※超過5分鐘停滯需備註</div>
+    <div class="code">STEP:4</div>
+  </div>
+
+  <div class="qr-card">
+    <div class="num">5</div>
+    <div class="title">穩定連續生產製造</div>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=STEP%3A5" alt="STEP:5">
+    <div class="hint">&nbsp;</div>
+    <div class="code">STEP:5</div>
+  </div>
+
+  <div class="qr-card">
+    <div class="num">6</div>
+    <div class="title">後工程接續生產</div>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=STEP%3A6" alt="STEP:6">
+    <div class="hint">軋平／捲網／波浪網等</div>
+    <div class="code">STEP:6</div>
+  </div>
+
+  <div class="qr-card">
+    <div class="num">7</div>
+    <div class="title">生產異常或註記事項</div>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=STEP%3A7" alt="STEP:7">
+    <div class="hint">※需填寫異常內容</div>
+    <div class="code">STEP:7</div>
+  </div>
+
+</div>
 </body>
 </html>
