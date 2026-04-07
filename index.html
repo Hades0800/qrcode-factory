@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>廠務工單進度</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Microsoft JhengHei", sans-serif;
+    background: #f4f6f8;
+    color: #222;
+    padding-bottom: 40px;
+  }
+  header {
+    background: #1f3a5f;
+    color: #fff;
+    padding: 14px 16px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: 0 2px 6px rgba(0,0,0,.15);
+  }
+  header h1 { margin: 0; font-size: 18px; }
+  header .sub { font-size: 12px; opacity: .85; margin-top: 2px; }
+
+  .container { padding: 14px; max-width: 600px; margin: 0 auto; }
+
+  .card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  }
+  .card h2 { margin: 0 0 10px; font-size: 15px; color: #1f3a5f; }
+
+  label { display: block; font-size: 13px; color: #555; margin-bottom: 4px; }
+  input[type=text], textarea {
+    width: 100%;
+    padding: 10px;
+    font-size: 16px;
+    border: 1px solid #cfd4da;
+    border-radius: 6px;
+    background: #fff;
+  }
+  textarea { min-height: 70px; resize: vertical; }
+
+  button {
+    appearance: none;
+    border: none;
+    border-radius: 6px;
+    font-size: 15px;
+    padding: 11px 14px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .btn-primary { background: #1f6feb; color: #fff; }
+  .btn-primary:disabled { background: #9ab8e0; }
+  .btn-secondary { background: #6c757d; color: #fff; }
+  .btn-success { background: #2ea043; color: #fff; }
+  .btn-danger { background: #d73a49; color: #fff; }
+  .btn-block { width: 100%; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+
+  .step {
+    border: 1px solid #e1e4e8;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    background: #fff;
+    transition: background .2s;
+  }
+  .step.done { background: #e6f7ea; border-color: #2ea043; }
+  .step .title { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+  .step .hint { font-size: 12px; color: #666; margin-bottom: 8px; }
+  .step .time { font-size: 13px; color: #2ea043; font-weight: 600; margin-bottom: 8px; }
+  .step .note-text { font-size: 13px; color: #555; background: #f6f8fa; padding: 6px 8px; border-radius: 4px; margin-bottom: 8px; word-break: break-all; }
+
+  #scannerModal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.92);
+    z-index: 100;
+    flex-direction: column;
+    padding: 16px;
+  }
+  #scannerModal.show { display: flex; }
+  #scannerModal .modal-title { color: #fff; font-size: 16px; margin-bottom: 10px; text-align: center; }
+  #qr-reader { width: 100%; max-width: 480px; margin: 0 auto; background: #000; border-radius: 8px; overflow: hidden; }
+  #qr-reader video { border-radius: 8px; }
+  #scannerModal .close-btn { margin-top: 14px; }
+
+  #toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,.85);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    z-index: 200;
+    display: none;
+    max-width: 90%;
+    text-align: center;
+  }
+  #toast.show { display: block; }
+  #toast.error { background: #d73a49; }
+  #toast.success { background: #2ea043; }
+
+  .badge {
+    display: inline-block;
+    background: #e1e4e8;
+    color: #444;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-left: 6px;
+  }
+  .badge.ok { background: #2ea043; color: #fff; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>廠務工單進度記錄</h1>
+  <div class="sub" id="leaderShow">未設定小組長</div>
+</header>
+
+<div class="container">
+
+  <!-- 小組長設定 -->
+  <div class="card" id="leaderCard">
+    <h2>小組長</h2>
+    <label>請輸入姓名（會自動記住）</label>
+    <div class="row">
+      <input type="text" id="leaderInput" placeholder="例：王大明">
+      <button class="btn-primary" id="saveLeaderBtn" style="flex:0 0 80px;">儲存</button>
+    </div>
+  </div>
+
+  <!-- 工單 -->
+  <div class="card">
+    <h2>工單號</h2>
+    <div id="orderEmpty">
+      <button class="btn-primary btn-block" id="scanOrderBtn">掃描工單條碼</button>
+      <div style="text-align:center;margin:8px 0;color:#888;font-size:12px;">或</div>
+      <div class="row">
+        <input type="text" id="orderInput" placeholder="手動輸入工單號">
+        <button class="btn-secondary" id="setOrderBtn" style="flex:0 0 80px;">確定</button>
+      </div>
+    </div>
+    <div id="orderShow" style="display:none;">
+      <div style="font-size:20px;font-weight:700;color:#1f3a5f;" id="orderNoText"></div>
+      <div style="font-size:12px;color:#666;margin-top:4px;" id="orderUpdated"></div>
+      <button class="btn-secondary btn-block" id="changeOrderBtn" style="margin-top:10px;">更換工單</button>
+    </div>
+  </div>
+
+  <!-- 步驟區（動態生成） -->
+  <div id="stepsArea" style="display:none;"></div>
+
+</div>
+
+<!-- 掃描 Modal -->
+<div id="scannerModal">
+  <div class="modal-title" id="scannerTitle">請掃描 QR Code</div>
+  <div id="qr-reader"></div>
+  <button class="btn-danger close-btn" id="closeScannerBtn">取消</button>
+</div>
+
+<!-- 密碼鎖 -->
+<div id="lockModal" style="display:none;position:fixed;inset:0;background:#1f3a5f;z-index:300;flex-direction:column;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#fff;padding:24px;border-radius:12px;max-width:340px;width:100%;text-align:center;">
+    <div style="font-size:40px;margin-bottom:8px;">🔒</div>
+    <h2 style="margin:0 0 8px;font-size:18px;color:#1f3a5f;">系統存取密碼</h2>
+    <div style="font-size:13px;color:#666;margin-bottom:16px;">第一次使用請輸入密碼，僅需一次</div>
+    <input type="password" id="lockPwInput" placeholder="請輸入密碼" style="width:100%;padding:12px;font-size:16px;border:1px solid #cfd4da;border-radius:6px;margin-bottom:12px;">
+    <button class="btn-primary btn-block" id="lockSubmitBtn">解鎖</button>
+    <div id="lockError" style="color:#d73a49;font-size:13px;margin-top:10px;display:none;"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ====== 設定 ======
+// 部署 Apps Script 後，把 Web App URL 貼到這裡
+const API_URL = 'https://script.google.com/macros/s/AKfycbzGzQOPjTu1D7e31UVOq9XlExO0onUrelJwMlbmg6WE6Samr7UnhuSpd1Pj7JygQl29hw/exec';
+
+// 7 個工項定義
+const STEPS = [
+  { id: '1', title: '1. 原料準備與設置',      hint: '', needNote: false },
+  { id: '2', title: '2. 模刀具準備與安裝',    hint: '', needNote: false },
+  { id: '3', title: '3. 試模與規格品質確認',  hint: '', needNote: false },
+  { id: '4', title: '4. 斷續試稼生產製造',    hint: '若超過 5 分鐘停滯生產請註明',          needNote: true,  noteLabel: '備註（停滯說明）' },
+  { id: '5', title: '5. 穩定連續生產製造',    hint: '', needNote: false },
+  { id: '6', title: '6. 後工程接續生產',      hint: '軋平、捲網、波浪網等',                  needNote: false },
+  { id: '7', title: '7. 生產異常或註記事項',  hint: '設備故障、模具頓刀、品質異常、清潔清運、包裝入庫等', needNote: true,  noteLabel: '異常 / 註記內容' },
+];
+
+// 對應後端欄位名
+const FIELD_MAP = {
+  '1': { time: '1.原料準備', note: null },
+  '2': { time: '2.模刀具',   note: null },
+  '3': { time: '3.試模確認', note: null },
+  '4': { time: '4.斷續試稼', note: '4-備註' },
+  '5': { time: '5.穩定生產', note: null },
+  '6': { time: '6.後工程',   note: null },
+  '7': { time: '7.異常註記', note: '7-備註' },
+};
+
+// ====== State ======
+let leader = localStorage.getItem('leader') || '';
+let accessToken = localStorage.getItem('accessToken') || '';
+let orderNo = '';
+let orderRow = null;
+let scanner = null;
+let scanMode = null; // 'order' | 'step'
+
+// ====== Helpers ======
+function $(id) { return document.getElementById(id); }
+
+function toast(msg, type) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = '';
+  if (type) t.classList.add(type);
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+async function api(payload) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    // 用 text/plain 避免 CORS preflight
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(Object.assign({ token: accessToken }, payload)),
+  });
+  const data = await res.json();
+  if (data.code === 'unauthorized') {
+    localStorage.removeItem('accessToken');
+    accessToken = '';
+    showLock('密碼錯誤，請重新輸入');
+  }
+  return data;
+}
+
+// ====== 密碼鎖 ======
+function showLock(errMsg) {
+  $('lockModal').style.display = 'flex';
+  $('lockPwInput').value = '';
+  if (errMsg) {
+    $('lockError').textContent = errMsg;
+    $('lockError').style.display = 'block';
+  } else {
+    $('lockError').style.display = 'none';
+  }
+  setTimeout(() => $('lockPwInput').focus(), 100);
+}
+function hideLock() { $('lockModal').style.display = 'none'; }
+
+$('lockSubmitBtn').onclick = async () => {
+  const pw = $('lockPwInput').value.trim();
+  if (!pw) return;
+  accessToken = pw;
+  // 用 getOrder 一個假工單測試密碼
+  const test = await api({ action: 'getOrder', orderNo: '__pwtest__' });
+  if (test.code === 'unauthorized') return; // showLock 已經由 api() 觸發
+  if (!test.ok) { $('lockError').textContent = test.error || '驗證失敗'; $('lockError').style.display = 'block'; return; }
+  localStorage.setItem('accessToken', accessToken);
+  hideLock();
+  toast('已解鎖', 'success');
+};
+$('lockPwInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('lockSubmitBtn').click(); });
+
+// ====== 小組長 ======
+function renderLeader() {
+  $('leaderShow').textContent = leader ? ('小組長：' + leader) : '未設定小組長';
+  $('leaderInput').value = leader;
+}
+$('saveLeaderBtn').onclick = () => {
+  const v = $('leaderInput').value.trim();
+  if (!v) { toast('請輸入姓名', 'error'); return; }
+  leader = v;
+  localStorage.setItem('leader', leader);
+  renderLeader();
+  toast('已儲存', 'success');
+};
+
+// ====== 工單 ======
+async function setOrder(no) {
+  if (!leader) { toast('請先設定小組長', 'error'); return; }
+  no = String(no || '').trim();
+  if (!no) { toast('工單號不可空白', 'error'); return; }
+  const res = await api({ action: 'getOrder', orderNo: no });
+  if (!res.ok) { toast(res.error || '讀取失敗', 'error'); return; }
+  orderNo = no;
+  orderRow = res.row;
+  $('orderEmpty').style.display = 'none';
+  $('orderShow').style.display = 'block';
+  $('orderNoText').textContent = no;
+  $('orderUpdated').textContent = orderRow['最後更新'] ? ('最後更新：' + orderRow['最後更新']) : '尚未開始';
+  renderSteps();
+}
+
+$('setOrderBtn').onclick = () => setOrder($('orderInput').value);
+$('orderInput').addEventListener('keydown', e => { if (e.key === 'Enter') setOrder($('orderInput').value); });
+$('scanOrderBtn').onclick = () => openScanner('order');
+$('changeOrderBtn').onclick = () => {
+  orderNo = ''; orderRow = null;
+  $('orderEmpty').style.display = 'block';
+  $('orderShow').style.display = 'none';
+  $('orderInput').value = '';
+  $('stepsArea').style.display = 'none';
+};
+
+// ====== 步驟渲染 ======
+function renderSteps() {
+  const area = $('stepsArea');
+  area.style.display = 'block';
+  area.innerHTML = '';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'card';
+  wrap.innerHTML = '<h2>工項進度（每項只能掃一次）</h2>';
+
+  STEPS.forEach(s => {
+    const f = FIELD_MAP[s.id];
+    const time = orderRow[f.time];
+    const note = f.note ? orderRow[f.note] : '';
+    const done = !!time;
+
+    const div = document.createElement('div');
+    div.className = 'step' + (done ? ' done' : '');
+
+    let html = '<div class="title">' + s.title +
+      (done ? '<span class="badge ok">已完成</span>' : '<span class="badge">未完成</span>') +
+      '</div>';
+    if (s.hint) html += '<div class="hint">' + s.hint + '</div>';
+
+    if (done) {
+      html += '<div class="time">✓ ' + time + '</div>';
+      if (note) html += '<div class="note-text">📝 ' + escapeHtml(note) + '</div>';
+      html += '<button class="btn-danger btn-block" data-clear="' + s.id + '">取消此項紀錄</button>';
+    } else {
+      html += '<button class="btn-primary btn-block" data-scan="' + s.id + '">掃描完成此項</button>';
+    }
+
+    div.innerHTML = html;
+    wrap.appendChild(div);
+  });
+
+  area.appendChild(wrap);
+
+  // 綁定事件
+  area.querySelectorAll('[data-scan]').forEach(b => {
+    b.onclick = () => startStepScan(b.getAttribute('data-scan'));
+  });
+  area.querySelectorAll('[data-clear]').forEach(b => {
+    b.onclick = () => clearStep(b.getAttribute('data-clear'));
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ====== 步驟操作 ======
+let pendingStep = null;
+
+function startStepScan(stepId) {
+  if (!orderNo) { toast('請先設定工單', 'error'); return; }
+  pendingStep = stepId;
+  openScanner('step');
+}
+
+async function clearStep(stepId) {
+  if (!confirm('確定要取消「' + STEPS.find(s=>s.id===stepId).title + '」的紀錄嗎？')) return;
+  const res = await api({ action: 'clearStep', orderNo, step: stepId });
+  if (!res.ok) { toast(res.error || '失敗', 'error'); return; }
+  orderRow = res.row;
+  $('orderUpdated').textContent = '最後更新：' + (orderRow['最後更新'] || '');
+  renderSteps();
+  toast('已取消紀錄', 'success');
+}
+
+async function submitStep(stepId, note) {
+  const res = await api({ action: 'setStep', orderNo, leader, step: stepId, note: note || '' });
+  if (!res.ok) {
+    toast(res.error || '失敗', 'error');
+    if (res.row) { orderRow = res.row; renderSteps(); }
+    return;
+  }
+  orderRow = res.row;
+  $('orderUpdated').textContent = '最後更新：' + (orderRow['最後更新'] || '');
+  renderSteps();
+  toast('✓ 已記錄 ' + STEPS.find(s=>s.id===stepId).title, 'success');
+}
+
+// ====== 掃描器 ======
+function openScanner(mode) {
+  scanMode = mode;
+  $('scannerTitle').textContent = mode === 'order' ? '請對準工單條碼' : '請掃描工項 QR Code';
+  $('scannerModal').classList.add('show');
+
+  if (!scanner) {
+    scanner = new Html5Qrcode('qr-reader');
+  }
+  const config = { fps: 10, qrbox: { width: 260, height: 260 } };
+  scanner.start(
+    { facingMode: 'environment' },
+    config,
+    onScanSuccess,
+    () => {}
+  ).catch(err => {
+    toast('無法啟動相機：' + err, 'error');
+    closeScanner();
+  });
+}
+
+async function closeScanner() {
+  $('scannerModal').classList.remove('show');
+  if (scanner) {
+    try { await scanner.stop(); } catch(e) {}
+  }
+}
+
+$('closeScannerBtn').onclick = closeScanner;
+
+async function onScanSuccess(decodedText) {
+  if (scanMode === 'order') {
+    await closeScanner();
+    setOrder(decodedText);
+    return;
+  }
+
+  // step 模式：QR 內容必須是 STEP:n
+  const m = String(decodedText).match(/^STEP[:\-]?(\d)$/i);
+  if (!m) { toast('不是工項 QR：' + decodedText, 'error'); return; }
+  const scanned = m[1];
+  if (scanned !== pendingStep) {
+    toast('掃到的是項目 ' + scanned + '，但你選的是項目 ' + pendingStep, 'error');
+    return;
+  }
+  await closeScanner();
+
+  // 需要備註的項目
+  const stepDef = STEPS.find(s => s.id === pendingStep);
+  let note = '';
+  if (stepDef.needNote) {
+    note = prompt(stepDef.noteLabel + '：', '') || '';
+    if (!note.trim()) {
+      if (!confirm('沒有填寫備註，仍要記錄嗎？')) return;
+    }
+  }
+  await submitStep(pendingStep, note);
+  pendingStep = null;
+}
+
+// ====== 啟動 ======
+renderLeader();
+if (API_URL.startsWith('PASTE_')) {
+  toast('尚未設定 API_URL，請先部署 Apps Script', 'error');
+}
+if (!accessToken) {
+  showLock();
+}
+</script>
+</body>
+</html>
