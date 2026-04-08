@@ -366,6 +366,7 @@
     </div>
   </div>
   <div class="right">
+    <a href="records.html" id="recordsLink" style="display:none;">紀錄</a>
     <a href="#" id="adminLink" style="display:none;">管理</a>
     <a href="#" id="logoutLink" style="display:none;">登出</a>
   </div>
@@ -582,11 +583,13 @@ function renderHeader() {
   if (me) {
     $('leaderShow').textContent = '小組長：' + me.displayName + (me.isAdmin ? '（管理員）' : '');
     $('logoutLink').style.display = 'inline';
+    $('recordsLink').style.display = 'inline';
     $('adminLink').style.display = me.isAdmin ? 'inline' : 'none';
     $('adminLink').href = 'admin.html';
   } else {
     $('leaderShow').textContent = '未登入';
     $('logoutLink').style.display = 'none';
+    $('recordsLink').style.display = 'none';
     $('adminLink').style.display = 'none';
   }
 }

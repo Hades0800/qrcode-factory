@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>上鎧鋼鐵 - 工單紀錄</title>
+<link rel="icon" href="logo.jpg">
+<style>
+  :root {
+    --brand: #d23535;
+    --brand-dark: #a82828;
+    --brand-soft: #fdf2f2;
+    --ink: #1c1c1e;
+    --text: #2c2c2e;
+    --muted: #6e6e73;
+    --border: #e5e5ea;
+    --bg: #f2f2f5;
+    --card: #ffffff;
+    --success: #2ea043;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,.04);
+  }
+  header .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  header .brand img { height: 36px; width: auto; flex-shrink: 0; }
+  header .brand-text { border-left: 2px solid var(--border); padding-left: 12px; line-height: 1.2; }
+  header .brand-text .title { font-size: 14px; font-weight: 700; color: var(--ink); }
+  header .brand-text .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  header .right { display: flex; gap: 4px; }
+  header .right a {
+    color: var(--brand);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    padding: 6px 10px;
+    border-radius: 6px;
+  }
+  header .right a:hover { background: var(--brand-soft); }
+
+  .container { padding: 16px; max-width: 100%; margin: 0 auto; }
+  .card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.02);
+  }
+
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: end;
+  }
+  .toolbar .field { display: flex; flex-direction: column; }
+  .toolbar label {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .toolbar input, .toolbar select {
+    padding: 8px 10px;
+    font-size: 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--ink);
+  }
+  .toolbar input:focus, .toolbar select:focus {
+    outline: none;
+    border-color: var(--brand);
+  }
+  button {
+    appearance: none;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    padding: 9px 14px;
+    cursor: pointer;
+    font-weight: 600;
+    font-family: inherit;
+    transition: transform .08s, background .15s;
+  }
+  button:active { transform: scale(.98); }
+  .btn-primary { background: var(--brand); color: #fff; box-shadow: 0 2px 6px rgba(210,53,53,.2); }
+  .btn-primary:hover { background: var(--brand-dark); }
+  .btn-secondary { background: #f2f2f5; color: var(--ink); border: 1.5px solid var(--border); }
+  .btn-secondary:hover { background: #e8e8eb; }
+
+  .stats {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .stat-card {
+    flex: 1;
+    min-width: 140px;
+    background: #fff;
+    padding: 14px 16px;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    border-left: 3px solid var(--brand);
+  }
+  .stat-card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .stat-card .value { font-size: 22px; font-weight: 800; color: var(--ink); margin-top: 4px; }
+
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 900px; }
+  th {
+    color: var(--muted);
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    text-align: left;
+    padding: 12px 10px;
+    background: #fafafc;
+    position: sticky;
+    top: 0;
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+  }
+  td {
+    padding: 12px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    white-space: nowrap;
+  }
+  tr:hover { background: #fafafc; }
+  td.order-no { font-weight: 700; color: var(--ink); }
+  td.machine { color: var(--brand); font-weight: 600; }
+  td.step-time { font-size: 11px; color: var(--success); }
+  td.step-time.empty { color: #ccc; }
+  td.note { white-space: normal; max-width: 200px; font-size: 12px; color: var(--text); }
+
+  .empty {
+    text-align: center;
+    color: var(--muted);
+    padding: 60px 20px;
+    font-size: 14px;
+  }
+
+  #toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(28,28,30,.95);
+    color: #fff;
+    padding: 14px 22px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    display: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,.2);
+  }
+  #toast.show { display: block; }
+  #toast.error { background: var(--brand); }
+  #toast.success { background: var(--success); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <img src="logo.jpg" alt="上鎧鋼鐵">
+    <div class="brand-text">
+      <div class="title">工單紀錄</div>
+      <div class="sub" id="meShow"></div>
+    </div>
+  </div>
+  <div class="right">
+    <a href="index.html">← 掃描頁</a>
+    <a href="admin.html" id="adminLink" style="display:none;">管理</a>
+    <a href="#" id="logoutLink">登出</a>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="stats" id="stats"></div>
+
+  <div class="card">
+    <div class="toolbar">
+      <div class="field">
+        <label>關鍵字</label>
+        <input type="text" id="filterText" placeholder="工單號 / 機台 / 小組長">
+      </div>
+      <div class="field">
+        <label>開始日期</label>
+        <input type="date" id="filterFrom">
+      </div>
+      <div class="field">
+        <label>結束日期</label>
+        <input type="date" id="filterTo">
+      </div>
+      <div class="field">
+        <label>狀態</label>
+        <select id="filterStatus">
+          <option value="">全部</option>
+          <option value="done">已全部完成（7/7）</option>
+          <option value="ongoing">進行中</option>
+          <option value="empty">尚未開始</option>
+        </select>
+      </div>
+      <button class="btn-secondary" id="refreshBtn">🔄 重新整理</button>
+      <button class="btn-primary" id="exportBtn">📥 匯出 CSV</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table id="ordersTable">
+        <thead>
+          <tr>
+            <th>工單號</th>
+            <th>機台</th>
+            <th>小組長</th>
+            <th>進度</th>
+            <th>1.原料準備</th>
+            <th>2.模刀具</th>
+            <th>3.試模確認</th>
+            <th>4.斷續試稼</th>
+            <th>5.穩定生產</th>
+            <th>6.後工程</th>
+            <th>7.異常註記</th>
+            <th>4-備註</th>
+            <th>7-備註</th>
+            <th>最後更新</th>
+          </tr>
+        </thead>
+        <tbody id="ordersBody">
+          <tr><td colspan="14" class="empty">載入中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API_URL = 'https://shangkai-manu-record.zeabur.app';
+let token = localStorage.getItem('token') || '';
+let me = JSON.parse(localStorage.getItem('me') || 'null');
+let allOrders = [];
+
+function $(id) { return document.getElementById(id); }
+function toast(msg, type) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = '';
+  if (type) t.classList.add(type);
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fmtTimeShort(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function api(path, options = {}) {
+  try {
+    const headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const res = await fetch(API_URL + path, { method: options.method || 'GET', headers });
+    let data;
+    try { data = await res.json(); }
+    catch (e) { return { ok: false, error: '伺服器回應錯誤' }; }
+    if (res.status === 401) {
+      alert('登入已逾期');
+      location.href = 'index.html';
+      return { ok: false };
+    }
+    if (!res.ok) return { ok: false, error: data.error || '操作失敗' };
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: '網路錯誤：' + err.message };
+  }
+}
+
+if (!token || !me) {
+  alert('請先登入');
+  location.href = 'index.html';
+}
+$('meShow').textContent = me ? (me.displayName + (me.isAdmin ? '（管理員）' : '')) : '';
+if (me && me.isAdmin) $('adminLink').style.display = 'inline';
+$('logoutLink').onclick = e => {
+  e.preventDefault();
+  if (!confirm('登出？')) return;
+  localStorage.clear();
+  location.href = 'index.html';
+};
+
+async function loadOrders() {
+  $('ordersBody').innerHTML = '<tr><td colspan="14" class="empty">載入中...</td></tr>';
+  const r = await api('/api/orders?limit=200');
+  if (!r.ok) {
+    $('ordersBody').innerHTML = '<tr><td colspan="14" class="empty">' + (r.error || '載入失敗') + '</td></tr>';
+    return;
+  }
+  allOrders = r.data.orders || [];
+  render();
+}
+
+function render() {
+  const filtered = applyFilters(allOrders);
+
+  // 統計
+  const total = filtered.length;
+  const completed = filtered.filter(o => countDone(o) === 7).length;
+  const ongoing = filtered.filter(o => { const c = countDone(o); return c > 0 && c < 7; }).length;
+  $('stats').innerHTML = `
+    <div class="stat-card"><div class="label">總工單數</div><div class="value">${total}</div></div>
+    <div class="stat-card"><div class="label">已完成</div><div class="value">${completed}</div></div>
+    <div class="stat-card"><div class="label">進行中</div><div class="value">${ongoing}</div></div>
+  `;
+
+  if (filtered.length === 0) {
+    $('ordersBody').innerHTML = '<tr><td colspan="14" class="empty">沒有符合條件的工單</td></tr>';
+    return;
+  }
+
+  $('ordersBody').innerHTML = filtered.map(o => {
+    const done = countDone(o);
+    return `
+      <tr>
+        <td class="order-no">${escapeHtml(o.orderNo)}</td>
+        <td class="machine">${escapeHtml(o.machineNo)}</td>
+        <td>${escapeHtml(o.leaderName)}</td>
+        <td><strong>${done}/7</strong></td>
+        ${stepCell(o.step1At)}
+        ${stepCell(o.step2At)}
+        ${stepCell(o.step3At)}
+        ${stepCell(o.step4At)}
+        ${stepCell(o.step5At)}
+        ${stepCell(o.step6At)}
+        ${stepCell(o.step7At)}
+        <td class="note">${escapeHtml(o.step4Note)}</td>
+        <td class="note">${escapeHtml(o.step7Note)}</td>
+        <td style="font-size:11px;color:#666;">${escapeHtml(fmtTime(o.updatedAt))}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function stepCell(t) {
+  if (!t) return '<td class="step-time empty">—</td>';
+  return '<td class="step-time">✓ ' + escapeHtml(fmtTimeShort(t)) + '</td>';
+}
+
+function countDone(o) {
+  return ['step1At','step2At','step3At','step4At','step5At','step6At','step7At'].filter(k => o[k]).length;
+}
+
+function applyFilters(list) {
+  const text = $('filterText').value.trim().toLowerCase();
+  const from = $('filterFrom').value;
+  const to = $('filterTo').value;
+  const status = $('filterStatus').value;
+  return list.filter(o => {
+    if (text) {
+      const hay = (o.orderNo + ' ' + o.machineNo + ' ' + o.leaderName).toLowerCase();
+      if (!hay.includes(text)) return false;
+    }
+    if (from || to) {
+      const d = o.updatedAt ? new Date(o.updatedAt) : null;
+      if (!d) return false;
+      if (from && d < new Date(from + 'T00:00:00')) return false;
+      if (to && d > new Date(to + 'T23:59:59')) return false;
+    }
+    if (status) {
+      const c = countDone(o);
+      if (status === 'done' && c !== 7) return false;
+      if (status === 'ongoing' && (c === 0 || c === 7)) return false;
+      if (status === 'empty' && c !== 0) return false;
+    }
+    return true;
+  });
+}
+
+['filterText','filterFrom','filterTo','filterStatus'].forEach(id => {
+  $(id).addEventListener('input', render);
+  $(id).addEventListener('change', render);
+});
+$('refreshBtn').onclick = loadOrders;
+
+$('exportBtn').onclick = () => {
+  const filtered = applyFilters(allOrders);
+  if (filtered.length === 0) { toast('沒有資料可匯出', 'error'); return; }
+  const headers = ['工單號','機台','小組長','1.原料準備','2.模刀具','3.試模確認','4.斷續試稼','4-備註','5.穩定生產','6.後工程','7.異常註記','7-備註','最後更新'];
+  const rows = filtered.map(o => [
+    o.orderNo, o.machineNo, o.leaderName,
+    fmtTime(o.step1At), fmtTime(o.step2At), fmtTime(o.step3At), fmtTime(o.step4At),
+    o.step4Note || '', fmtTime(o.step5At), fmtTime(o.step6At), fmtTime(o.step7At),
+    o.step7Note || '', fmtTime(o.updatedAt),
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => {
+    const s = String(v == null ? '' : v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }).join(',')).join('\n');
+  // Excel 開 CSV 中文 — 加 BOM
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = `工單紀錄_${stamp}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('已下載 ' + filtered.length + ' 筆', 'success');
+};
+
+loadOrders();
+</script>
+</body>
+</html>
