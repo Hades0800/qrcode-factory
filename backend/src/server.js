@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { execSync } from 'child_process';
 
 import authRoutes from './routes/auth.js';
 import orderRoutes from './routes/orders.js';
@@ -97,6 +98,24 @@ async function ensureAdmin() {
 
 const port = Number(process.env.PORT || 8080);
 const host = '0.0.0.0';
+
+// 啟動時自動執行 prisma db push（建立 / 同步資料表）
+function runDbPush() {
+  if (!process.env.DATABASE_URL) {
+    console.error('⚠️ DATABASE_URL 未設定，跳過 prisma db push');
+    return;
+  }
+  try {
+    console.log('→ 執行 prisma db push...');
+    execSync('npx prisma db push --skip-generate --accept-data-loss', { stdio: 'inherit' });
+    console.log('✓ prisma db push 完成');
+  } catch (err) {
+    console.error('⚠️ prisma db push 失敗，但 server 仍會啟動，請訪問 /diag 看狀態：');
+    console.error(err.message);
+  }
+}
+
+runDbPush();
 
 // 不讓 ensureAdmin 失敗導致 server 不啟動 — 改成警告，server 仍要啟動方便除錯
 try {
