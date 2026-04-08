@@ -197,12 +197,12 @@
 
   <div class="card">
     <h2>新增小組長</h2>
-    <label>帳號（英數，登入用）</label>
-    <input type="text" id="newUsername" autocapitalize="none" placeholder="例：wang">
-    <label>顯示名稱（記錄到工單上的人名）</label>
+    <label>帳號（只能英數，登入用，例：wang、lin01）</label>
+    <input type="text" id="newUsername" autocapitalize="none" autocomplete="off" placeholder="例：wang" pattern="[a-zA-Z0-9_]+">
+    <label>顯示名稱（中文，記錄到工單上的人名）</label>
     <input type="text" id="newDisplayName" placeholder="例：王大明">
     <label>密碼（至少 6 字）</label>
-    <input type="password" id="newPassword">
+    <input type="password" id="newPassword" autocomplete="new-password">
     <div class="checkbox-row">
       <input type="checkbox" id="newIsAdmin">
       <label for="newIsAdmin" style="margin:0;">設為管理員</label>
@@ -320,6 +320,7 @@ $('createBtn').onclick = async () => {
   const password = $('newPassword').value;
   const isAdmin = $('newIsAdmin').checked;
   if (!username || !displayName || !password) { toast('請填寫完整', 'error'); return; }
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) { toast('帳號只能用英數和底線', 'error'); return; }
   if (password.length < 6) { toast('密碼至少 6 字', 'error'); return; }
   $('createBtn').disabled = true;
   const r = await api('/api/admin/leaders', { method: 'POST', body: { username, displayName, password, isAdmin } });
