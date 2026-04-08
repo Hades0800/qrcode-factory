@@ -275,8 +275,24 @@
     color: #fff;
   }
   .step .step-body { flex: 1; min-width: 0; }
-  .step .title { font-weight: 700; font-size: 15px; color: var(--ink); margin-bottom: 4px; }
-  .step .hint { font-size: 12px; color: var(--muted); margin-bottom: 10px; line-height: 1.4; }
+  .step .title {
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--ink);
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .step .hint {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 10px;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .step .time {
     font-size: 13px;
     color: var(--success);
