@@ -3,166 +3,367 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>廠務工單進度</title>
+<title>上鎧鋼鐵 - 廠務工單系統</title>
+<link rel="icon" href="logo.jpg">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
+  :root {
+    --brand: #d23535;
+    --brand-dark: #a82828;
+    --brand-soft: #fdf2f2;
+    --ink: #1c1c1e;
+    --text: #2c2c2e;
+    --muted: #6e6e73;
+    --border: #e5e5ea;
+    --bg: #f2f2f5;
+    --card: #ffffff;
+    --success: #2ea043;
+    --success-soft: #e6f7ea;
+  }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0;
-    font-family: -apple-system, "Microsoft JhengHei", sans-serif;
-    background: #f4f6f8;
-    color: #222;
+    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
     padding-bottom: 40px;
+    -webkit-font-smoothing: antialiased;
   }
+
+  /* Header */
   header {
-    background: #1f3a5f;
-    color: #fff;
-    padding: 14px 16px;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
     position: sticky;
     top: 0;
     z-index: 10;
-    box-shadow: 0 2px 6px rgba(0,0,0,.15);
     display: flex;
     align-items: center;
     justify-content: space-between;
+    box-shadow: 0 1px 4px rgba(0,0,0,.04);
   }
-  header h1 { margin: 0; font-size: 17px; }
-  header .sub { font-size: 12px; opacity: .85; margin-top: 2px; }
-  header .right { font-size: 12px; }
-  header .right a { color: #fff; opacity: .9; text-decoration: none; margin-left: 8px; }
+  header .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  header .brand img {
+    height: 36px;
+    width: auto;
+    flex-shrink: 0;
+  }
+  header .brand-text {
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    line-height: 1.2;
+    min-width: 0;
+  }
+  header .brand-text .title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  header .brand-text .sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  header .right { display: flex; gap: 4px; flex-shrink: 0; }
+  header .right a {
+    color: var(--brand);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    padding: 6px 10px;
+    border-radius: 6px;
+    transition: background .15s;
+  }
+  header .right a:hover { background: var(--brand-soft); }
 
-  .container { padding: 14px; max-width: 600px; margin: 0 auto; }
+  .container { padding: 16px; max-width: 600px; margin: 0 auto; }
 
   .card {
-    background: #fff;
-    border-radius: 10px;
-    padding: 14px;
-    margin-bottom: 12px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    background: var(--card);
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.02);
   }
-  .card h2 { margin: 0 0 10px; font-size: 15px; color: #1f3a5f; }
+  .card h2 {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
 
-  label { display: block; font-size: 13px; color: #555; margin-bottom: 4px; }
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
   input[type=text], input[type=password], textarea {
     width: 100%;
-    padding: 10px;
+    padding: 13px 14px;
     font-size: 16px;
-    border: 1px solid #cfd4da;
-    border-radius: 6px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
     background: #fff;
+    color: var(--ink);
+    transition: border-color .15s;
+  }
+  input[type=text]:focus, input[type=password]:focus, textarea:focus {
+    outline: none;
+    border-color: var(--brand);
   }
   textarea { min-height: 70px; resize: vertical; }
 
   button {
     appearance: none;
     border: none;
-    border-radius: 6px;
+    border-radius: 10px;
     font-size: 15px;
-    padding: 11px 14px;
+    padding: 13px 16px;
     cursor: pointer;
     font-weight: 600;
+    font-family: inherit;
+    transition: transform .08s, opacity .15s, background .15s;
   }
-  .btn-primary { background: #1f6feb; color: #fff; }
-  .btn-primary:disabled { background: #9ab8e0; }
-  .btn-secondary { background: #6c757d; color: #fff; }
-  .btn-success { background: #2ea043; color: #fff; }
-  .btn-danger { background: #d73a49; color: #fff; }
+  button:active { transform: scale(.98); }
+  button:disabled { opacity: .5; }
+  .btn-primary { background: var(--brand); color: #fff; box-shadow: 0 2px 6px rgba(210,53,53,.25); }
+  .btn-primary:hover:not(:disabled) { background: var(--brand-dark); }
+  .btn-secondary { background: #f2f2f5; color: var(--ink); border: 1.5px solid var(--border); }
+  .btn-secondary:hover { background: #e8e8eb; }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-danger { background: #fff; color: var(--brand); border: 1.5px solid var(--brand); }
+  .btn-danger:hover { background: var(--brand-soft); }
   .btn-block { width: 100%; }
-  .row { display: flex; gap: 8px; }
+  .row { display: flex; gap: 10px; }
   .row > * { flex: 1; }
 
+  /* 工單顯示 */
+  .order-display {
+    text-align: center;
+    padding: 8px 0;
+  }
+  .order-display .label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .order-display .num {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--ink);
+    letter-spacing: -.5px;
+    margin-bottom: 6px;
+    word-break: break-all;
+  }
+  .order-display .updated {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* Steps */
   .step {
-    border: 1px solid #e1e4e8;
-    border-radius: 8px;
-    padding: 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
     margin-bottom: 10px;
     background: #fff;
+    transition: all .15s;
   }
-  .step.done { background: #e6f7ea; border-color: #2ea043; }
-  .step .title { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
-  .step .hint { font-size: 12px; color: #666; margin-bottom: 8px; }
-  .step .time { font-size: 13px; color: #2ea043; font-weight: 600; margin-bottom: 8px; }
-  .step .note-text { font-size: 13px; color: #555; background: #f6f8fa; padding: 6px 8px; border-radius: 4px; margin-bottom: 8px; word-break: break-all; }
+  .step.done {
+    background: var(--success-soft);
+    border-color: var(--success);
+  }
+  .step .title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  .step .title { font-weight: 700; font-size: 15px; color: var(--ink); flex: 1; }
+  .step .hint { font-size: 12px; color: var(--muted); margin-bottom: 10px; line-height: 1.4; }
+  .step .time {
+    font-size: 13px;
+    color: var(--success);
+    font-weight: 600;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .step .note-text {
+    font-size: 13px;
+    color: var(--text);
+    background: rgba(255,255,255,.7);
+    padding: 8px 10px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    word-break: break-all;
+    border-left: 3px solid var(--success);
+  }
 
+  .badge {
+    display: inline-block;
+    background: var(--border);
+    color: var(--muted);
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .badge.ok { background: var(--success); color: #fff; }
+
+  /* 進度條 */
+  .progress-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding: 10px 14px;
+    background: var(--brand-soft);
+    border-radius: 10px;
+    border-left: 3px solid var(--brand);
+  }
+  .progress-summary .text {
+    flex: 1;
+    font-size: 13px;
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .progress-summary .count {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--brand);
+  }
+
+  /* Scanner Modal */
   #scannerModal {
     display: none;
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,.92);
+    background: rgba(0,0,0,.95);
     z-index: 100;
     flex-direction: column;
-    padding: 16px;
+    padding: 20px;
   }
   #scannerModal.show { display: flex; }
-  #scannerModal .modal-title { color: #fff; font-size: 16px; margin-bottom: 10px; text-align: center; }
-  #qr-reader { width: 100%; max-width: 480px; margin: 0 auto; background: #000; border-radius: 8px; overflow: hidden; }
-  #qr-reader video { border-radius: 8px; }
-  #scannerModal .close-btn { margin-top: 14px; }
+  #scannerModal .modal-title {
+    color: #fff;
+    font-size: 17px;
+    margin-bottom: 14px;
+    text-align: center;
+    font-weight: 600;
+  }
+  #qr-reader { width: 100%; max-width: 480px; margin: 0 auto; background: #000; border-radius: 12px; overflow: hidden; }
+  #qr-reader video { border-radius: 12px; }
+  #scannerModal .close-btn { margin-top: 16px; max-width: 480px; margin-left: auto; margin-right: auto; width: 100%; }
 
+  /* Toast */
   #toast {
     position: fixed;
     bottom: 30px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(0,0,0,.85);
+    background: rgba(28,28,30,.95);
     color: #fff;
-    padding: 12px 20px;
-    border-radius: 8px;
+    padding: 14px 22px;
+    border-radius: 12px;
     font-size: 14px;
+    font-weight: 600;
     z-index: 200;
     display: none;
     max-width: 90%;
     text-align: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,.2);
   }
   #toast.show { display: block; }
-  #toast.error { background: #d73a49; }
-  #toast.success { background: #2ea043; }
-
-  .badge {
-    display: inline-block;
-    background: #e1e4e8;
-    color: #444;
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: 10px;
-    margin-left: 6px;
-  }
-  .badge.ok { background: #2ea043; color: #fff; }
+  #toast.error { background: var(--brand); }
+  #toast.success { background: var(--success); }
 
   /* 登入畫面 */
   #loginScreen {
     display: none;
     position: fixed;
     inset: 0;
-    background: linear-gradient(135deg, #1f3a5f, #2c5a8e);
+    background: linear-gradient(160deg, #ffffff 0%, #faf0f0 100%);
     z-index: 300;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 24px;
   }
   #loginScreen.show { display: flex; }
+  #loginScreen .logo-area {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  #loginScreen .logo-area img {
+    width: 220px;
+    max-width: 80vw;
+    height: auto;
+    margin-bottom: 8px;
+  }
   #loginScreen .login-box {
     background: #fff;
-    padding: 28px 24px;
-    border-radius: 12px;
-    max-width: 360px;
+    padding: 28px 26px;
+    border-radius: 18px;
+    max-width: 380px;
     width: 100%;
-    box-shadow: 0 10px 30px rgba(0,0,0,.2);
+    box-shadow: 0 20px 60px rgba(168,40,40,.12), 0 0 0 1px rgba(0,0,0,.04);
   }
-  #loginScreen h2 { margin: 0 0 4px; font-size: 20px; color: #1f3a5f; text-align: center; }
-  #loginScreen .login-sub { text-align: center; color: #666; font-size: 13px; margin-bottom: 20px; }
-  #loginScreen label { margin-top: 10px; }
-  #loginScreen .login-error { color: #d73a49; font-size: 13px; margin-top: 12px; min-height: 18px; text-align: center; }
-  #loginScreen .login-btn { margin-top: 16px; }
+  #loginScreen h2 {
+    margin: 0 0 4px;
+    font-size: 20px;
+    color: var(--ink);
+    text-align: center;
+    font-weight: 700;
+  }
+  #loginScreen .login-sub {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 22px;
+  }
+  #loginScreen label { margin-top: 14px; }
+  #loginScreen .login-error {
+    color: var(--brand);
+    font-size: 13px;
+    margin-top: 14px;
+    min-height: 18px;
+    text-align: center;
+    font-weight: 500;
+  }
+  #loginScreen .login-btn { margin-top: 20px; }
 </style>
 </head>
 <body>
 
 <header>
-  <div>
-    <h1>廠務工單進度</h1>
-    <div class="sub" id="leaderShow">未登入</div>
+  <div class="brand">
+    <img src="logo.jpg" alt="上鎧鋼鐵">
+    <div class="brand-text">
+      <div class="title">廠務工單系統</div>
+      <div class="sub" id="leaderShow">未登入</div>
+    </div>
   </div>
   <div class="right">
     <a href="#" id="adminLink" style="display:none;">管理</a>
@@ -175,17 +376,20 @@
   <div class="card">
     <h2>工單號</h2>
     <div id="orderEmpty">
-      <button class="btn-primary btn-block" id="scanOrderBtn">掃描工單條碼</button>
-      <div style="text-align:center;margin:8px 0;color:#888;font-size:12px;">或</div>
+      <button class="btn-primary btn-block" id="scanOrderBtn">📷 掃描工單條碼</button>
+      <div style="text-align:center;margin:12px 0;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px;">或</div>
       <div class="row">
         <input type="text" id="orderInput" placeholder="手動輸入工單號">
-        <button class="btn-secondary" id="setOrderBtn" style="flex:0 0 80px;">確定</button>
+        <button class="btn-secondary" id="setOrderBtn" style="flex:0 0 90px;">確定</button>
       </div>
     </div>
     <div id="orderShow" style="display:none;">
-      <div style="font-size:20px;font-weight:700;color:#1f3a5f;" id="orderNoText"></div>
-      <div style="font-size:12px;color:#666;margin-top:4px;" id="orderUpdated"></div>
-      <button class="btn-secondary btn-block" id="changeOrderBtn" style="margin-top:10px;">更換工單</button>
+      <div class="order-display">
+        <div class="label">目前工單</div>
+        <div class="num" id="orderNoText"></div>
+        <div class="updated" id="orderUpdated"></div>
+      </div>
+      <button class="btn-secondary btn-block" id="changeOrderBtn" style="margin-top:14px;">更換工單</button>
     </div>
   </div>
 
@@ -202,6 +406,9 @@
 
 <!-- 登入畫面 -->
 <div id="loginScreen">
+  <div class="logo-area">
+    <img src="logo.jpg" alt="上鎧鋼鐵 SHANG KAI STEEL">
+  </div>
   <div class="login-box">
     <h2>廠務工單系統</h2>
     <div class="login-sub">請使用小組長帳號登入</div>
@@ -397,7 +604,16 @@ function renderSteps() {
   area.innerHTML = '';
   const wrap = document.createElement('div');
   wrap.className = 'card';
-  wrap.innerHTML = '<h2>工項進度（每項只能掃一次）</h2>';
+
+  // 進度統計
+  const doneCount = STEPS.filter(s => order[STEP_FIELD[s.id].time]).length;
+  wrap.innerHTML = `
+    <h2>工項進度</h2>
+    <div class="progress-summary">
+      <div class="text">已完成 ${doneCount} / ${STEPS.length} 項</div>
+      <div class="count">${Math.round(doneCount / STEPS.length * 100)}%</div>
+    </div>
+  `;
 
   STEPS.forEach(s => {
     const f = STEP_FIELD[s.id];
@@ -406,7 +622,7 @@ function renderSteps() {
     const done = !!time;
     const div = document.createElement('div');
     div.className = 'step' + (done ? ' done' : '');
-    let html = '<div class="title">' + s.title +
+    let html = '<div class="title-row"><div class="title">' + s.title + '</div>' +
       (done ? '<span class="badge ok">已完成</span>' : '<span class="badge">未完成</span>') + '</div>';
     if (s.hint) html += '<div class="hint">' + s.hint + '</div>';
     if (done) {
@@ -414,7 +630,7 @@ function renderSteps() {
       if (note) html += '<div class="note-text">📝 ' + escapeHtml(note) + '</div>';
       html += '<button class="btn-danger btn-block" data-clear="' + s.id + '">取消此項紀錄</button>';
     } else {
-      html += '<button class="btn-primary btn-block" data-scan="' + s.id + '">掃描完成此項</button>';
+      html += '<button class="btn-primary btn-block" data-scan="' + s.id + '">📷 掃描完成此項</button>';
     }
     div.innerHTML = html;
     wrap.appendChild(div);

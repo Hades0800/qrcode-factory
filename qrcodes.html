@@ -2,18 +2,30 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<title>工項 QR Code 列印</title>
+<title>上鎧鋼鐵 - 工項 QR Code 列印</title>
+<link rel="icon" href="logo.jpg">
 <style>
   @page { size: A4 portrait; margin: 10mm; }
   * { box-sizing: border-box; }
   body {
-    font-family: -apple-system, "Microsoft JhengHei", "PingFang TC", sans-serif;
+    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
     margin: 0;
     padding: 10mm;
     background: #fff;
     color: #000;
   }
-  h1 { font-size: 16pt; margin: 0 0 4mm; text-align: center; }
+  .header-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8mm;
+    margin-bottom: 4mm;
+    padding-bottom: 3mm;
+    border-bottom: 2px solid #d23535;
+  }
+  .header-row img { height: 14mm; width: auto; }
+  .header-row h1 { font-size: 14pt; margin: 0; color: #1c1c1e; font-weight: 800; }
+  .header-row .sub { font-size: 9pt; color: #666; margin-top: 1mm; }
   .grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -21,7 +33,7 @@
     width: 100%;
   }
   .qr-card {
-    border: 2px solid #000;
+    border: 2px solid #1c1c1e;
     border-radius: 4mm;
     padding: 3mm;
     text-align: center;
@@ -30,10 +42,15 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 60mm;
+    min-height: 58mm;
   }
-  .qr-card .num { font-size: 24pt; font-weight: 900; line-height: 1; color: #1f3a5f; }
-  .qr-card .title { font-size: 12pt; font-weight: 700; margin: 1mm 0; }
+  .qr-card .num {
+    font-size: 24pt;
+    font-weight: 900;
+    line-height: 1;
+    color: #d23535;
+  }
+  .qr-card .title { font-size: 12pt; font-weight: 700; margin: 1mm 0; color: #1c1c1e; }
   .qr-card img { display: block; width: 38mm; height: 38mm; margin: 1mm 0; }
   .qr-card .hint { font-size: 8pt; color: #555; min-height: 4mm; }
   .qr-card .code { font-size: 7pt; color: #888; }
@@ -41,11 +58,22 @@
     body { padding: 0; }
     .tip { display: none; }
   }
-  .tip { font-size: 11pt; color: #555; text-align: center; margin-bottom: 4mm; }
+  .tip {
+    font-size: 10pt;
+    color: #666;
+    text-align: center;
+    margin-bottom: 4mm;
+  }
 </style>
 </head>
 <body>
-<h1>廠務工項 QR Code</h1>
+<div class="header-row">
+  <img src="logo.jpg" alt="上鎧鋼鐵">
+  <div>
+    <h1>廠務工項 QR Code</h1>
+    <div class="sub">SHANG KAI STEEL · 廠務工單系統</div>
+  </div>
+</div>
 <p class="tip">Cmd/Ctrl+P 列印 A4。剪下後護貝貼於現場機台。</p>
 
 <div class="grid">

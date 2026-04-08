@@ -3,97 +3,193 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>廠務工單系統 - 管理</title>
+<title>上鎧鋼鐵 - 帳號管理</title>
+<link rel="icon" href="logo.jpg">
 <style>
-  * { box-sizing: border-box; }
+  :root {
+    --brand: #d23535;
+    --brand-dark: #a82828;
+    --brand-soft: #fdf2f2;
+    --ink: #1c1c1e;
+    --text: #2c2c2e;
+    --muted: #6e6e73;
+    --border: #e5e5ea;
+    --bg: #f2f2f5;
+    --card: #ffffff;
+    --success: #2ea043;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0;
-    font-family: -apple-system, "Microsoft JhengHei", sans-serif;
-    background: #f4f6f8;
-    color: #222;
+    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
   }
   header {
-    background: #1f3a5f;
-    color: #fff;
-    padding: 14px 16px;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,.04);
   }
-  header h1 { margin: 0; font-size: 17px; }
-  header a { color: #fff; font-size: 13px; text-decoration: none; opacity: .9; }
-  .container { padding: 14px; max-width: 720px; margin: 0 auto; }
+  header .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  header .brand img { height: 36px; width: auto; flex-shrink: 0; }
+  header .brand-text {
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    line-height: 1.2;
+  }
+  header .brand-text .title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  header .brand-text .sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  header .right { display: flex; gap: 4px; }
+  header .right a {
+    color: var(--brand);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    padding: 6px 10px;
+    border-radius: 6px;
+  }
+  header .right a:hover { background: var(--brand-soft); }
+
+  .container { padding: 16px; max-width: 760px; margin: 0 auto; }
   .card {
-    background: #fff;
-    border-radius: 10px;
-    padding: 16px;
-    margin-bottom: 12px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    background: var(--card);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.02);
   }
-  .card h2 { margin: 0 0 12px; font-size: 16px; color: #1f3a5f; }
-  label { display: block; font-size: 13px; color: #555; margin: 8px 0 4px; }
+  .card h2 {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin: 12px 0 6px;
+    font-weight: 500;
+  }
   input[type=text], input[type=password] {
     width: 100%;
-    padding: 10px;
+    padding: 13px 14px;
     font-size: 15px;
-    border: 1px solid #cfd4da;
-    border-radius: 6px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    color: var(--ink);
+    transition: border-color .15s;
+  }
+  input[type=text]:focus, input[type=password]:focus {
+    outline: none;
+    border-color: var(--brand);
   }
   button {
     appearance: none;
     border: none;
-    border-radius: 6px;
+    border-radius: 10px;
     font-size: 14px;
-    padding: 9px 14px;
+    padding: 11px 16px;
     cursor: pointer;
     font-weight: 600;
+    font-family: inherit;
+    transition: transform .08s, background .15s;
   }
-  .btn-primary { background: #1f6feb; color: #fff; }
-  .btn-secondary { background: #6c757d; color: #fff; }
-  .btn-danger { background: #d73a49; color: #fff; }
-  .btn-block { width: 100%; padding: 12px; }
-  .checkbox-row { display: flex; align-items: center; gap: 6px; margin: 10px 0; font-size: 14px; }
+  button:active { transform: scale(.98); }
+  .btn-primary { background: var(--brand); color: #fff; box-shadow: 0 2px 6px rgba(210,53,53,.2); }
+  .btn-primary:hover { background: var(--brand-dark); }
+  .btn-secondary { background: #f2f2f5; color: var(--ink); border: 1.5px solid var(--border); }
+  .btn-secondary:hover { background: #e8e8eb; }
+  .btn-danger { background: #fff; color: var(--brand); border: 1.5px solid var(--brand); }
+  .btn-danger:hover { background: var(--brand-soft); }
+  .btn-block { width: 100%; padding: 14px; margin-top: 8px; }
+
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 0;
+    font-size: 14px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border-radius: 8px;
+  }
+  .checkbox-row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--brand); }
+
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #eee; }
-  th { color: #666; font-weight: 600; font-size: 13px; }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+  th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+
   .badge {
     display: inline-block;
-    background: #2ea043;
+    background: var(--brand);
     color: #fff;
-    font-size: 11px;
-    padding: 2px 8px;
+    font-size: 10px;
+    padding: 3px 8px;
     border-radius: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-left: 4px;
   }
-  .row-actions button { padding: 5px 10px; font-size: 12px; margin-right: 4px; }
+  .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .row-actions button { padding: 7px 12px; font-size: 12px; }
+
   #toast {
     position: fixed;
     bottom: 30px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(0,0,0,.85);
+    background: rgba(28,28,30,.95);
     color: #fff;
-    padding: 12px 20px;
-    border-radius: 8px;
+    padding: 14px 22px;
+    border-radius: 12px;
     font-size: 14px;
+    font-weight: 600;
     display: none;
     max-width: 90%;
     text-align: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,.2);
   }
   #toast.show { display: block; }
-  #toast.error { background: #d73a49; }
-  #toast.success { background: #2ea043; }
+  #toast.error { background: var(--brand); }
+  #toast.success { background: var(--success); }
 </style>
 </head>
 <body>
 
 <header>
-  <div>
-    <h1>管理 - 小組長帳號</h1>
-    <div style="font-size:12px;opacity:.85;" id="meShow"></div>
+  <div class="brand">
+    <img src="logo.jpg" alt="上鎧鋼鐵">
+    <div class="brand-text">
+      <div class="title">帳號管理</div>
+      <div class="sub" id="meShow"></div>
+    </div>
   </div>
-  <div>
+  <div class="right">
     <a href="index.html">← 回掃描頁</a>
-    &nbsp; <a href="#" id="logoutLink">登出</a>
+    <a href="#" id="logoutLink">登出</a>
   </div>
 </header>
 
