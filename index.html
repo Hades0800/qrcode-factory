@@ -701,12 +701,40 @@ function renderSteps() {
   });
 
   area.appendChild(wrap);
+
+  // 完成送出 — 清空目前狀態回到掃工單畫面
+  const finishCard = document.createElement('div');
+  finishCard.className = 'card';
+  finishCard.style.background = 'var(--brand)';
+  finishCard.innerHTML = `
+    <div style="text-align:center;color:#fff;margin-bottom:10px;font-size:13px;font-weight:600;">完成此工單後可掃下一張</div>
+    <button class="btn-block" id="finishBtn" style="background:#fff;color:var(--brand);font-size:16px;padding:16px;border-radius:10px;border:none;font-weight:700;">✓ 完成送出，掃下一張工單</button>
+  `;
+  area.appendChild(finishCard);
+
   area.querySelectorAll('[data-scan]').forEach(b => {
     b.onclick = () => startStepScan(b.getAttribute('data-scan'));
   });
   area.querySelectorAll('[data-clear]').forEach(b => {
     b.onclick = () => clearStep(b.getAttribute('data-clear'));
   });
+  $('finishBtn').onclick = finishOrder;
+}
+
+function finishOrder() {
+  if (!confirm('確定完成此工單並掃下一張？\n\n（資料已自動儲存，可隨時回頭查看紀錄）')) return;
+  orderNo = ''; order = null;
+  $('orderEmpty').style.display = 'block';
+  $('orderShow').style.display = 'none';
+  $('orderInput').value = '';
+  $('machineCard').style.display = 'none';
+  $('machineEmpty').style.display = 'block';
+  $('machineShow').style.display = 'none';
+  $('machineInput').value = '';
+  $('stepsArea').style.display = 'none';
+  toast('已完成，請掃下一張工單', 'success');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  setTimeout(() => $('orderInput').focus(), 300);
 }
 
 // ====== 步驟操作 ======
