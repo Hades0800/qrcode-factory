@@ -46,16 +46,23 @@
     border-left: 2px solid var(--border);
     padding-left: 12px;
     line-height: 1.2;
+    min-width: 0;
   }
   header .brand-text .title {
     font-size: 14px;
     font-weight: 700;
     color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   header .brand-text .sub {
     font-size: 11px;
     color: var(--muted);
     margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   header .right { display: flex; gap: 4px; }
   header .right a {
