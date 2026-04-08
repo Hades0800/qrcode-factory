@@ -245,10 +245,11 @@
             <th>4-備註</th>
             <th>7-備註</th>
             <th>最後更新</th>
+            <th id="actionTh" style="display:none;">操作</th>
           </tr>
         </thead>
         <tbody id="ordersBody">
-          <tr><td colspan="14" class="empty">載入中...</td></tr>
+          <tr><td colspan="15" class="empty">載入中...</td></tr>
         </tbody>
       </table>
     </div>
@@ -314,7 +315,10 @@ if (!token || !me) {
   location.href = 'index.html';
 }
 $('meShow').textContent = me ? (me.displayName + (me.isAdmin ? '（管理員）' : '')) : '';
-if (me && me.isAdmin) $('adminLink').style.display = 'inline';
+if (me && me.isAdmin) {
+  $('adminLink').style.display = 'inline';
+  $('actionTh').style.display = '';
+}
 $('logoutLink').onclick = e => {
   e.preventDefault();
   if (!confirm('登出？')) return;
@@ -347,10 +351,11 @@ function render() {
   `;
 
   if (filtered.length === 0) {
-    $('ordersBody').innerHTML = '<tr><td colspan="14" class="empty">沒有符合條件的工單</td></tr>';
+    $('ordersBody').innerHTML = '<tr><td colspan="15" class="empty">沒有符合條件的工單</td></tr>';
     return;
   }
 
+  const isAdmin = me && me.isAdmin;
   $('ordersBody').innerHTML = filtered.map(o => {
     const done = countDone(o);
     return `
@@ -369,9 +374,23 @@ function render() {
         <td class="note">${escapeHtml(o.step4Note)}</td>
         <td class="note">${escapeHtml(o.step7Note)}</td>
         <td style="font-size:11px;color:#666;">${escapeHtml(fmtTime(o.updatedAt))}</td>
+        ${isAdmin ? `<td><button class="btn-secondary" data-del="${escapeHtml(o.orderNo)}" style="padding:6px 12px;font-size:12px;color:var(--brand);border-color:var(--brand);">刪除</button></td>` : ''}
       </tr>
     `;
   }).join('');
+
+  $('ordersBody').querySelectorAll('[data-del]').forEach(b => {
+    b.onclick = () => deleteOrder(b.getAttribute('data-del'));
+  });
+}
+
+async function deleteOrder(orderNo) {
+  if (!confirm('確定刪除工單「' + orderNo + '」？\n\n⚠️ 此動作無法復原，所有掃描紀錄都會消失。')) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo), { method: 'DELETE' });
+  if (!r.ok) { toast(r.error || '刪除失敗', 'error'); return; }
+  allOrders = allOrders.filter(o => o.orderNo !== orderNo);
+  render();
+  toast('已刪除 ' + orderNo, 'success');
 }
 
 function stepCell(t) {

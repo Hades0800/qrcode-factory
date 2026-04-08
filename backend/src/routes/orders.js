@@ -130,6 +130,18 @@ export default async function orderRoutes(fastify) {
     return { order: serializeOrder(updated) };
   });
 
+  // 刪除工單（僅管理員）
+  fastify.delete('/:orderNo', async (request, reply) => {
+    if (!request.user.isAdmin) {
+      return reply.code(403).send({ error: '只有管理員可以刪除工單' });
+    }
+    const { orderNo } = request.params;
+    const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
+    if (!order) return reply.code(404).send({ error: '找不到工單' });
+    await fastify.prisma.order.delete({ where: { orderNo } });
+    return { ok: true };
+  });
+
   // 列出近期工單（給管理者或自己查）
   fastify.get('/', async (request) => {
     const limit = Math.min(Number(request.query.limit) || 50, 200);
