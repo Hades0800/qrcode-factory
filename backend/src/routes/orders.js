@@ -12,6 +12,7 @@ function serializeOrder(o) {
   if (!o) return null;
   return {
     orderNo: o.orderNo,
+    machineNo: o.machineNo || '',
     leaderId: o.leaderId,
     leaderName: o.leader?.displayName || '',
     step1At: o.step1At,
@@ -46,6 +47,28 @@ export default async function orderRoutes(fastify) {
       });
     }
     return { order: serializeOrder(order) };
+  });
+
+  // 設定機台號
+  fastify.post('/:orderNo/machine', async (request, reply) => {
+    const { orderNo } = request.params;
+    const { machineNo } = request.body || {};
+    if (!orderNo) return reply.code(400).send({ error: '缺少工單號' });
+    if (!machineNo || !String(machineNo).trim()) {
+      return reply.code(400).send({ error: '機台號不可空白' });
+    }
+    let order = await fastify.prisma.order.findUnique({ where: { orderNo } });
+    if (!order) {
+      order = await fastify.prisma.order.create({
+        data: { orderNo, leaderId: request.user.id },
+      });
+    }
+    const updated = await fastify.prisma.order.update({
+      where: { orderNo },
+      data: { machineNo: String(machineNo).trim().slice(0, 60), leaderId: request.user.id },
+      include: { leader: true },
+    });
+    return { order: serializeOrder(updated) };
   });
 
   // 紀錄某步驟

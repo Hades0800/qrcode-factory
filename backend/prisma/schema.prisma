@@ -21,6 +21,7 @@ model Leader {
 model Order {
   id        Int      @id @default(autoincrement())
   orderNo   String   @unique
+  machineNo String?
   leaderId  Int?
   leader    Leader?  @relation(fields: [leaderId], references: [id])
 

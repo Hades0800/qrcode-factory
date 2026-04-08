@@ -393,6 +393,26 @@
     </div>
   </div>
 
+  <!-- 機台號（必填） -->
+  <div class="card" id="machineCard" style="display:none;">
+    <h2>機台號 <span style="color:var(--brand);">*必填</span></h2>
+    <div id="machineEmpty">
+      <button class="btn-primary btn-block" id="scanMachineBtn">📷 掃描機台 QR</button>
+      <div style="text-align:center;margin:12px 0;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px;">或</div>
+      <div class="row">
+        <input type="text" id="machineInput" placeholder="手動輸入機台號（例：No1）">
+        <button class="btn-secondary" id="setMachineBtn" style="flex:0 0 90px;">確定</button>
+      </div>
+    </div>
+    <div id="machineShow" style="display:none;">
+      <div class="order-display">
+        <div class="label">機台</div>
+        <div class="num" id="machineNoText" style="font-size:24px;color:var(--brand);"></div>
+      </div>
+      <button class="btn-secondary btn-block" id="changeMachineBtn" style="margin-top:14px;">更換機台</button>
+    </div>
+  </div>
+
   <!-- 步驟區（動態生成） -->
   <div id="stepsArea" style="display:none;"></div>
 </div>
@@ -583,7 +603,7 @@ async function setOrder(no) {
   $('orderShow').style.display = 'block';
   $('orderNoText').textContent = no;
   $('orderUpdated').textContent = order.updatedAt ? ('最後更新：' + fmtTime(order.updatedAt)) : '尚未開始';
-  renderSteps();
+  renderMachine();
 }
 
 $('setOrderBtn').onclick = () => setOrder($('orderInput').value);
@@ -594,7 +614,48 @@ $('changeOrderBtn').onclick = () => {
   $('orderEmpty').style.display = 'block';
   $('orderShow').style.display = 'none';
   $('orderInput').value = '';
+  $('machineCard').style.display = 'none';
   $('stepsArea').style.display = 'none';
+};
+
+// ====== 機台 ======
+function renderMachine() {
+  $('machineCard').style.display = 'block';
+  if (order && order.machineNo) {
+    $('machineEmpty').style.display = 'none';
+    $('machineShow').style.display = 'block';
+    $('machineNoText').textContent = order.machineNo;
+    renderSteps();
+  } else {
+    $('machineEmpty').style.display = 'block';
+    $('machineShow').style.display = 'none';
+    $('stepsArea').style.display = 'none';
+    setTimeout(() => $('machineInput').focus(), 100);
+  }
+}
+
+async function setMachine(no) {
+  no = String(no || '').trim();
+  if (!no) { toast('機台號不可空白', 'error'); return; }
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/machine', {
+    method: 'POST',
+    body: { machineNo: no },
+  });
+  if (!r.ok) { toast(r.error, 'error'); return; }
+  order = r.data.order;
+  toast('機台已設定：' + no, 'success');
+  renderMachine();
+}
+
+$('setMachineBtn').onclick = () => setMachine($('machineInput').value);
+$('machineInput').addEventListener('keydown', e => { if (e.key === 'Enter') setMachine($('machineInput').value); });
+$('scanMachineBtn').onclick = () => openScanner('machine');
+$('changeMachineBtn').onclick = () => {
+  $('machineEmpty').style.display = 'block';
+  $('machineShow').style.display = 'none';
+  $('machineInput').value = '';
+  $('stepsArea').style.display = 'none';
+  setTimeout(() => $('machineInput').focus(), 100);
 };
 
 // ====== 步驟渲染 ======
@@ -681,7 +742,12 @@ async function submitStep(stepId, note) {
 // ====== 掃描器 ======
 function openScanner(mode) {
   scanMode = mode;
-  $('scannerTitle').textContent = mode === 'order' ? '請對準工單條碼' : '請掃描工項 QR Code';
+  const titles = {
+    'order': '請對準工單條碼',
+    'machine': '請對準機台 QR Code',
+    'step': '請掃描工項 QR Code',
+  };
+  $('scannerTitle').textContent = titles[mode] || '請掃描 QR Code';
   $('scannerModal').classList.add('show');
   if (!scanner) scanner = new Html5Qrcode('qr-reader');
   scanner.start(
@@ -722,6 +788,22 @@ async function onScanSuccess(decodedText) {
     return;
   }
 
+  if (scanMode === 'machine') {
+    await closeScanner();
+    let raw = String(decodedText || '').trim();
+    let extracted = raw;
+    try {
+      if (/^https?:\/\//i.test(raw)) {
+        const u = new URL(raw);
+        extracted = u.searchParams.get('machine') || u.pathname.split('/').filter(Boolean).pop() || raw;
+      }
+    } catch (e) {}
+    $('machineInput').value = extracted;
+    toast('掃到：' + raw.slice(0, 40) + (raw.length > 40 ? '…' : '') + '，請確認後按確定', 'success');
+    $('machineInput').focus();
+    return;
+  }
+
   // step 模式
   const m = String(decodedText).match(/^STEP[:\-]?(\d)$/i);
   if (!m) { toast('不是工項 QR：' + decodedText, 'error'); return; }
@@ -732,13 +814,11 @@ async function onScanSuccess(decodedText) {
   }
   await closeScanner();
 
+  // 工項全部非必填 — 4/7 仍提供備註輸入但可留白，不再彈確認框
   const stepDef = STEPS.find(s => s.id === pendingStep);
   let note = '';
   if (stepDef.needNote) {
-    note = prompt(stepDef.noteLabel + '：', '') || '';
-    if (!note.trim()) {
-      if (!confirm('沒有填寫備註，仍要記錄嗎？')) return;
-    }
+    note = prompt(stepDef.noteLabel + '（可留白）：', '') || '';
   }
   await submitStep(pendingStep, note);
   pendingStep = null;
