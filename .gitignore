@@ -1,0 +1,5 @@
+memory/
+qrcodes.pdf
+.DS_Store
+node_modules/
+.env

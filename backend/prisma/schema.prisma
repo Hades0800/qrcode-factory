@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Leader {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String
+  displayName  String
+  isAdmin      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  orders Order[]
+}
+
+model Order {
+  id        Int      @id @default(autoincrement())
+  orderNo   String   @unique
+  leaderId  Int?
+  leader    Leader?  @relation(fields: [leaderId], references: [id])
+
+  step1At   DateTime?
+  step2At   DateTime?
+  step3At   DateTime?
+  step4At   DateTime?
+  step4Note String?
+  step5At   DateTime?
+  step6At   DateTime?
+  step7At   DateTime?
+  step7Note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderNo])
+}
