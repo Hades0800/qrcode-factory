@@ -41,6 +41,29 @@ fastify.decorate('requireAdmin', async (request, reply) => {
 fastify.get('/', async () => ({ ok: true, msg: '工單記錄系統 API 運作中' }));
 fastify.get('/health', async () => ({ ok: true }));
 
+// 診斷端點（測 DB 連線、列出環境變數狀態，密碼遮蔽）
+fastify.get('/diag', async () => {
+  const env = {
+    DATABASE_URL: process.env.DATABASE_URL ? '已設定 (' + process.env.DATABASE_URL.slice(0, 25) + '...)' : '❌ 未設定',
+    JWT_SECRET: process.env.JWT_SECRET ? '已設定' : '❌ 未設定',
+    ADMIN_USERNAME: process.env.ADMIN_USERNAME || '❌ 未設定',
+    ADMIN_PASSWORD: process.env.ADMIN_PASSWORD ? '已設定' : '❌ 未設定',
+    ADMIN_NAME: process.env.ADMIN_NAME || '❌ 未設定',
+  };
+  let dbStatus = 'unknown';
+  let dbError = null;
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    dbStatus = '✓ 連線成功';
+  } catch (err) {
+    dbStatus = '❌ 連線失敗';
+    dbError = String(err.message || err);
+  }
+  let leaderCount = null;
+  try { leaderCount = await prisma.leader.count(); } catch (e) { leaderCount = 'error: ' + e.message; }
+  return { env, dbStatus, dbError, leaderCount };
+});
+
 // 路由
 await fastify.register(authRoutes, { prefix: '/api/auth' });
 await fastify.register(orderRoutes, { prefix: '/api/orders' });
@@ -75,11 +98,20 @@ async function ensureAdmin() {
 const port = Number(process.env.PORT || 8080);
 const host = '0.0.0.0';
 
+// 不讓 ensureAdmin 失敗導致 server 不啟動 — 改成警告，server 仍要啟動方便除錯
 try {
   await ensureAdmin();
-  await fastify.listen({ port, host });
-  console.log(`Listening on ${host}:${port}`);
 } catch (err) {
-  fastify.log.error(err);
+  console.error('⚠️ ensureAdmin 失敗，但 server 仍會啟動，可訪問 /diag 看狀態：');
+  console.error(err);
+}
+
+try {
+  await fastify.listen({ port, host });
+  console.log(`✓ Listening on ${host}:${port}`);
+  console.log(`✓ 測試: GET https://你的網址/diag 可看 DB 連線狀態`);
+} catch (err) {
+  console.error('❌ 無法啟動 server:');
+  console.error(err);
   process.exit(1);
 }
