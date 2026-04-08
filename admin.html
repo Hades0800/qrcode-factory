@@ -38,18 +38,20 @@
   header .brand {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     min-width: 0;
+    flex: 1;
   }
-  header .brand img { height: 36px; width: auto; flex-shrink: 0; }
+  header .brand img { height: 30px; width: auto; flex-shrink: 0; }
   header .brand-text {
     border-left: 2px solid var(--border);
-    padding-left: 12px;
+    padding-left: 10px;
     line-height: 1.2;
     min-width: 0;
+    flex: 1;
   }
   header .brand-text .title {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--ink);
     white-space: nowrap;
@@ -64,14 +66,21 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  header .right { display: flex; gap: 4px; }
+  header .right { display: flex; gap: 2px; flex-shrink: 0; }
   header .right a {
     color: var(--brand);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     text-decoration: none;
-    padding: 6px 10px;
+    padding: 6px 8px;
     border-radius: 6px;
+    white-space: nowrap;
+  }
+  @media (max-width: 480px) {
+    header .brand img { height: 26px; }
+    header .brand-text { padding-left: 8px; }
+    header .brand-text .title { font-size: 12px; }
+    header .right a { font-size: 11px; padding: 5px 7px; }
   }
   header .right a:hover { background: var(--brand-soft); }
 
@@ -195,7 +204,7 @@
     </div>
   </div>
   <div class="right">
-    <a href="index.html">← 掃描頁</a>
+    <a href="index.html">掃描</a>
     <a href="records.html">紀錄</a>
     <a href="#" id="logoutLink">登出</a>
   </div>
