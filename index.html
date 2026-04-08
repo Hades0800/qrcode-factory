@@ -2,9 +2,14 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="上鎧鋼鐵">
+<meta name="theme-color" content="#d23535">
 <title>上鎧鋼鐵 - 廠務工單系統</title>
 <link rel="icon" href="logo.jpg">
+<link rel="apple-touch-icon" href="logo.jpg">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
   :root {
@@ -19,15 +24,18 @@
     --card: #ffffff;
     --success: #2ea043;
     --success-soft: #e6f7ea;
+    --safe-top: env(safe-area-inset-top, 0);
+    --safe-bottom: env(safe-area-inset-bottom, 0);
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
   body {
     margin: 0;
     font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
     background: var(--bg);
     color: var(--text);
-    padding-bottom: 40px;
     -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: contain;
   }
 
   /* Header */
@@ -35,6 +43,7 @@
     background: #fff;
     border-bottom: 1px solid var(--border);
     padding: 12px 16px;
+    padding-top: calc(12px + var(--safe-top));
     position: sticky;
     top: 0;
     z-index: 10;
@@ -46,17 +55,17 @@
   header .brand {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     min-width: 0;
   }
   header .brand img {
-    height: 36px;
+    height: 32px;
     width: auto;
     flex-shrink: 0;
   }
   header .brand-text {
     border-left: 2px solid var(--border);
-    padding-left: 12px;
+    padding-left: 10px;
     line-height: 1.2;
     min-width: 0;
   }
@@ -71,39 +80,58 @@
   header .brand-text .sub {
     font-size: 11px;
     color: var(--muted);
-    margin-top: 2px;
+    margin-top: 1px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  header .right { display: flex; gap: 4px; flex-shrink: 0; }
+  header .right { display: flex; gap: 2px; flex-shrink: 0; }
   header .right a {
     color: var(--brand);
     font-size: 13px;
     font-weight: 600;
     text-decoration: none;
-    padding: 6px 10px;
-    border-radius: 6px;
-    transition: background .15s;
+    padding: 8px 10px;
+    border-radius: 8px;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
   }
   header .right a:hover { background: var(--brand-soft); }
 
-  .container { padding: 16px; max-width: 600px; margin: 0 auto; }
+  .container {
+    padding: 14px;
+    max-width: 600px;
+    margin: 0 auto;
+    padding-bottom: calc(120px + var(--safe-bottom));
+  }
 
   .card {
     background: var(--card);
-    border-radius: 14px;
-    padding: 18px;
-    margin-bottom: 14px;
+    border-radius: 16px;
+    padding: 18px 16px;
+    margin-bottom: 12px;
     box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.02);
   }
   .card h2 {
     margin: 0 0 14px;
-    font-size: 13px;
+    font-size: 12px;
     color: var(--muted);
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
+    letter-spacing: .8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .card h2 .required {
+    background: var(--brand);
+    color: #fff;
+    font-size: 9px;
+    padding: 2px 8px;
+    border-radius: 10px;
     letter-spacing: .5px;
+    font-weight: 700;
   }
 
   label {
@@ -115,43 +143,76 @@
   }
   input[type=text], input[type=password], textarea {
     width: 100%;
-    padding: 13px 14px;
-    font-size: 16px;
+    padding: 16px;
+    font-size: 17px;
     border: 1.5px solid var(--border);
-    border-radius: 10px;
+    border-radius: 12px;
     background: #fff;
     color: var(--ink);
-    transition: border-color .15s;
+    transition: border-color .15s, box-shadow .15s;
+    -webkit-appearance: none;
+    appearance: none;
   }
   input[type=text]:focus, input[type=password]:focus, textarea:focus {
     outline: none;
     border-color: var(--brand);
+    box-shadow: 0 0 0 3px rgba(210,53,53,.12);
   }
   textarea { min-height: 70px; resize: vertical; }
 
   button {
     appearance: none;
     border: none;
-    border-radius: 10px;
-    font-size: 15px;
-    padding: 13px 16px;
+    border-radius: 12px;
+    font-size: 16px;
+    padding: 16px;
     cursor: pointer;
-    font-weight: 600;
+    font-weight: 700;
     font-family: inherit;
-    transition: transform .08s, opacity .15s, background .15s;
+    transition: transform .08s, opacity .15s, background .15s, box-shadow .15s;
+    min-height: 52px;
+    touch-action: manipulation;
   }
-  button:active { transform: scale(.98); }
+  button:active { transform: scale(.97); }
   button:disabled { opacity: .5; }
-  .btn-primary { background: var(--brand); color: #fff; box-shadow: 0 2px 6px rgba(210,53,53,.25); }
+  .btn-primary {
+    background: var(--brand);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(210,53,53,.3);
+  }
   .btn-primary:hover:not(:disabled) { background: var(--brand-dark); }
-  .btn-secondary { background: #f2f2f5; color: var(--ink); border: 1.5px solid var(--border); }
-  .btn-secondary:hover { background: #e8e8eb; }
+  .btn-primary:active { box-shadow: 0 2px 6px rgba(210,53,53,.3); }
+  .btn-secondary {
+    background: #fff;
+    color: var(--ink);
+    border: 1.5px solid var(--border);
+  }
+  .btn-secondary:hover { background: #f7f7f9; }
   .btn-success { background: var(--success); color: #fff; }
   .btn-danger { background: #fff; color: var(--brand); border: 1.5px solid var(--brand); }
   .btn-danger:hover { background: var(--brand-soft); }
   .btn-block { width: 100%; }
   .row { display: flex; gap: 10px; }
   .row > * { flex: 1; }
+
+  .or-divider {
+    display: flex;
+    align-items: center;
+    margin: 14px 0;
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 600;
+  }
+  .or-divider::before, .or-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  .or-divider::before { margin-right: 12px; }
+  .or-divider::after { margin-left: 12px; }
 
   /* 工單顯示 */
   .order-display {
@@ -162,16 +223,18 @@
     font-size: 11px;
     color: var(--muted);
     text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 4px;
+    letter-spacing: 1.2px;
+    margin-bottom: 6px;
+    font-weight: 600;
   }
   .order-display .num {
-    font-size: 28px;
+    font-size: 30px;
     font-weight: 800;
     color: var(--ink);
     letter-spacing: -.5px;
     margin-bottom: 6px;
     word-break: break-all;
+    line-height: 1.1;
   }
   .order-display .updated {
     font-size: 12px;
@@ -181,32 +244,44 @@
   /* Steps */
   .step {
     border: 1.5px solid var(--border);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 14px;
     margin-bottom: 10px;
     background: #fff;
     transition: all .15s;
+    display: flex;
+    gap: 14px;
   }
   .step.done {
     background: var(--success-soft);
     border-color: var(--success);
   }
-  .step .title-row {
+  .step .step-num {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: var(--bg);
+    color: var(--muted);
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    margin-bottom: 4px;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 800;
+    transition: all .2s;
   }
-  .step .title { font-weight: 700; font-size: 15px; color: var(--ink); flex: 1; }
+  .step.done .step-num {
+    background: var(--success);
+    color: #fff;
+  }
+  .step .step-body { flex: 1; min-width: 0; }
+  .step .title { font-weight: 700; font-size: 15px; color: var(--ink); margin-bottom: 4px; }
   .step .hint { font-size: 12px; color: var(--muted); margin-bottom: 10px; line-height: 1.4; }
   .step .time {
     font-size: 13px;
     color: var(--success);
     font-weight: 600;
     margin-bottom: 10px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
   }
   .step .note-text {
     font-size: 13px;
@@ -218,6 +293,7 @@
     word-break: break-all;
     border-left: 3px solid var(--success);
   }
+  .step button { font-size: 15px; padding: 13px; min-height: 48px; }
 
   .badge {
     display: inline-block;
@@ -229,6 +305,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: .5px;
+    margin-left: 6px;
   }
   .badge.ok { background: var(--success); color: #fff; }
 
@@ -236,12 +313,12 @@
   .progress-summary {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     margin-bottom: 14px;
-    padding: 10px 14px;
-    background: var(--brand-soft);
-    border-radius: 10px;
-    border-left: 3px solid var(--brand);
+    padding: 14px 16px;
+    background: linear-gradient(135deg, var(--brand-soft), #ffffff);
+    border-radius: 12px;
+    border: 1.5px solid var(--brand-soft);
   }
   .progress-summary .text {
     flex: 1;
@@ -249,10 +326,58 @@
     color: var(--ink);
     font-weight: 600;
   }
+  .progress-summary .text small {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 500;
+    margin-top: 2px;
+  }
   .progress-summary .count {
-    font-size: 18px;
+    font-size: 24px;
     font-weight: 800;
     color: var(--brand);
+    line-height: 1;
+  }
+  .progress-bar {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 12px;
+    grid-column: 1 / -1;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--brand), var(--brand-dark));
+    border-radius: 3px;
+    transition: width .3s;
+  }
+  .progress-summary { flex-wrap: wrap; }
+  .progress-summary .progress-bar { width: 100%; }
+
+  /* Sticky bottom action */
+  .bottom-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #fff;
+    border-top: 1px solid var(--border);
+    padding: 12px 14px;
+    padding-bottom: calc(12px + var(--safe-bottom));
+    box-shadow: 0 -4px 16px rgba(0,0,0,.06);
+    z-index: 50;
+    display: none;
+  }
+  .bottom-bar.show { display: block; }
+  .bottom-bar button {
+    width: 100%;
+    background: var(--brand);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(210,53,53,.3);
+    font-size: 16px;
+    min-height: 56px;
   }
 
   /* Scanner Modal */
@@ -375,10 +500,10 @@
 <div class="container">
   <!-- 工單 -->
   <div class="card">
-    <h2>工單號</h2>
+    <h2>工單號 <span class="required">必填</span></h2>
     <div id="orderEmpty">
       <button class="btn-primary btn-block" id="scanOrderBtn">📷 掃描工單條碼</button>
-      <div style="text-align:center;margin:12px 0;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px;">或</div>
+      <div class="or-divider">或</div>
       <div class="row">
         <input type="text" id="orderInput" placeholder="手動輸入工單號">
         <button class="btn-secondary" id="setOrderBtn" style="flex:0 0 90px;">確定</button>
@@ -396,10 +521,10 @@
 
   <!-- 機台號（必填） -->
   <div class="card" id="machineCard" style="display:none;">
-    <h2>機台號 <span style="color:var(--brand);">*必填</span></h2>
+    <h2>機台號 <span class="required">必填</span></h2>
     <div id="machineEmpty">
       <button class="btn-primary btn-block" id="scanMachineBtn">📷 掃描機台 QR</button>
-      <div style="text-align:center;margin:12px 0;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px;">或</div>
+      <div class="or-divider">或</div>
       <div class="row">
         <input type="text" id="machineInput" placeholder="手動輸入機台號（例：No1）">
         <button class="btn-secondary" id="setMachineBtn" style="flex:0 0 90px;">確定</button>
@@ -416,6 +541,11 @@
 
   <!-- 步驟區（動態生成） -->
   <div id="stepsArea" style="display:none;"></div>
+</div>
+
+<!-- Sticky 完成送出 -->
+<div class="bottom-bar" id="bottomBar">
+  <button id="finishBtn">✓ 完成送出，掃下一張工單</button>
 </div>
 
 <!-- 掃描 Modal -->
@@ -570,6 +700,8 @@ function logout(silent) {
   $('orderShow').style.display = 'none';
   $('stepsArea').style.display = 'none';
   $('orderInput').value = '';
+  $('machineCard').style.display = 'none';
+  $('bottomBar').classList.remove('show');
   renderHeader();
   showLogin(silent ? '登入逾期，請重新登入' : '');
 }
@@ -619,6 +751,7 @@ $('changeOrderBtn').onclick = () => {
   $('orderInput').value = '';
   $('machineCard').style.display = 'none';
   $('stepsArea').style.display = 'none';
+  $('bottomBar').classList.remove('show');
 };
 
 // ====== 機台 ======
@@ -669,13 +802,17 @@ function renderSteps() {
   const wrap = document.createElement('div');
   wrap.className = 'card';
 
-  // 進度統計
   const doneCount = STEPS.filter(s => order[STEP_FIELD[s.id].time]).length;
+  const pct = Math.round(doneCount / STEPS.length * 100);
   wrap.innerHTML = `
     <h2>工項進度</h2>
     <div class="progress-summary">
-      <div class="text">已完成 ${doneCount} / ${STEPS.length} 項</div>
-      <div class="count">${Math.round(doneCount / STEPS.length * 100)}%</div>
+      <div class="text">
+        已完成 ${doneCount} / ${STEPS.length} 項
+        <small>掃描對應 QR 即可記錄時間</small>
+      </div>
+      <div class="count">${pct}%</div>
+      <div class="progress-bar"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
     </div>
   `;
 
@@ -686,31 +823,22 @@ function renderSteps() {
     const done = !!time;
     const div = document.createElement('div');
     div.className = 'step' + (done ? ' done' : '');
-    let html = '<div class="title-row"><div class="title">' + s.title + '</div>' +
-      (done ? '<span class="badge ok">已完成</span>' : '<span class="badge">未完成</span>') + '</div>';
-    if (s.hint) html += '<div class="hint">' + s.hint + '</div>';
+    let body = `<div class="title">${escapeHtml(s.title.replace(/^\d+\.\s*/, ''))}` +
+      (done ? '<span class="badge ok">已完成</span>' : '<span class="badge">未完成</span>') +
+      '</div>';
+    if (s.hint) body += '<div class="hint">' + s.hint + '</div>';
     if (done) {
-      html += '<div class="time">✓ ' + fmtTime(time) + '</div>';
-      if (note) html += '<div class="note-text">📝 ' + escapeHtml(note) + '</div>';
-      html += '<button class="btn-danger btn-block" data-clear="' + s.id + '">取消此項紀錄</button>';
+      body += '<div class="time">✓ ' + fmtTime(time) + '</div>';
+      if (note) body += '<div class="note-text">📝 ' + escapeHtml(note) + '</div>';
+      body += '<button class="btn-danger btn-block" data-clear="' + s.id + '">取消此項</button>';
     } else {
-      html += '<button class="btn-primary btn-block" data-scan="' + s.id + '">📷 掃描完成此項</button>';
+      body += '<button class="btn-primary btn-block" data-scan="' + s.id + '">📷 掃描完成</button>';
     }
-    div.innerHTML = html;
+    div.innerHTML = `<div class="step-num">${s.id}</div><div class="step-body">${body}</div>`;
     wrap.appendChild(div);
   });
 
   area.appendChild(wrap);
-
-  // 完成送出 — 清空目前狀態回到掃工單畫面
-  const finishCard = document.createElement('div');
-  finishCard.className = 'card';
-  finishCard.style.background = 'var(--brand)';
-  finishCard.innerHTML = `
-    <div style="text-align:center;color:#fff;margin-bottom:10px;font-size:13px;font-weight:600;">完成此工單後可掃下一張</div>
-    <button class="btn-block" id="finishBtn" style="background:#fff;color:var(--brand);font-size:16px;padding:16px;border-radius:10px;border:none;font-weight:700;">✓ 完成送出，掃下一張工單</button>
-  `;
-  area.appendChild(finishCard);
 
   area.querySelectorAll('[data-scan]').forEach(b => {
     b.onclick = () => startStepScan(b.getAttribute('data-scan'));
@@ -718,7 +846,8 @@ function renderSteps() {
   area.querySelectorAll('[data-clear]').forEach(b => {
     b.onclick = () => clearStep(b.getAttribute('data-clear'));
   });
-  $('finishBtn').onclick = finishOrder;
+
+  $('bottomBar').classList.add('show');
 }
 
 function finishOrder() {
@@ -732,10 +861,12 @@ function finishOrder() {
   $('machineShow').style.display = 'none';
   $('machineInput').value = '';
   $('stepsArea').style.display = 'none';
+  $('bottomBar').classList.remove('show');
   toast('已完成，請掃下一張工單', 'success');
   window.scrollTo({ top: 0, behavior: 'smooth' });
   setTimeout(() => $('orderInput').focus(), 300);
 }
+$('finishBtn').onclick = finishOrder;
 
 // ====== 步驟操作 ======
 function startStepScan(stepId) {
