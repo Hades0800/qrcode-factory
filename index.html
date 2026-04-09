@@ -565,7 +565,20 @@
 <div id="scannerModal">
   <div class="modal-title" id="scannerTitle">請掃描 QR Code</div>
   <div id="qr-reader"></div>
-  <button class="btn-danger close-btn" id="closeScannerBtn">取消</button>
+  <div id="cameraError" style="display:none;color:#fff;text-align:center;padding:20px;background:rgba(255,255,255,.08);border-radius:12px;max-width:480px;margin:0 auto;">
+    <div style="font-size:40px;margin-bottom:10px;">📷❌</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:8px;">無法開啟相機</div>
+    <div id="cameraErrorMsg" style="font-size:13px;opacity:.85;margin-bottom:14px;line-height:1.5;"></div>
+    <div style="font-size:12px;opacity:.7;text-align:left;background:rgba(0,0,0,.3);padding:12px;border-radius:8px;line-height:1.6;">
+      <strong>請檢查：</strong><br>
+      1. 瀏覽器是否允許使用相機<br>
+      2. iPhone：設定 → Safari → 相機 → 允許<br>
+      3. Android：設定 → 應用程式 → 瀏覽器 → 權限 → 相機<br>
+      4. 沒有其他 App 正在用相機<br>
+      5. 改用「手動輸入」也可以
+    </div>
+  </div>
+  <button class="btn-danger close-btn" id="closeScannerBtn">關閉，改用手動輸入</button>
 </div>
 
 <!-- 登入畫面 -->
@@ -915,6 +928,12 @@ async function submitStep(stepId, note) {
 }
 
 // ====== 掃描器 ======
+function showCameraError(msg) {
+  $('qr-reader').style.display = 'none';
+  $('cameraError').style.display = 'block';
+  $('cameraErrorMsg').textContent = msg;
+}
+
 function openScanner(mode) {
   scanMode = mode;
   const titles = {
@@ -924,15 +943,44 @@ function openScanner(mode) {
   };
   $('scannerTitle').textContent = titles[mode] || '請掃描 QR Code';
   $('scannerModal').classList.add('show');
-  if (!scanner) scanner = new Html5Qrcode('qr-reader');
+  $('qr-reader').style.display = 'block';
+  $('cameraError').style.display = 'none';
+
+  // 檢查瀏覽器是否支援
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showCameraError('此瀏覽器不支援相機（需 HTTPS + 現代瀏覽器）');
+    return;
+  }
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+    showCameraError('需在 HTTPS 網站才能使用相機');
+    return;
+  }
+
+  if (!scanner) {
+    try { scanner = new Html5Qrcode('qr-reader'); }
+    catch (e) { showCameraError('掃描器初始化失敗：' + e.message); return; }
+  }
   scanner.start(
     { facingMode: 'environment' },
     { fps: 10, qrbox: { width: 260, height: 260 } },
     onScanSuccess,
     () => {},
   ).catch(err => {
-    toast('無法啟動相機：' + err, 'error');
-    closeScanner();
+    const errStr = String(err && err.message || err);
+    let friendly = errStr;
+    if (/Permission|NotAllowed|denied/i.test(errStr)) {
+      friendly = '相機權限被拒絕。請到瀏覽器設定中開啟相機權限後重新整理。';
+    } else if (/NotFound|no.*camera/i.test(errStr)) {
+      friendly = '找不到相機裝置。';
+    } else if (/NotReadable|in use|busy/i.test(errStr)) {
+      friendly = '相機被其他 App 佔用，請關閉其他相機 App 後再試。';
+    } else if (/Overconstrained/i.test(errStr)) {
+      // 改用前鏡頭再試
+      scanner.start({ facingMode: 'user' }, { fps: 10, qrbox: { width: 260, height: 260 } }, onScanSuccess, () => {})
+        .catch(e2 => showCameraError('相機規格不支援：' + errStr));
+      return;
+    }
+    showCameraError(friendly);
   });
 }
 
@@ -941,6 +989,11 @@ async function closeScanner() {
   if (scanner) {
     try { await scanner.stop(); } catch (e) {}
   }
+  // 關閉時讓對應的輸入框獲得焦點，方便手動輸入
+  setTimeout(() => {
+    if (scanMode === 'order') $('orderInput').focus();
+    else if (scanMode === 'machine') $('machineInput').focus();
+  }, 200);
 }
 $('closeScannerBtn').onclick = closeScanner;
 
