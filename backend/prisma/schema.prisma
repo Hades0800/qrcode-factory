@@ -35,6 +35,12 @@ model Order {
   step7At   DateTime?
   step7Note String?
 
+  step11At   DateTime?
+  step12At   DateTime?
+  step12Note String?
+  step13At   DateTime?
+  step13Note String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -195,6 +195,82 @@
   .row { display: flex; gap: 10px; }
   .row > * { flex: 1; }
 
+  /* 機台按鈕格 */
+  .machine-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .machine-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 8px;
+    min-height: 80px;
+    background: #fff;
+    border: 2px solid var(--border);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all .15s;
+    font-family: inherit;
+  }
+  .machine-btn:active { transform: scale(.96); }
+  .machine-btn:hover { border-color: var(--brand); background: var(--brand-soft); }
+  .machine-btn .m-num { font-size: 20px; font-weight: 800; color: var(--brand); }
+  .machine-btn .m-spec { font-size: 13px; color: var(--muted); margin-top: 2px; font-weight: 600; }
+  .machine-btn.selected {
+    border-color: var(--brand);
+    background: var(--brand);
+    box-shadow: 0 4px 12px rgba(210,53,53,.3);
+  }
+  .machine-btn.selected .m-num { color: #fff; }
+  .machine-btn.selected .m-spec { color: rgba(255,255,255,.85); }
+
+  /* 底部動作按鈕 */
+  .action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .action-btn {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px;
+    border-radius: 14px;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    min-height: 60px;
+    transition: all .15s;
+  }
+  .action-btn:active { transform: scale(.98); }
+  .action-btn .act-icon {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 800;
+  }
+  .action-btn .act-body { flex: 1; min-width: 0; }
+  .action-btn .act-title { font-size: 15px; font-weight: 700; }
+  .action-btn .act-hint { font-size: 11px; opacity: .8; margin-top: 2px; line-height: 1.3; }
+  .action-btn.act-success { background: var(--success); color: #fff; box-shadow: 0 4px 12px rgba(46,160,67,.3); }
+  .action-btn.act-success .act-icon { background: rgba(255,255,255,.2); }
+  .action-btn.act-warning { background: #f0ad4e; color: #fff; box-shadow: 0 4px 12px rgba(240,173,78,.3); }
+  .action-btn.act-warning .act-icon { background: rgba(255,255,255,.2); }
+  .action-btn.act-danger { background: var(--brand); color: #fff; box-shadow: 0 4px 12px rgba(210,53,53,.3); }
+  .action-btn.act-danger .act-icon { background: rgba(255,255,255,.2); }
+  .action-btn.done { opacity: .6; }
+  .action-btn.done .act-title::after { content: ' ✓'; }
+
   .or-divider {
     display: flex;
     align-items: center;
@@ -532,15 +608,17 @@
     </div>
   </div>
 
-  <!-- 機台號（必填） -->
+  <!-- 機台選擇（必填） -->
   <div class="card" id="machineCard" style="display:none;">
-    <h2>機台號 <span class="required">必填</span></h2>
+    <h2>選擇機台 <span class="required">必填</span></h2>
     <div id="machineEmpty">
-      <button class="btn-primary btn-block" id="scanMachineBtn">📷 掃描機台 QR</button>
-      <div class="or-divider">或</div>
-      <div class="row">
-        <input type="text" id="machineInput" placeholder="手動輸入機台號（例：No1）">
-        <button class="btn-secondary" id="setMachineBtn" style="flex:0 0 90px;">確定</button>
+      <div class="machine-grid">
+        <button class="machine-btn" data-machine="No1-350"><span class="m-num">No1</span><span class="m-spec">350</span></button>
+        <button class="machine-btn" data-machine="No2-250"><span class="m-num">No2</span><span class="m-spec">250</span></button>
+        <button class="machine-btn" data-machine="No3-60"><span class="m-num">No3</span><span class="m-spec">60</span></button>
+        <button class="machine-btn" data-machine="No4-90"><span class="m-num">No4</span><span class="m-spec">90</span></button>
+        <button class="machine-btn" data-machine="No5-40"><span class="m-num">No5</span><span class="m-spec">40</span></button>
+        <button class="machine-btn" data-machine="No6-40"><span class="m-num">No6</span><span class="m-spec">40</span></button>
       </div>
     </div>
     <div id="machineShow" style="display:none;">
@@ -606,23 +684,32 @@
 const API_URL = 'https://shangkai-manu-record.zeabur.app';
 
 const STEPS = [
-  { id: '1', title: '1. 原料準備與設置',     hint: '', needNote: false },
-  { id: '2', title: '2. 模刀具準備與安裝',   hint: '', needNote: false },
-  { id: '3', title: '3. 試模與規格品質確認', hint: '', needNote: false },
-  { id: '4', title: '4. 斷續試稼生產製造',   hint: '若超過 5 分鐘停滯生產請註明', needNote: true,  noteLabel: '備註（停滯說明）' },
-  { id: '5', title: '5. 穩定連續生產製造',   hint: '', needNote: false },
-  { id: '6', title: '6. 後工程接續生產',     hint: '軋平、捲網、波浪網等',         needNote: false },
-  { id: '7', title: '7. 生產異常或註記事項', hint: '設備故障、模具頓刀、品質異常、清潔清運、包裝入庫等', needNote: true,  noteLabel: '異常 / 註記內容' },
+  { id: '1', title: '01. 原料準備與設置',     hint: '' },
+  { id: '2', title: '02. 模刀具準備與安裝',   hint: '' },
+  { id: '3', title: '03. 試模與規格品質確認', hint: '' },
+  { id: '4', title: '04. 斷續試稼生產製造',   hint: '無法連續生產3分鐘' },
+  { id: '5', title: '05. 穩定連續生產製造',   hint: '' },
+  { id: '6', title: '06. 後工程接續生產',     hint: '軋平、捲網、波浪網等' },
+  { id: '7', title: '07. 其他作業',           hint: '清潔清運或包裝入庫等' },
+];
+
+const ACTIONS = [
+  { id: '11', title: '工單完成與結束', hint: '開始新的製造工單', style: 'act-success', icon: '✓', finishes: true },
+  { id: '12', title: '生產正常暫停稼動', hint: '休息時間、人力支援、隔日生產、順位調整、外賓參觀', style: 'act-warning', icon: '⏸', needNote: true, noteLabel: '暫停原因（可留白）' },
+  { id: '13', title: '生產異常停止稼動', hint: '設備故障、模具頓刀、品質異常', style: 'act-danger', icon: '⚠', needNote: true, noteLabel: '異常說明（可留白）' },
 ];
 
 const STEP_FIELD = {
-  '1': { time: 'step1At', note: null },
-  '2': { time: 'step2At', note: null },
-  '3': { time: 'step3At', note: null },
-  '4': { time: 'step4At', note: 'step4Note' },
-  '5': { time: 'step5At', note: null },
-  '6': { time: 'step6At', note: null },
-  '7': { time: 'step7At', note: 'step7Note' },
+  '1':  { time: 'step1At',  note: null },
+  '2':  { time: 'step2At',  note: null },
+  '3':  { time: 'step3At',  note: null },
+  '4':  { time: 'step4At',  note: null },
+  '5':  { time: 'step5At',  note: null },
+  '6':  { time: 'step6At',  note: null },
+  '7':  { time: 'step7At',  note: null },
+  '11': { time: 'step11At', note: null },
+  '12': { time: 'step12At', note: 'step12Note' },
+  '13': { time: 'step13At', note: 'step13Note' },
 };
 
 // ====== State ======
@@ -792,7 +879,6 @@ function renderMachine() {
     $('machineEmpty').style.display = 'block';
     $('machineShow').style.display = 'none';
     $('stepsArea').style.display = 'none';
-    setTimeout(() => $('machineInput').focus(), 100);
   }
 }
 
@@ -809,15 +895,14 @@ async function setMachine(no) {
   renderMachine();
 }
 
-$('setMachineBtn').onclick = () => setMachine($('machineInput').value);
-$('machineInput').addEventListener('keydown', e => { if (e.key === 'Enter') setMachine($('machineInput').value); });
-$('scanMachineBtn').onclick = () => openScanner('machine');
+document.querySelectorAll('.machine-btn').forEach(b => {
+  b.onclick = () => setMachine(b.getAttribute('data-machine'));
+});
 $('changeMachineBtn').onclick = () => {
   $('machineEmpty').style.display = 'block';
   $('machineShow').style.display = 'none';
-  $('machineInput').value = '';
   $('stepsArea').style.display = 'none';
-  setTimeout(() => $('machineInput').focus(), 100);
+  $('bottomBar').classList.remove('show');
 };
 
 // ====== 步驟渲染 ======
@@ -831,7 +916,7 @@ function renderSteps() {
   const doneCount = STEPS.filter(s => order[STEP_FIELD[s.id].time]).length;
   const pct = Math.round(doneCount / STEPS.length * 100);
   wrap.innerHTML = `
-    <h2>工項進度</h2>
+    <h2>工序進度</h2>
     <div class="progress-summary">
       <div class="text">
         已完成 ${doneCount} / ${STEPS.length} 項
@@ -845,26 +930,51 @@ function renderSteps() {
   STEPS.forEach(s => {
     const f = STEP_FIELD[s.id];
     const time = order[f.time];
-    const note = f.note ? order[f.note] : '';
     const done = !!time;
     const div = document.createElement('div');
     div.className = 'step' + (done ? ' done' : '');
-    let body = `<div class="title">${escapeHtml(s.title.replace(/^\d+\.\s*/, ''))}` +
+    const numLabel = s.title.match(/^(\d+)\./)?.[1] || s.id;
+    const titleText = s.title.replace(/^\d+\.\s*/, '');
+    let body = `<div class="title">${escapeHtml(titleText)}` +
       (done ? '<span class="badge ok">已完成</span>' : '<span class="badge">未完成</span>') +
       '</div>';
     if (s.hint) body += '<div class="hint">' + s.hint + '</div>';
     if (done) {
       body += '<div class="time">✓ ' + fmtTime(time) + '</div>';
-      if (note) body += '<div class="note-text">📝 ' + escapeHtml(note) + '</div>';
       body += '<button class="btn-danger btn-block" data-clear="' + s.id + '">取消此項</button>';
     } else {
       body += '<button class="btn-primary btn-block" data-scan="' + s.id + '">📷 掃描完成</button>';
     }
-    div.innerHTML = `<div class="step-num">${s.id}</div><div class="step-body">${body}</div>`;
+    div.innerHTML = `<div class="step-num">${numLabel}</div><div class="step-body">${body}</div>`;
     wrap.appendChild(div);
   });
 
   area.appendChild(wrap);
+
+  // 底部三顆動作按鈕
+  const actWrap = document.createElement('div');
+  actWrap.className = 'card';
+  actWrap.innerHTML = '<h2>操作</h2>';
+  const actDiv = document.createElement('div');
+  actDiv.className = 'action-buttons';
+  ACTIONS.forEach(a => {
+    const f = STEP_FIELD[a.id];
+    const time = f ? order[f.time] : null;
+    const done = !!time;
+    const btn = document.createElement('button');
+    btn.className = 'action-btn ' + a.style + (done ? ' done' : '');
+    btn.innerHTML = `
+      <div class="act-icon">${a.icon}</div>
+      <div class="act-body">
+        <div class="act-title">${escapeHtml(a.title)}${done ? '<span style="font-size:11px;font-weight:500;margin-left:6px;">' + fmtTime(time) + '</span>' : ''}</div>
+        <div class="act-hint">${escapeHtml(a.hint)}</div>
+      </div>
+    `;
+    btn.onclick = () => handleAction(a);
+    actDiv.appendChild(btn);
+  });
+  actWrap.appendChild(actDiv);
+  area.appendChild(actWrap);
 
   area.querySelectorAll('[data-scan]').forEach(b => {
     b.onclick = () => startStepScan(b.getAttribute('data-scan'));
@@ -873,11 +983,25 @@ function renderSteps() {
     b.onclick = () => clearStep(b.getAttribute('data-clear'));
   });
 
-  $('bottomBar').classList.add('show');
+  $('bottomBar').classList.remove('show');
+}
+
+async function handleAction(action) {
+  if (!orderNo) return;
+  let note = '';
+  if (action.needNote) {
+    note = prompt(action.noteLabel + '：', '') || '';
+  }
+  if (action.finishes) {
+    if (!confirm('確定完成此工單？\n\n（資料已自動儲存）')) return;
+  }
+  await submitStep(action.id, note);
+  if (action.finishes) {
+    finishOrder();
+  }
 }
 
 function finishOrder() {
-  if (!confirm('確定完成此工單並掃下一張？\n\n（資料已自動儲存，可隨時回頭查看紀錄）')) return;
   orderNo = ''; order = null;
   $('orderEmpty').style.display = 'block';
   $('orderShow').style.display = 'none';
@@ -1033,7 +1157,7 @@ async function onScanSuccess(decodedText) {
   }
 
   // step 模式
-  const m = String(decodedText).match(/^STEP[:\-]?(\d)$/i);
+  const m = String(decodedText).match(/^STEP[:\-]?(\d+)$/i);
   if (!m) { toast('不是工項 QR：' + decodedText, 'error'); return; }
   const scanned = m[1];
   if (scanned !== pendingStep) {
@@ -1042,13 +1166,7 @@ async function onScanSuccess(decodedText) {
   }
   await closeScanner();
 
-  // 工項全部非必填 — 4/7 仍提供備註輸入但可留白，不再彈確認框
-  const stepDef = STEPS.find(s => s.id === pendingStep);
-  let note = '';
-  if (stepDef.needNote) {
-    note = prompt(stepDef.noteLabel + '（可留白）：', '') || '';
-  }
-  await submitStep(pendingStep, note);
+  await submitStep(pendingStep, '');
   pendingStep = null;
 }
 

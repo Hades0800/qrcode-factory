@@ -242,15 +242,18 @@
             <th>機台</th>
             <th>小組長</th>
             <th>進度</th>
-            <th>1.原料準備</th>
-            <th>2.模刀具</th>
-            <th>3.試模確認</th>
-            <th>4.斷續試稼</th>
-            <th>5.穩定生產</th>
-            <th>6.後工程</th>
-            <th>7.異常註記</th>
-            <th>4-備註</th>
-            <th>7-備註</th>
+            <th>01.原料</th>
+            <th>02.模刀具</th>
+            <th>03.試模</th>
+            <th>04.斷續</th>
+            <th>05.穩定</th>
+            <th>06.後工程</th>
+            <th>07.其他</th>
+            <th>11.完成</th>
+            <th>12.暫停</th>
+            <th>13.異常</th>
+            <th>12-備註</th>
+            <th>13-備註</th>
             <th>最後更新</th>
             <th id="actionTh" style="display:none;">操作</th>
           </tr>
@@ -334,10 +337,10 @@ $('logoutLink').onclick = e => {
 };
 
 async function loadOrders() {
-  $('ordersBody').innerHTML = '<tr><td colspan="14" class="empty">載入中...</td></tr>';
+  $('ordersBody').innerHTML = '<tr><td colspan="19" class="empty">載入中...</td></tr>';
   const r = await api('/api/orders?limit=200');
   if (!r.ok) {
-    $('ordersBody').innerHTML = '<tr><td colspan="14" class="empty">' + (r.error || '載入失敗') + '</td></tr>';
+    $('ordersBody').innerHTML = '<tr><td colspan="19" class="empty">' + (r.error || '載入失敗') + '</td></tr>';
     return;
   }
   allOrders = r.data.orders || [];
@@ -358,7 +361,7 @@ function render() {
   `;
 
   if (filtered.length === 0) {
-    $('ordersBody').innerHTML = '<tr><td colspan="15" class="empty">沒有符合條件的工單</td></tr>';
+    $('ordersBody').innerHTML = '<tr><td colspan="19" class="empty">沒有符合條件的工單</td></tr>';
     return;
   }
 
@@ -378,8 +381,11 @@ function render() {
         ${stepCell(o.step5At)}
         ${stepCell(o.step6At)}
         ${stepCell(o.step7At)}
-        <td class="note">${escapeHtml(o.step4Note)}</td>
-        <td class="note">${escapeHtml(o.step7Note)}</td>
+        ${stepCell(o.step11At)}
+        ${stepCell(o.step12At)}
+        ${stepCell(o.step13At)}
+        <td class="note">${escapeHtml(o.step12Note)}</td>
+        <td class="note">${escapeHtml(o.step13Note)}</td>
         <td style="font-size:11px;color:#666;">${escapeHtml(fmtTime(o.updatedAt))}</td>
         ${isAdmin ? `<td><button class="btn-secondary" data-del="${escapeHtml(o.orderNo)}" style="padding:6px 12px;font-size:12px;color:var(--brand);border-color:var(--brand);">刪除</button></td>` : ''}
       </tr>
@@ -406,7 +412,7 @@ function stepCell(t) {
 }
 
 function countDone(o) {
-  return ['step1At','step2At','step3At','step4At','step5At','step6At','step7At'].filter(k => o[k]).length;
+  return ['step1At','step2At','step3At','step4At','step5At','step6At','step7At'].filter(k => o[k]).length; // 只算 01-07 的進度
 }
 
 function applyFilters(list) {
@@ -444,12 +450,13 @@ $('refreshBtn').onclick = loadOrders;
 $('exportBtn').onclick = () => {
   const filtered = applyFilters(allOrders);
   if (filtered.length === 0) { toast('沒有資料可匯出', 'error'); return; }
-  const headers = ['工單號','機台','小組長','1.原料準備','2.模刀具','3.試模確認','4.斷續試稼','4-備註','5.穩定生產','6.後工程','7.異常註記','7-備註','最後更新'];
+  const headers = ['工單號','機台','小組長','01.原料準備','02.模刀具','03.試模確認','04.斷續試稼','05.穩定生產','06.後工程','07.其他作業','11.完成','12.暫停','12-備註','13.異常','13-備註','最後更新'];
   const rows = filtered.map(o => [
     o.orderNo, o.machineNo, o.leaderName,
     fmtTime(o.step1At), fmtTime(o.step2At), fmtTime(o.step3At), fmtTime(o.step4At),
-    o.step4Note || '', fmtTime(o.step5At), fmtTime(o.step6At), fmtTime(o.step7At),
-    o.step7Note || '', fmtTime(o.updatedAt),
+    fmtTime(o.step5At), fmtTime(o.step6At), fmtTime(o.step7At),
+    fmtTime(o.step11At), fmtTime(o.step12At), o.step12Note || '',
+    fmtTime(o.step13At), o.step13Note || '', fmtTime(o.updatedAt),
   ]);
   const csv = [headers, ...rows].map(r => r.map(v => {
     const s = String(v == null ? '' : v);
