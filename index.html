@@ -951,7 +951,7 @@ function renderSteps() {
     const numLabel = s.title.match(/^(\d+)\./)?.[1] || s.id;
     const titleText = s.title.replace(/^\d+\.\s*/, '');
     let body = `<div class="title">${escapeHtml(titleText)}` +
-      (done ? '<span class="badge ok">已完成</span>' : '<span class="badge">未完成</span>') +
+      (done ? '<span class="badge ok">已完成</span>' : '') +
       '</div>';
     if (s.hint) body += '<div class="hint">' + s.hint + '</div>';
     if (done) {
