@@ -1024,10 +1024,11 @@ function renderSteps() {
       <div class="act-hint">${isPaused ? '暫停中，請先恢復' : escapeHtml(a.hint)}</div>
     </div>
   `;
-  finBtn.onclick = () => {
+  finBtn.onclick = async () => {
     if (isPaused) { toast('請先恢復生產', 'error'); return; }
     if (!confirm('確定完成此工單？\n\n（資料已自動儲存）')) return;
-    submitStep('11', '').then(() => finishOrder());
+    try { await submitStep('11', ''); } catch(e) {}
+    finishOrder();
   };
   actDiv.appendChild(finBtn);
 
