@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#d23535">
+<title>上鎧鋼鐵 - 即時生產</title>
+<link rel="icon" href="logo.jpg">
+<link rel="apple-touch-icon" href="logo.jpg">
+<style>
+  :root {
+    --brand: #d23535;
+    --brand-dark: #a82828;
+    --brand-soft: #fdf2f2;
+    --ink: #1c1c1e;
+    --text: #2c2c2e;
+    --muted: #6e6e73;
+    --border: #e5e5ea;
+    --bg: #f2f2f5;
+    --card: #ffffff;
+    --success: #2ea043;
+    --success-soft: #e6f7ea;
+    --safe-top: env(safe-area-inset-top, 0);
+    --safe-bottom: env(safe-area-inset-bottom, 0);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  header {
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    padding-top: calc(10px + var(--safe-top));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  header .brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
+  header .brand img { height: 28px; width: auto; flex-shrink: 0; }
+  header .brand-text { border-left: 2px solid var(--border); padding-left: 10px; }
+  header .brand-text .title { font-size: 13px; font-weight: 700; color: var(--ink); white-space: nowrap; }
+  header .brand-text .sub { font-size: 10px; color: var(--muted); white-space: nowrap; }
+  header .right { display: flex; gap: 2px; flex-shrink: 0; }
+  header .right a {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    padding: 6px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+  header .right a:hover { background: var(--brand-soft); color: var(--brand); }
+
+  /* Tab bar */
+  .tab-bar {
+    display: flex;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .tab-bar a {
+    flex: 1;
+    text-align: center;
+    padding: 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    text-decoration: none;
+    border-bottom: 3px solid transparent;
+    transition: all .15s;
+  }
+  .tab-bar a:hover { color: var(--brand); }
+  .tab-bar a.active {
+    color: var(--brand);
+    border-bottom-color: var(--brand);
+  }
+
+  /* Machine tabs (horizontal scroll) */
+  .machine-tabs {
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    scrollbar-width: none;
+  }
+  .machine-tabs::-webkit-scrollbar { display: none; }
+  .machine-tab {
+    flex: 0 0 auto;
+    padding: 12px 20px;
+    text-align: center;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all .15s;
+    min-width: 80px;
+    font-family: inherit;
+    background: none;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .machine-tab:active { background: #f5f5f7; }
+  .machine-tab .mt-num { font-size: 16px; font-weight: 800; }
+  .machine-tab .mt-spec { font-size: 10px; }
+  .machine-tab.active {
+    color: var(--brand);
+    border-bottom-color: var(--brand);
+    background: var(--brand-soft);
+  }
+
+  /* Content area */
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 14px;
+    padding-bottom: calc(14px + var(--safe-bottom));
+  }
+
+  .card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.02);
+  }
+  .card h3 {
+    margin: 0 0 12px;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+  }
+
+  /* Stats grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .stat {
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+  }
+  .stat .s-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .stat .s-value { font-size: 22px; font-weight: 800; color: var(--ink); }
+  .stat .s-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .stat.highlight { background: var(--brand-soft); }
+  .stat.highlight .s-value { color: var(--brand); }
+  .stat.good { background: var(--success-soft); }
+  .stat.good .s-value { color: var(--success); }
+
+  /* Order card */
+  .order-card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.02);
+    border-left: 4px solid var(--border);
+  }
+  .order-card.active { border-left-color: var(--brand); }
+  .order-card .oc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .order-card .oc-no {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--ink);
+  }
+  .order-card.active .oc-no { color: var(--brand); }
+  .order-card .oc-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 10px;
+    background: var(--border);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .order-card.active .oc-badge { background: var(--brand); color: #fff; }
+
+  .order-info {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 10px;
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .order-info .oi-label { color: var(--muted); font-weight: 500; white-space: nowrap; }
+  .order-info .oi-value { color: var(--ink); font-weight: 600; word-break: break-all; }
+
+  /* Timeline */
+  .timeline { padding-left: 0; margin: 0; list-style: none; }
+  .timeline li {
+    position: relative;
+    padding-left: 28px;
+    padding-bottom: 14px;
+    font-size: 13px;
+  }
+  .timeline li:last-child { padding-bottom: 0; }
+  .timeline li::before {
+    content: "";
+    position: absolute;
+    left: 8px;
+    top: 22px;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+  .timeline li:last-child::before { display: none; }
+  .timeline li .tl-dot {
+    position: absolute;
+    left: 2px;
+    top: 4px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--border);
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 2px var(--border);
+  }
+  .timeline li.done .tl-dot { background: var(--success); box-shadow: 0 0 0 2px var(--success); }
+  .timeline li.current .tl-dot { background: var(--brand); box-shadow: 0 0 0 2px var(--brand); animation: pulse 1.5s infinite; }
+  .timeline li .tl-time {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .timeline li.current .tl-time { color: var(--brand); font-weight: 700; }
+  .timeline li .tl-label {
+    color: var(--ink);
+    margin-top: 2px;
+    font-weight: 500;
+  }
+  .timeline li.current .tl-label { color: var(--brand); font-weight: 700; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .5; }
+  }
+
+  .empty-msg { text-align: center; color: var(--muted); padding: 40px 20px; font-size: 14px; }
+
+  @media (max-width: 480px) {
+    header .brand img { height: 24px; }
+    header .brand-text .title { font-size: 12px; }
+    header .right a { font-size: 11px; padding: 5px 6px; }
+    .machine-tab { padding: 10px 14px; min-width: 65px; }
+    .machine-tab .mt-num { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <img src="logo.jpg" alt="上鎧鋼鐵">
+    <div class="brand-text">
+      <div class="title">即時生產</div>
+      <div class="sub" id="meShow"></div>
+    </div>
+  </div>
+  <div class="right">
+    <a href="admin.html" id="adminLink" style="display:none;">管理</a>
+    <a href="#" id="logoutLink">登出</a>
+  </div>
+</header>
+
+<div class="tab-bar">
+  <a href="index.html">掃描</a>
+  <a href="records.html">紀錄</a>
+  <a href="realtime.html" class="active">即時</a>
+</div>
+
+<div class="machine-tabs" id="machineTabs"></div>
+
+<div class="content" id="content">
+  <div class="empty-msg">請選擇機台</div>
+</div>
+
+<script>
+const API_URL = 'https://shangkai-manu-record.zeabur.app';
+const MACHINES = [
+  { id: 'No1-350', num: 'No1', spec: '350' },
+  { id: 'No2-250', num: 'No2', spec: '250' },
+  { id: 'No3-60',  num: 'No3', spec: '60' },
+  { id: 'No4-90',  num: 'No4', spec: '90' },
+  { id: 'No5-40',  num: 'No5', spec: '40' },
+  { id: 'No6-40',  num: 'No6', spec: '40' },
+];
+const STEP_LABELS = [
+  { key: 'step1At',  label: '原料準備與設置' },
+  { key: 'step2At',  label: '模刀具準備與安裝' },
+  { key: 'step3At',  label: '試模與規格品質確認' },
+  { key: 'step4At',  label: '斷續試稼生產製造' },
+  { key: 'step5At',  label: '穩定連續生產製造' },
+  { key: 'step6At',  label: '後工程接續生產' },
+  { key: 'step7At',  label: '其他作業' },
+  { key: 'step11At', label: '生產作業完成終止' },
+];
+
+let token = localStorage.getItem('token') || '';
+let me = JSON.parse(localStorage.getItem('me') || 'null');
+let allOrders = [];
+let activeMachine = '';
+
+function $(id) { return document.getElementById(id); }
+function escapeHtml(s) { return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2,'0');
+  return pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+function fmtDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
+}
+function isToday(iso) {
+  if (!iso) return false;
+  const d = new Date(iso);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+}
+
+async function api(path) {
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const res = await fetch(API_URL + path, { method: 'GET', headers });
+    let data; try { data = await res.json(); } catch(e) { return { ok: false }; }
+    if (res.status === 401) { alert('登入已逾期'); location.href = 'index.html'; return { ok: false }; }
+    if (!res.ok) return { ok: false };
+    return { ok: true, data };
+  } catch (e) { return { ok: false }; }
+}
+
+if (!token || !me) { alert('請先登入'); location.href = 'index.html'; }
+$('meShow').textContent = me ? me.displayName : '';
+if (me && me.isAdmin) $('adminLink').style.display = 'inline';
+$('logoutLink').onclick = e => { e.preventDefault(); localStorage.clear(); location.href = 'index.html'; };
+
+// Machine tabs
+function renderMachineTabs() {
+  $('machineTabs').innerHTML = MACHINES.map(m =>
+    `<button class="machine-tab${activeMachine === m.id ? ' active' : ''}" data-m="${m.id}">
+      <div class="mt-num">${m.num}</div>
+      <div class="mt-spec">${m.spec}</div>
+    </button>`
+  ).join('');
+  $('machineTabs').querySelectorAll('.machine-tab').forEach(b => {
+    b.onclick = () => {
+      activeMachine = b.dataset.m;
+      renderMachineTabs();
+      renderContent();
+    };
+  });
+}
+
+async function loadOrders() {
+  const r = await api('/api/orders?limit=200');
+  if (r.ok) allOrders = r.data.orders || [];
+  renderMachineTabs();
+  if (MACHINES.length > 0 && !activeMachine) {
+    activeMachine = MACHINES[0].id;
+    renderMachineTabs();
+  }
+  renderContent();
+}
+
+function renderContent() {
+  const content = $('content');
+  if (!activeMachine) {
+    content.innerHTML = '<div class="empty-msg">請選擇機台</div>';
+    return;
+  }
+
+  const m = MACHINES.find(x => x.id === activeMachine);
+  const today = new Date();
+  const dateStr = today.getFullYear() + '/' + String(today.getMonth()+1).padStart(2,'0') + '/' + String(today.getDate()).padStart(2,'0');
+
+  // Filter orders for this machine (today only)
+  const machineOrders = allOrders
+    .filter(o => o.machineNo === activeMachine)
+    .filter(o => isToday(o.updatedAt) || isToday(o.createdAt))
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+
+  const totalOrders = machineOrders.length;
+  const completedOrders = machineOrders.filter(o => o.step11At).length;
+
+  // Find active order (has steps but no step11)
+  const activeOrder = machineOrders.find(o => !o.step11At && countSteps(o) > 0);
+
+  let html = '';
+
+  // Stats
+  html += `
+    <div class="card">
+      <h3>機台概覽</h3>
+      <div class="stats-grid">
+        <div class="stat">
+          <div class="s-label">生產日期</div>
+          <div class="s-value" style="font-size:16px;">${dateStr}</div>
+        </div>
+        <div class="stat highlight">
+          <div class="s-label">機台編號</div>
+          <div class="s-value" style="font-size:18px;">${escapeHtml(m.num)}-${escapeHtml(m.spec)}</div>
+        </div>
+        <div class="stat">
+          <div class="s-label">今日工單數</div>
+          <div class="s-value">${totalOrders}</div>
+        </div>
+        <div class="stat ${completedOrders > 0 ? 'good' : ''}">
+          <div class="s-label">已完成</div>
+          <div class="s-value">${completedOrders}</div>
+          <div class="s-sub">/ ${totalOrders} 張</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Orders
+  if (machineOrders.length === 0) {
+    html += '<div class="empty-msg">今天此機台尚無工單</div>';
+  } else {
+    machineOrders.forEach(o => {
+      const isActive = activeOrder && o.orderNo === activeOrder.orderNo;
+      const steps = countSteps(o);
+      const timeline = buildTimeline(o);
+      html += `
+        <div class="order-card${isActive ? ' active' : ''}">
+          <div class="oc-header">
+            <div class="oc-no">${escapeHtml(o.orderNo)}</div>
+            <div class="oc-badge">${o.step11At ? '已完成' : (steps > 0 ? '生產中' : '等待中')}</div>
+          </div>
+          <div class="order-info">
+            <span class="oi-label">製造單號</span><span class="oi-value">${escapeHtml(o.orderNo)}</span>
+            <span class="oi-label">小組長</span><span class="oi-value">${escapeHtml(o.leaderName)}</span>
+            <span class="oi-label">進度</span><span class="oi-value">${steps} / 7</span>
+          </div>
+          <h3 style="margin:0 0 8px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;">生產實態</h3>
+          <ul class="timeline">${timeline}</ul>
+        </div>
+      `;
+    });
+  }
+
+  content.innerHTML = html;
+}
+
+function countSteps(o) {
+  return ['step1At','step2At','step3At','step4At','step5At','step6At','step7At'].filter(k => o[k]).length;
+}
+
+function buildTimeline(o) {
+  const items = [];
+  STEP_LABELS.forEach(s => {
+    if (o[s.key]) {
+      items.push({ time: new Date(o[s.key]), label: s.label, key: s.key });
+    }
+  });
+  items.sort((a, b) => a.time - b.time);
+
+  if (items.length === 0) return '<li><div class="tl-dot"></div><div class="tl-label" style="color:var(--muted);">尚未開始</div></li>';
+
+  // Find current (last non-step11 item)
+  const lastIdx = o.step11At ? -1 : items.length - 1;
+
+  return items.map((it, i) => {
+    const isCurrent = i === lastIdx;
+    const cls = isCurrent ? 'current' : 'done';
+    return `
+      <li class="${cls}">
+        <div class="tl-dot"></div>
+        <div class="tl-time">${fmtTime(it.time.toISOString())}</div>
+        <div class="tl-label">${escapeHtml(it.label)}</div>
+      </li>
+    `;
+  }).join('');
+}
+
+loadOrders();
+// 每 30 秒自動刷新
+setInterval(loadOrders, 30000);
+</script>
+</body>
+</html>
