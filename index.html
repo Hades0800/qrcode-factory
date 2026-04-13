@@ -859,7 +859,8 @@ function renderHeader() {
 }
 document.addEventListener('click', e => {
   const menu = $('dropMenu');
-  if (menu && !menu.contains(e.target) && e.target !== $('menuBtn')) {
+  const btn = $('menuBtn');
+  if (menu && !menu.contains(e.target) && btn && !btn.contains(e.target)) {
     menu.classList.remove('show');
   }
 });

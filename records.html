@@ -351,7 +351,8 @@ if (me && me.isAdmin) {
 }
 document.addEventListener('click', e => {
   const menu = $('dropMenu');
-  if (menu && !menu.contains(e.target) && e.target !== $('menuBtn')) menu.classList.remove('show');
+  const btn = $('menuBtn');
+  if (menu && !menu.contains(e.target) && btn && !btn.contains(e.target)) menu.classList.remove('show');
 });
 $('logoutLink').onclick = e => {
   e.preventDefault();

@@ -381,7 +381,8 @@ $('meShow').textContent = me ? me.displayName : '';
 if (me && me.isAdmin) $('adminLink').style.display = 'flex';
 document.addEventListener('click', e => {
   const menu = document.getElementById('dropMenu');
-  if (menu && !menu.contains(e.target) && e.target !== document.getElementById('menuBtn')) menu.classList.remove('show');
+  const btn = document.getElementById('menuBtn');
+  if (menu && !menu.contains(e.target) && btn && !btn.contains(e.target)) menu.classList.remove('show');
 });
 $('logoutLink').onclick = e => { e.preventDefault(); localStorage.clear(); location.href = 'index.html'; };
 
