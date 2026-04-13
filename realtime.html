@@ -308,6 +308,7 @@
     <a href="index.html">📷 掃描</a>
     <a href="records.html">📊 紀錄</a>
     <a href="realtime.html" class="nav-active">⚡ 即時</a>
+    <a href="upload.html" id="uploadLink" style="display:none;">📤 上傳</a>
     <a href="admin.html" id="adminLink" style="display:none;">⚙ 管理</a>
     <div class="menu-sep"></div>
     <a href="#" id="logoutLink" class="menu-logout">登出</a>
@@ -381,6 +382,7 @@ async function api(path) {
 if (!token || !me) { alert('請先登入'); location.href = 'index.html'; }
 $('meShow').textContent = me ? me.displayName : '';
 if (me && me.isAdmin) $('adminLink').style.display = 'flex';
+if (me && (me.isAdmin || me.isPlanner)) $('uploadLink').style.display = 'flex';
 document.addEventListener('click', e => {
   const menu = document.getElementById('dropMenu');
   const btn = document.getElementById('menuBtn');
@@ -507,6 +509,11 @@ function renderContent() {
             <span class="oi-label">生產規格</span><span class="oi-value">${escapeHtml(o.productSpec || '')}</span>
             <span class="oi-label">模具規格</span><span class="oi-value">${escapeHtml(o.moldSpec || '')}</span>
             <span class="oi-label">領用材料</span><span class="oi-value">${escapeHtml(o.material || '')}</span>
+            <span class="oi-label">派工數</span><span class="oi-value">${o.dispatchQty || ''}</span>
+            <span class="oi-label">刀數</span><span class="oi-value">${o.bladeCount || ''}</span>
+            <span class="oi-label">機器SPM</span><span class="oi-value">${o.machineSPM || ''}</span>
+            <span class="oi-label">一片理論重</span><span class="oi-value">${o.unitWeight || ''}</span>
+            <span class="oi-label">全部總重量</span><span class="oi-value">${o.totalWeight || ''}</span>
             <span class="oi-label">小組長</span><span class="oi-value">${escapeHtml(o.leaderName)}</span>
           </div>
           <h3 style="margin:0 0 8px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;">生產實態</h3>

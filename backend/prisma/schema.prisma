@@ -13,6 +13,7 @@ model Leader {
   passwordHash String
   displayName  String
   isAdmin      Boolean  @default(false)
+  isPlanner    Boolean  @default(false)
   createdAt    DateTime @default(now())
 
   orders Order[]
@@ -24,6 +25,17 @@ model Order {
   machineNo String?
   leaderId  Int?
   leader    Leader?  @relation(fields: [leaderId], references: [id])
+
+  // 匯入欄位（生管上傳）
+  productionDate DateTime?  // 生產日期
+  productSpec    String?     // 生產規格
+  moldSpec       String?     // 模具規格
+  material       String?     // 領用材料
+  dispatchQty    Int?        // 派工數
+  bladeCount     Int?        // 刀數
+  machineSPM     Int?        // 機器SPM
+  unitWeight     Float?      // 一片理論重(kg)
+  totalWeight    Float?      // 全部總重量(kg)
 
   step1At   DateTime?
   step2At   DateTime?

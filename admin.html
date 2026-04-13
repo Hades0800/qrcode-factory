@@ -226,6 +226,10 @@
       <input type="checkbox" id="newIsAdmin">
       <label for="newIsAdmin" style="margin:0;">設為管理員</label>
     </div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="newIsPlanner">
+      <label for="newIsPlanner" style="margin:0;">設為生管（可上傳工單）</label>
+    </div>
     <button class="btn-primary btn-block" id="createBtn">新增帳號</button>
   </div>
 
@@ -311,7 +315,7 @@ async function loadLeaders() {
   if (!leaders.length) { $('leadersTable').innerHTML = '<div style="color:#999;">尚無帳號</div>'; return; }
   const rows = leaders.map(l => `
     <tr>
-      <td><strong>${escapeHtml(l.displayName)}</strong>${l.isAdmin ? ' <span class="badge">管理員</span>' : ''}<br><span style="color:#888;font-size:12px;">@${escapeHtml(l.username)}</span></td>
+      <td><strong>${escapeHtml(l.displayName)}</strong>${l.isAdmin ? ' <span class="badge">管理員</span>' : ''}${l.isPlanner ? ' <span class="badge" style="background:#f0ad4e;">生管</span>' : ''}<br><span style="color:#888;font-size:12px;">@${escapeHtml(l.username)}</span></td>
       <td style="font-size:12px;color:#666;">${fmtDate(l.createdAt)}</td>
       <td class="row-actions">
         <button class="btn-secondary" data-reset="${l.id}" data-name="${escapeHtml(l.displayName)}">改密碼</button>
@@ -338,15 +342,16 @@ $('createBtn').onclick = async () => {
   const displayName = $('newDisplayName').value.trim();
   const password = $('newPassword').value;
   const isAdmin = $('newIsAdmin').checked;
+  const isPlanner = $('newIsPlanner').checked;
   if (!username || !displayName || !password) { toast('請填寫完整', 'error'); return; }
   if (!/^[a-zA-Z0-9_]+$/.test(username)) { toast('帳號只能用英數和底線', 'error'); return; }
   if (password.length < 6) { toast('密碼至少 6 字', 'error'); return; }
   $('createBtn').disabled = true;
-  const r = await api('/api/admin/leaders', { method: 'POST', body: { username, displayName, password, isAdmin } });
+  const r = await api('/api/admin/leaders', { method: 'POST', body: { username, displayName, password, isAdmin, isPlanner } });
   $('createBtn').disabled = false;
   if (!r.ok) { toast(r.error, 'error'); return; }
   toast('已新增 ' + displayName, 'success');
-  $('newUsername').value = ''; $('newDisplayName').value = ''; $('newPassword').value = ''; $('newIsAdmin').checked = false;
+  $('newUsername').value = ''; $('newDisplayName').value = ''; $('newPassword').value = ''; $('newIsAdmin').checked = false; $('newIsPlanner').checked = false;
   loadLeaders();
 };
 

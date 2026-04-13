@@ -13,7 +13,7 @@ export default async function authRoutes(fastify) {
     if (!ok) return reply.code(401).send({ error: '帳號或密碼錯誤' });
 
     const token = fastify.jwt.sign(
-      { id: leader.id, username: leader.username, displayName: leader.displayName, isAdmin: leader.isAdmin },
+      { id: leader.id, username: leader.username, displayName: leader.displayName, isAdmin: leader.isAdmin, isPlanner: leader.isPlanner },
       { expiresIn: '30d' },
     );
     return {
@@ -23,6 +23,7 @@ export default async function authRoutes(fastify) {
         username: leader.username,
         displayName: leader.displayName,
         isAdmin: leader.isAdmin,
+        isPlanner: leader.isPlanner,
       },
     };
   });

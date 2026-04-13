@@ -217,6 +217,7 @@
     <a href="index.html">📷 掃描</a>
     <a href="records.html" class="nav-active">📊 紀錄</a>
     <a href="realtime.html">⚡ 即時</a>
+    <a href="upload.html" id="uploadLink" style="display:none;">📤 上傳</a>
     <a href="admin.html" id="adminLink" style="display:none;">⚙ 管理</a>
     <div class="menu-sep"></div>
     <a href="#" id="logoutLink" class="menu-logout">登出</a>
@@ -351,6 +352,7 @@ if (me && me.isAdmin) {
   $('adminLink').style.display = 'flex';
   $('actionTh').style.display = '';
 }
+if (me && (me.isAdmin || me.isPlanner)) $('uploadLink').style.display = 'flex';
 document.addEventListener('click', e => {
   const menu = $('dropMenu');
   const btn = $('menuBtn');

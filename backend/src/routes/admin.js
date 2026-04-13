@@ -13,6 +13,7 @@ export default async function adminRoutes(fastify) {
         username: true,
         displayName: true,
         isAdmin: true,
+        isPlanner: true,
         createdAt: true,
       },
     });
@@ -21,7 +22,7 @@ export default async function adminRoutes(fastify) {
 
   // 新增
   fastify.post('/leaders', async (request, reply) => {
-    const { username, password, displayName, isAdmin } = request.body || {};
+    const { username, password, displayName, isAdmin, isPlanner } = request.body || {};
     if (!username || !password || !displayName) {
       return reply.code(400).send({ error: '請填寫帳號、密碼、顯示名稱' });
     }
@@ -32,8 +33,8 @@ export default async function adminRoutes(fastify) {
     if (exists) return reply.code(409).send({ error: '帳號已存在' });
     const passwordHash = await bcrypt.hash(password, 10);
     const leader = await fastify.prisma.leader.create({
-      data: { username, passwordHash, displayName, isAdmin: !!isAdmin },
-      select: { id: true, username: true, displayName: true, isAdmin: true, createdAt: true },
+      data: { username, passwordHash, displayName, isAdmin: !!isAdmin, isPlanner: !!isPlanner },
+      select: { id: true, username: true, displayName: true, isAdmin: true, isPlanner: true, createdAt: true },
     });
     return { leader };
   });

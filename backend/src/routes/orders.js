@@ -36,6 +36,10 @@ function serializeOrder(o) {
     step1At: o.step1At, step2At: o.step2At, step3At: o.step3At,
     step4At: o.step4At, step5At: o.step5At, step6At: o.step6At,
     step7At: o.step7At, step11At: o.step11At,
+    productionDate: o.productionDate, productSpec: o.productSpec || '',
+    moldSpec: o.moldSpec || '', material: o.material || '',
+    dispatchQty: o.dispatchQty, bladeCount: o.bladeCount,
+    machineSPM: o.machineSPM, unitWeight: o.unitWeight, totalWeight: o.totalWeight,
     pause12: summarize('12'),
     pause13: summarize('13'),
     createdAt: o.createdAt,
@@ -183,6 +187,46 @@ export default async function orderRoutes(fastify) {
     });
     const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
     return { order: serializeOrder(updated), resumed: { type, duration } };
+  });
+
+  // 批次上傳工單（生管 or 管理員）
+  fastify.post('/bulk-upload', async (request, reply) => {
+    if (!request.user.isAdmin && !request.user.isPlanner) {
+      return reply.code(403).send({ error: '需要生管或管理員權限' });
+    }
+    const { orders: rows } = request.body || {};
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return reply.code(400).send({ error: '沒有資料' });
+    }
+    let created = 0, updated = 0, errors = [];
+    for (const row of rows) {
+      try {
+        if (!row.orderNo) { errors.push('缺少製造單號'); continue; }
+        const data = {
+          productionDate: row.productionDate ? new Date(row.productionDate) : null,
+          productSpec: row.productSpec || null,
+          moldSpec: row.moldSpec || null,
+          material: row.material || null,
+          dispatchQty: row.dispatchQty ? Number(row.dispatchQty) : null,
+          bladeCount: row.bladeCount ? Number(row.bladeCount) : null,
+          machineSPM: row.machineSPM ? Number(row.machineSPM) : null,
+          unitWeight: row.unitWeight ? Number(row.unitWeight) : null,
+          totalWeight: row.totalWeight ? Number(row.totalWeight) : null,
+          machineNo: row.machineNo || null,
+        };
+        const existing = await fastify.prisma.order.findUnique({ where: { orderNo: String(row.orderNo) } });
+        if (existing) {
+          await fastify.prisma.order.update({ where: { orderNo: String(row.orderNo) }, data });
+          updated++;
+        } else {
+          await fastify.prisma.order.create({ data: { orderNo: String(row.orderNo), ...data } });
+          created++;
+        }
+      } catch (e) {
+        errors.push(row.orderNo + ': ' + e.message);
+      }
+    }
+    return { ok: true, created, updated, errors, total: rows.length };
   });
 
   // 刪除工單（僅管理員）
