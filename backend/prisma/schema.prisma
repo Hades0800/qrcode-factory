@@ -49,12 +49,13 @@ model Order {
 }
 
 model PauseEvent {
-  id       Int       @id @default(autoincrement())
-  orderId  Int
-  order    Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  type     String    // "12" = 正常暫停, "13" = 異常停止
-  startAt  DateTime  @default(now())
-  endAt    DateTime?
-  duration Int?      // 秒數（endAt - startAt）
-  note     String?
+  id         Int       @id @default(autoincrement())
+  orderId    Int
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type       String    // "12" = 正常暫停, "13" = 異常停止
+  activeStep String?   // 暫停當下的工序（例如 "04. 斷續試稼生產製造"）
+  startAt    DateTime  @default(now())
+  endAt      DateTime?
+  duration   Int?      // 秒數（endAt - startAt）
+  note       String?
 }

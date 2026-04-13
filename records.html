@@ -158,6 +158,18 @@
   td.step-time.empty { color: #ccc; }
   td.note { white-space: normal; max-width: 200px; font-size: 12px; color: var(--text); }
 
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover { background: var(--brand-soft); }
+  tr.detail-row td { background: #fafafc; padding: 0; border-bottom: 2px solid var(--border); }
+  .detail-panel { padding: 14px 16px; }
+  .detail-panel h4 { margin: 0 0 8px; font-size: 13px; color: var(--ink); font-weight: 700; }
+  .detail-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: auto; margin-bottom: 10px; }
+  .detail-table th { background: var(--border); font-size: 10px; padding: 6px 8px; text-transform: uppercase; letter-spacing: .5px; }
+  .detail-table td { padding: 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .detail-table .type-12 { color: #b8860b; font-weight: 700; }
+  .detail-table .type-13 { color: var(--brand); font-weight: 700; }
+  .detail-none { color: var(--muted); font-size: 12px; padding: 8px 0; }
+
   .empty {
     text-align: center;
     color: var(--muted);
@@ -366,11 +378,47 @@ function render() {
   }
 
   const isAdmin = me && me.isAdmin;
-  $('ordersBody').innerHTML = filtered.map(o => {
+  const colCount = isAdmin ? 19 : 18;
+  $('ordersBody').innerHTML = filtered.map((o, idx) => {
     const done = countDone(o);
+    const allEvents = [
+      ...((o.pause12 && o.pause12.history) || []).map(e => Object.assign({}, e, { label: '正常暫停' })),
+      ...((o.pause13 && o.pause13.history) || []).map(e => Object.assign({}, e, { label: '異常停止' })),
+    ].sort((a, b) => new Date(a.startAt) - new Date(b.startAt));
+    const hasEvents = allEvents.length > 0;
+    let detailHtml = '';
+    if (hasEvents) {
+      const rows = allEvents.map((e, i) => {
+        const typeClass = e.label === '異常停止' ? 'type-13' : 'type-12';
+        return `<tr>
+          <td>${i + 1}</td>
+          <td class="${typeClass}">${e.label}</td>
+          <td>${escapeHtml(e.activeStep || '—')}</td>
+          <td>${fmtTimeShort(e.startAt)}</td>
+          <td>${e.endAt ? fmtTimeShort(e.endAt) : '進行中…'}</td>
+          <td>${e.duration ? fmtDur(e.duration) : '—'}</td>
+          <td>${escapeHtml(e.note || '')}</td>
+        </tr>`;
+      }).join('');
+      detailHtml = `
+        <tr class="detail-row" id="detail-${idx}" style="display:none;">
+          <td colspan="${colCount}">
+            <div class="detail-panel">
+              <h4>暫停 / 異常明細（工單 ${escapeHtml(o.orderNo)}）</h4>
+              <table class="detail-table">
+                <thead><tr><th>#</th><th>類型</th><th>當下工序</th><th>暫停時間</th><th>恢復時間</th><th>持續時間</th><th>備註</th></tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+    const p12 = o.pause12 || { count: 0, totalSec: 0 };
+    const p13 = o.pause13 || { count: 0, totalSec: 0 };
     return `
-      <tr>
-        <td class="order-no">${escapeHtml(o.orderNo)}</td>
+      <tr class="${hasEvents ? 'clickable' : ''}" ${hasEvents ? `onclick="toggleDetail(${idx})"` : ''}>
+        <td class="order-no">${escapeHtml(o.orderNo)} ${hasEvents ? '<span style="font-size:10px;color:var(--brand);">▶ 明細</span>' : ''}</td>
         <td class="machine">${escapeHtml(o.machineNo)}</td>
         <td>${escapeHtml(o.leaderName)}</td>
         <td><strong>${done}/7</strong></td>
@@ -382,19 +430,26 @@ function render() {
         ${stepCell(o.step6At)}
         ${stepCell(o.step7At)}
         ${stepCell(o.step11At)}
-        <td>${o.pause12 ? o.pause12.count : 0} 次</td>
-        <td>${o.pause12 ? fmtDur(o.pause12.totalSec) : '—'}</td>
-        <td>${o.pause13 ? o.pause13.count : 0} 次</td>
-        <td>${o.pause13 ? fmtDur(o.pause13.totalSec) : '—'}</td>
+        <td>${p12.count} 次</td>
+        <td>${fmtDur(p12.totalSec)}</td>
+        <td>${p13.count} 次</td>
+        <td>${fmtDur(p13.totalSec)}</td>
         <td style="font-size:11px;color:#666;">${escapeHtml(fmtTime(o.updatedAt))}</td>
-        ${isAdmin ? `<td><button class="btn-secondary" data-del="${escapeHtml(o.orderNo)}" style="padding:6px 12px;font-size:12px;color:var(--brand);border-color:var(--brand);">刪除</button></td>` : ''}
+        ${isAdmin ? `<td><button class="btn-secondary" data-del="${escapeHtml(o.orderNo)}" style="padding:6px 12px;font-size:12px;color:var(--brand);border-color:var(--brand);" onclick="event.stopPropagation()">刪除</button></td>` : ''}
       </tr>
+      ${detailHtml}
     `;
   }).join('');
 
   $('ordersBody').querySelectorAll('[data-del]').forEach(b => {
     b.onclick = () => deleteOrder(b.getAttribute('data-del'));
   });
+}
+
+function toggleDetail(idx) {
+  const row = document.getElementById('detail-' + idx);
+  if (!row) return;
+  row.style.display = row.style.display === 'none' ? '' : 'none';
 }
 
 async function deleteOrder(orderNo) {

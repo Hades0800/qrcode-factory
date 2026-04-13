@@ -1033,12 +1033,24 @@ function renderSteps() {
   $('bottomBar').classList.remove('show');
 }
 
+function getCurrentStep() {
+  let latest = null, latestTime = 0;
+  STEPS.forEach(s => {
+    const t = order[STEP_FIELD[s.id].time];
+    if (t && new Date(t).getTime() > latestTime) {
+      latestTime = new Date(t).getTime();
+      latest = s;
+    }
+  });
+  return latest ? latest.title : '尚未開始';
+}
+
 async function startPause(p) {
   if (!orderNo) return;
   let note = prompt(p.noteLabel + '：', '') || '';
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/pause', {
     method: 'POST',
-    body: { type: p.type, note },
+    body: { type: p.type, note, activeStep: getCurrentStep() },
   });
   if (!r.ok) { toast(r.error, 'error'); return; }
   order = r.data.order;
