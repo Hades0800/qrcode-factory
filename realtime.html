@@ -243,6 +243,15 @@
     font-weight: 500;
   }
   .timeline li.current .tl-label { color: var(--brand); font-weight: 700; }
+  .timeline li.pause-event .tl-dot { background: #f0ad4e; box-shadow: 0 0 0 2px #f0ad4e; }
+  .timeline li.pause-event .tl-time { color: #b8860b; }
+  .timeline li.pause-event .tl-label { color: #b8860b; font-weight: 600; }
+  .timeline li.abnormal-event .tl-dot { background: var(--brand); box-shadow: 0 0 0 2px var(--brand); }
+  .timeline li.abnormal-event .tl-time { color: var(--brand); }
+  .timeline li.abnormal-event .tl-label { color: var(--brand); font-weight: 600; }
+  .timeline li.resume-event .tl-dot { background: var(--success); box-shadow: 0 0 0 2px var(--success); }
+  .timeline li.resume-event .tl-time { color: var(--success); }
+  .timeline li.resume-event .tl-label { color: var(--success); font-style: italic; }
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: .5; }
@@ -496,7 +505,6 @@ function renderContent() {
             <span class="oi-label">模具規格</span><span class="oi-value">${escapeHtml(o.moldSpec || '')}</span>
             <span class="oi-label">領用材料</span><span class="oi-value">${escapeHtml(o.material || '')}</span>
             <span class="oi-label">小組長</span><span class="oi-value">${escapeHtml(o.leaderName)}</span>
-            <span class="oi-label">進度</span><span class="oi-value">${steps} / 7</span>
           </div>
           <h3 style="margin:0 0 8px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;">生產實態</h3>
           <ul class="timeline">${timeline}</ul>
@@ -514,21 +522,49 @@ function countSteps(o) {
 
 function buildTimeline(o) {
   const items = [];
+
+  // 工序
   STEP_LABELS.forEach(s => {
     if (o[s.key]) {
-      items.push({ time: new Date(o[s.key]), label: s.label, key: s.key });
+      items.push({ time: new Date(o[s.key]), label: s.label, type: 'step' });
     }
   });
+
+  // 暫停事件
+  const pauseEvents = [
+    ...((o.pause12 && o.pause12.history) || []).map(e => Object.assign({}, e, { pauseType: '12', pauseLabel: '正常暫停' })),
+    ...((o.pause13 && o.pause13.history) || []).map(e => Object.assign({}, e, { pauseType: '13', pauseLabel: '異常停止' })),
+  ];
+  pauseEvents.forEach(e => {
+    const note = e.note ? '（' + e.note + '）' : '';
+    items.push({
+      time: new Date(e.startAt),
+      label: e.pauseLabel + note,
+      type: e.pauseType === '13' ? 'abnormal' : 'pause',
+    });
+    if (e.endAt) {
+      const dur = e.duration ? fmtDur(e.duration) : '';
+      items.push({
+        time: new Date(e.endAt),
+        label: '恢復生產' + (dur ? '（暫停 ' + dur + '）' : ''),
+        type: 'resume',
+      });
+    }
+  });
+
   items.sort((a, b) => a.time - b.time);
 
   if (items.length === 0) return '<li><div class="tl-dot"></div><div class="tl-label" style="color:var(--muted);">尚未開始</div></li>';
 
-  // Find current (last non-step11 item)
   const lastIdx = o.step11At ? -1 : items.length - 1;
 
   return items.map((it, i) => {
-    const isCurrent = i === lastIdx;
-    const cls = isCurrent ? 'current' : 'done';
+    const isCurrent = i === lastIdx && it.type === 'step';
+    let cls = 'done';
+    if (isCurrent) cls = 'current';
+    else if (it.type === 'pause') cls = 'done pause-event';
+    else if (it.type === 'abnormal') cls = 'done abnormal-event';
+    else if (it.type === 'resume') cls = 'done resume-event';
     return `
       <li class="${cls}">
         <div class="tl-dot"></div>
@@ -537,6 +573,15 @@ function buildTimeline(o) {
       </li>
     `;
   }).join('');
+}
+
+function fmtDur(sec) {
+  if (!sec || sec <= 0) return '';
+  if (sec < 60) return sec + '秒';
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  if (m < 60) return m + '分' + (s > 0 ? s + '秒' : '');
+  return Math.floor(m / 60) + '時' + (m % 60) + '分';
 }
 
 loadOrders();
