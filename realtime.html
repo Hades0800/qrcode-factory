@@ -248,20 +248,28 @@
     50% { opacity: .5; }
   }
 
-  .overview-card {
-    transition: max-height .3s ease, opacity .2s ease, padding .3s ease, margin .3s ease;
-    max-height: 500px;
+  .overview-card .overview-body {
+    transition: max-height .3s ease, opacity .2s ease;
+    max-height: 600px;
     overflow: hidden;
   }
-  .overview-card.collapsed {
+  .overview-card.collapsed .overview-body {
     max-height: 0;
     opacity: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-    margin-bottom: 0;
-    border: none;
-    box-shadow: none;
   }
+  .overview-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .overview-toggle .toggle-icon {
+    font-size: 12px;
+    color: var(--muted);
+    transition: transform .2s;
+  }
+  .overview-card.collapsed .toggle-icon { transform: rotate(180deg); }
 
   .empty-msg { text-align: center; color: var(--muted); padding: 40px 20px; font-size: 14px; }
 
@@ -424,8 +432,12 @@ function renderContent() {
   // Stats
   html += `
     <div class="card overview-card" id="overviewCard">
-      <h3>機台概覽</h3>
-      <div class="stats-grid">
+      <div class="overview-toggle" onclick="document.getElementById('overviewCard').classList.toggle('collapsed')">
+        <h3 style="margin-bottom:0;">機台概覽</h3>
+        <span class="toggle-icon">▲</span>
+      </div>
+      <div class="overview-body">
+      <div class="stats-grid" style="margin-top:12px;">
         <div class="stat">
           <div class="s-label">生產日期</div>
           <div class="s-value" style="font-size:16px;">${dateStr}</div>
@@ -460,6 +472,7 @@ function renderContent() {
           <div class="s-value">—</div>
         </div>
       </div>
+      </div>
     </div>
   `;
 
@@ -467,8 +480,6 @@ function renderContent() {
   if (machineOrders.length === 0) {
     html += '<div class="empty-msg">今天此機台尚無工單</div>';
   } else {
-    // 確保內容夠高可以滾動（讓機台概覽能收起）
-    html += '<style>#content .scroll-spacer{min-height:60vh;}</style><div class="scroll-spacer">';
     machineOrders.forEach(o => {
       const isActive = activeOrder && o.orderNo === activeOrder.orderNo;
       const steps = countSteps(o);
@@ -492,7 +503,6 @@ function renderContent() {
         </div>
       `;
     });
-    html += '</div>'; // close scroll-spacer
   }
 
   content.innerHTML = html;
@@ -532,16 +542,6 @@ function buildTimeline(o) {
 loadOrders();
 setInterval(loadOrders, 30000);
 
-// 滑到工單區域時自動收起機台概覽
-$('content').addEventListener('scroll', function() {
-  const card = document.getElementById('overviewCard');
-  if (!card) return;
-  if (this.scrollTop > 80) {
-    card.classList.add('collapsed');
-  } else {
-    card.classList.remove('collapsed');
-  }
-});
 </script>
 </body>
 </html>
