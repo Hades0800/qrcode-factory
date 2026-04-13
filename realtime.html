@@ -248,6 +248,21 @@
     50% { opacity: .5; }
   }
 
+  .overview-card {
+    transition: max-height .3s ease, opacity .2s ease, padding .3s ease, margin .3s ease;
+    max-height: 500px;
+    overflow: hidden;
+  }
+  .overview-card.collapsed {
+    max-height: 0;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border: none;
+    box-shadow: none;
+  }
+
   .empty-msg { text-align: center; color: var(--muted); padding: 40px 20px; font-size: 14px; }
 
   @media (max-width: 480px) {
@@ -408,7 +423,7 @@ function renderContent() {
 
   // Stats
   html += `
-    <div class="card">
+    <div class="card overview-card" id="overviewCard">
       <h3>機台概覽</h3>
       <div class="stats-grid">
         <div class="stat">
@@ -512,8 +527,18 @@ function buildTimeline(o) {
 }
 
 loadOrders();
-// 每 30 秒自動刷新
 setInterval(loadOrders, 30000);
+
+// 滑到工單區域時自動收起機台概覽
+$('content').addEventListener('scroll', function() {
+  const card = document.getElementById('overviewCard');
+  if (!card) return;
+  if (this.scrollTop > 80) {
+    card.classList.add('collapsed');
+  } else {
+    card.classList.remove('collapsed');
+  }
+});
 </script>
 </body>
 </html>
