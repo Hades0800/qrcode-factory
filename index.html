@@ -383,6 +383,9 @@
     border-left: 3px solid var(--success);
   }
   .step button { font-size: 15px; padding: 13px; min-height: 48px; }
+  .step-actions { display: flex; gap: 8px; }
+  .step-actions .btn-primary { flex: 1; }
+  .step-actions .btn-success { flex: 0 0 auto; padding: 13px 18px; background: var(--success); color: #fff; box-shadow: 0 2px 6px rgba(46,160,67,.25); }
 
   .badge {
     display: inline-block;
@@ -944,7 +947,7 @@ function renderSteps() {
       body += '<div class="time">✓ ' + fmtTime(time) + '</div>';
       body += '<button class="btn-danger btn-block" data-clear="' + s.id + '">取消此項</button>';
     } else {
-      body += '<button class="btn-primary btn-block" data-scan="' + s.id + '">📷 掃描完成</button>';
+      body += '<div class="step-actions"><button class="btn-primary" data-scan="' + s.id + '">📷 掃描完成</button><button class="btn-success" data-done="' + s.id + '">✓ 已完成</button></div>';
     }
     div.innerHTML = `<div class="step-num">${numLabel}</div><div class="step-body">${body}</div>`;
     wrap.appendChild(div);
@@ -979,6 +982,9 @@ function renderSteps() {
 
   area.querySelectorAll('[data-scan]').forEach(b => {
     b.onclick = () => startStepScan(b.getAttribute('data-scan'));
+  });
+  area.querySelectorAll('[data-done]').forEach(b => {
+    b.onclick = () => submitStep(b.getAttribute('data-done'), '');
   });
   area.querySelectorAll('[data-clear]').forEach(b => {
     b.onclick = () => clearStep(b.getAttribute('data-clear'));
