@@ -587,30 +587,9 @@
 </header>
 
 <div class="container">
-  <!-- 工單 -->
-  <div class="card">
-    <h2>工單號 <span class="required">必填</span></h2>
-    <div id="orderEmpty">
-      <button class="btn-primary btn-block" id="scanOrderBtn">📷 掃描工單條碼</button>
-      <div class="or-divider">或</div>
-      <div class="row">
-        <input type="text" id="orderInput" placeholder="手動輸入工單號">
-        <button class="btn-secondary" id="setOrderBtn" style="flex:0 0 90px;">確定</button>
-      </div>
-    </div>
-    <div id="orderShow" style="display:none;">
-      <div class="order-display">
-        <div class="label">目前工單</div>
-        <div class="num" id="orderNoText"></div>
-        <div class="updated" id="orderUpdated"></div>
-      </div>
-      <button class="btn-secondary btn-block" id="changeOrderBtn" style="margin-top:14px;">更換工單</button>
-    </div>
-  </div>
-
-  <!-- 機台選擇（必填） -->
-  <div class="card" id="machineCard" style="display:none;">
-    <h2>選擇機台 <span class="required">必填</span></h2>
+  <!-- 機台選擇（第一步） -->
+  <div class="card" id="machineCard">
+    <h2>選擇機台 <span class="required">第一步</span></h2>
     <div id="machineEmpty">
       <div class="machine-grid">
         <button class="machine-btn" data-machine="No1-350"><span class="m-num">No1</span><span class="m-spec">350</span></button>
@@ -627,6 +606,27 @@
         <div class="num" id="machineNoText" style="font-size:24px;color:var(--brand);"></div>
       </div>
       <button class="btn-secondary btn-block" id="changeMachineBtn" style="margin-top:14px;">更換機台</button>
+    </div>
+  </div>
+
+  <!-- 工單號（第二步） -->
+  <div class="card" id="orderCard" style="display:none;">
+    <h2>工單號 <span class="required">第二步</span></h2>
+    <div id="orderEmpty">
+      <button class="btn-primary btn-block" id="scanOrderBtn">📷 掃描工單條碼</button>
+      <div class="or-divider">或</div>
+      <div class="row">
+        <input type="text" id="orderInput" placeholder="手動輸入工單號">
+        <button class="btn-secondary" id="setOrderBtn" style="flex:0 0 90px;">確定</button>
+      </div>
+    </div>
+    <div id="orderShow" style="display:none;">
+      <div class="order-display">
+        <div class="label">目前工單</div>
+        <div class="num" id="orderNoText"></div>
+        <div class="updated" id="orderUpdated"></div>
+      </div>
+      <button class="btn-secondary btn-block" id="changeOrderBtn" style="margin-top:14px;">更換工單</button>
     </div>
   </div>
 
@@ -809,11 +809,15 @@ function logout(silent) {
   localStorage.removeItem('me');
   orderNo = '';
   order = null;
+  selectedMachine = '';
+  document.querySelectorAll('.machine-btn').forEach(b => b.classList.remove('selected'));
+  $('machineEmpty').style.display = 'block';
+  $('machineShow').style.display = 'none';
+  $('orderCard').style.display = 'none';
   $('orderEmpty').style.display = 'block';
   $('orderShow').style.display = 'none';
   $('stepsArea').style.display = 'none';
   $('orderInput').value = '';
-  $('machineCard').style.display = 'none';
   $('bottomBar').classList.remove('show');
   renderHeader();
   showLogin(silent ? '登入逾期，請重新登入' : '');
@@ -839,19 +843,55 @@ function renderHeader() {
   }
 }
 
-// ====== 工單 ======
+// ====== 機台（第一步）======
+let selectedMachine = '';
+
+function selectMachine(no) {
+  selectedMachine = no;
+  document.querySelectorAll('.machine-btn').forEach(b => {
+    b.classList.toggle('selected', b.getAttribute('data-machine') === no);
+  });
+  // 選完機台 → 顯示工單號卡片
+  $('orderCard').style.display = 'block';
+  $('machineEmpty').style.display = 'none';
+  $('machineShow').style.display = 'block';
+  $('machineNoText').textContent = no;
+  setTimeout(() => $('orderInput').focus(), 200);
+}
+
+document.querySelectorAll('.machine-btn').forEach(b => {
+  b.onclick = () => selectMachine(b.getAttribute('data-machine'));
+});
+$('changeMachineBtn').onclick = () => {
+  selectedMachine = '';
+  document.querySelectorAll('.machine-btn').forEach(b => b.classList.remove('selected'));
+  $('machineEmpty').style.display = 'block';
+  $('machineShow').style.display = 'none';
+  $('orderCard').style.display = 'none';
+  $('stepsArea').style.display = 'none';
+  $('bottomBar').classList.remove('show');
+};
+
+// ====== 工單號（第二步）======
 async function setOrder(no) {
   no = String(no || '').trim();
   if (!no) { toast('工單號不可空白', 'error'); return; }
+  if (!selectedMachine) { toast('請先選擇機台', 'error'); return; }
   const r = await api('/api/orders/' + encodeURIComponent(no));
   if (!r.ok) { toast(r.error, 'error'); return; }
   orderNo = no;
   order = r.data.order;
+  // 設定機台到 DB
+  const mr = await api('/api/orders/' + encodeURIComponent(no) + '/machine', {
+    method: 'POST',
+    body: { machineNo: selectedMachine },
+  });
+  if (mr.ok) order = mr.data.order;
   $('orderEmpty').style.display = 'none';
   $('orderShow').style.display = 'block';
   $('orderNoText').textContent = no;
   $('orderUpdated').textContent = order.updatedAt ? ('最後更新：' + fmtTime(order.updatedAt)) : '尚未開始';
-  renderMachine();
+  renderSteps();
 }
 
 $('setOrderBtn').onclick = () => setOrder($('orderInput').value);
@@ -862,45 +902,6 @@ $('changeOrderBtn').onclick = () => {
   $('orderEmpty').style.display = 'block';
   $('orderShow').style.display = 'none';
   $('orderInput').value = '';
-  $('machineCard').style.display = 'none';
-  $('stepsArea').style.display = 'none';
-  $('bottomBar').classList.remove('show');
-};
-
-// ====== 機台 ======
-function renderMachine() {
-  $('machineCard').style.display = 'block';
-  if (order && order.machineNo) {
-    $('machineEmpty').style.display = 'none';
-    $('machineShow').style.display = 'block';
-    $('machineNoText').textContent = order.machineNo;
-    renderSteps();
-  } else {
-    $('machineEmpty').style.display = 'block';
-    $('machineShow').style.display = 'none';
-    $('stepsArea').style.display = 'none';
-  }
-}
-
-async function setMachine(no) {
-  no = String(no || '').trim();
-  if (!no) { toast('機台號不可空白', 'error'); return; }
-  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/machine', {
-    method: 'POST',
-    body: { machineNo: no },
-  });
-  if (!r.ok) { toast(r.error, 'error'); return; }
-  order = r.data.order;
-  toast('機台已設定：' + no, 'success');
-  renderMachine();
-}
-
-document.querySelectorAll('.machine-btn').forEach(b => {
-  b.onclick = () => setMachine(b.getAttribute('data-machine'));
-});
-$('changeMachineBtn').onclick = () => {
-  $('machineEmpty').style.display = 'block';
-  $('machineShow').style.display = 'none';
   $('stepsArea').style.display = 'none';
   $('bottomBar').classList.remove('show');
 };
@@ -1002,19 +1003,18 @@ async function handleAction(action) {
 }
 
 function finishOrder() {
-  orderNo = ''; order = null;
+  orderNo = ''; order = null; selectedMachine = '';
+  document.querySelectorAll('.machine-btn').forEach(b => b.classList.remove('selected'));
+  $('machineEmpty').style.display = 'block';
+  $('machineShow').style.display = 'none';
+  $('orderCard').style.display = 'none';
   $('orderEmpty').style.display = 'block';
   $('orderShow').style.display = 'none';
   $('orderInput').value = '';
-  $('machineCard').style.display = 'none';
-  $('machineEmpty').style.display = 'block';
-  $('machineShow').style.display = 'none';
-  $('machineInput').value = '';
   $('stepsArea').style.display = 'none';
   $('bottomBar').classList.remove('show');
-  toast('已完成，請掃下一張工單', 'success');
+  toast('已完成，請選擇機台開始下一張工單', 'success');
   window.scrollTo({ top: 0, behavior: 'smooth' });
-  setTimeout(() => $('orderInput').focus(), 300);
 }
 $('finishBtn').onclick = finishOrder;
 
