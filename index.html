@@ -268,8 +268,10 @@
   .action-btn.act-warning .act-icon { background: rgba(255,255,255,.2); }
   .action-btn.act-danger { background: var(--brand); color: #fff; box-shadow: 0 4px 12px rgba(210,53,53,.3); }
   .action-btn.act-danger .act-icon { background: rgba(255,255,255,.2); }
-  .action-btn.done { opacity: .6; }
-  .action-btn.done .act-title::after { content: ' ✓'; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .75; }
+  }
 
   .or-divider {
     display: flex;
@@ -696,10 +698,10 @@ const STEPS = [
   { id: '7', title: '07. 其他作業',           hint: '清潔清運或包裝入庫等' },
 ];
 
-const ACTIONS = [
-  { id: '11', title: '工單完成與結束', hint: '開始新的製造工單', style: 'act-success', icon: '✓', finishes: true },
-  { id: '12', title: '生產正常暫停稼動', hint: '休息時間、人力支援、隔日生產、順位調整、外賓參觀', style: 'act-warning', icon: '⏸', needNote: true, noteLabel: '暫停原因（可留白）' },
-  { id: '13', title: '生產異常停止稼動', hint: '設備故障、模具頓刀、品質異常', style: 'act-danger', icon: '⚠', needNote: true, noteLabel: '異常說明（可留白）' },
+const ACTIONS_FINISH = { id: '11', title: '工單完成與結束', hint: '開始新的製造工單', style: 'act-success', icon: '✓' };
+const PAUSE_TYPES = [
+  { type: '12', title: '生產正常暫停稼動', hint: '休息時間、人力支援、隔日生產、順位調整、外賓參觀', style: 'act-warning', icon: '⏸', noteLabel: '暫停原因（可留白）' },
+  { type: '13', title: '生產異常停止稼動', hint: '設備故障、模具頓刀、品質異常', style: 'act-danger', icon: '⚠', noteLabel: '異常說明（可留白）' },
 ];
 
 const STEP_FIELD = {
@@ -955,30 +957,68 @@ function renderSteps() {
 
   area.appendChild(wrap);
 
-  // 底部三顆動作按鈕
+  // 底部動作按鈕
   const actWrap = document.createElement('div');
   actWrap.className = 'card';
   actWrap.innerHTML = '<h2>操作</h2>';
   const actDiv = document.createElement('div');
   actDiv.className = 'action-buttons';
-  ACTIONS.forEach(a => {
-    const f = STEP_FIELD[a.id];
-    const time = f ? order[f.time] : null;
-    const done = !!time;
+
+  // 暫停/異常按鈕（開關模式）
+  PAUSE_TYPES.forEach(p => {
+    const info = order['pause' + p.type]; // pause12 or pause13
+    const isActive = info && info.active;
+    const totalSec = info ? info.totalSec : 0;
+    const count = info ? info.count : 0;
     const btn = document.createElement('button');
-    btn.className = 'action-btn ' + a.style + (done ? ' done' : '');
-    btn.innerHTML = `
-      <div class="act-icon">${a.icon}</div>
-      <div class="act-body">
-        <div class="act-title">${escapeHtml(a.title)}${done ? '<span style="font-size:11px;font-weight:500;margin-left:6px;">' + fmtTime(time) + '</span>' : ''}</div>
-        <div class="act-hint">${escapeHtml(a.hint)}</div>
-      </div>
-    `;
-    btn.onclick = () => handleAction(a);
+    if (isActive) {
+      btn.className = 'action-btn ' + p.style;
+      btn.style.animation = 'pulse 1.5s infinite';
+      btn.innerHTML = `
+        <div class="act-icon">▶</div>
+        <div class="act-body">
+          <div class="act-title">恢復生產</div>
+          <div class="act-hint">${escapeHtml(p.title)} 中… <span class="live-timer" data-start="${info.active.startAt}"></span></div>
+        </div>
+      `;
+      btn.onclick = () => resumePause(p.type);
+    } else {
+      btn.className = 'action-btn ' + p.style;
+      let subtitle = p.hint;
+      if (count > 0) subtitle = `累計 ${count} 次，共 ${fmtDuration(totalSec)}`;
+      btn.innerHTML = `
+        <div class="act-icon">${p.icon}</div>
+        <div class="act-body">
+          <div class="act-title">${escapeHtml(p.title)}</div>
+          <div class="act-hint">${subtitle}</div>
+        </div>
+      `;
+      btn.onclick = () => startPause(p);
+    }
     actDiv.appendChild(btn);
   });
+
+  // 完成按鈕
+  const a = ACTIONS_FINISH;
+  const finBtn = document.createElement('button');
+  finBtn.className = 'action-btn ' + a.style;
+  finBtn.innerHTML = `
+    <div class="act-icon">${a.icon}</div>
+    <div class="act-body">
+      <div class="act-title">${escapeHtml(a.title)}</div>
+      <div class="act-hint">${escapeHtml(a.hint)}</div>
+    </div>
+  `;
+  finBtn.onclick = () => {
+    if (!confirm('確定完成此工單？\n\n（資料已自動儲存）')) return;
+    submitStep('11', '').then(() => finishOrder());
+  };
+  actDiv.appendChild(finBtn);
+
   actWrap.appendChild(actDiv);
   area.appendChild(actWrap);
+
+  startLiveTimers();
 
   area.querySelectorAll('[data-scan]').forEach(b => {
     b.onclick = () => startStepScan(b.getAttribute('data-scan'));
@@ -993,18 +1033,60 @@ function renderSteps() {
   $('bottomBar').classList.remove('show');
 }
 
-async function handleAction(action) {
+async function startPause(p) {
   if (!orderNo) return;
-  let note = '';
-  if (action.needNote) {
-    note = prompt(action.noteLabel + '：', '') || '';
-  }
-  if (action.finishes) {
-    if (!confirm('確定完成此工單？\n\n（資料已自動儲存）')) return;
-  }
-  await submitStep(action.id, note);
-  if (action.finishes) {
-    finishOrder();
+  let note = prompt(p.noteLabel + '：', '') || '';
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/pause', {
+    method: 'POST',
+    body: { type: p.type, note },
+  });
+  if (!r.ok) { toast(r.error, 'error'); return; }
+  order = r.data.order;
+  renderSteps();
+  toast(p.title + ' — 開始計時', 'success');
+  startLiveTimers();
+}
+
+async function resumePause(type) {
+  if (!orderNo) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/resume', {
+    method: 'POST',
+    body: { type },
+  });
+  if (!r.ok) { toast(r.error, 'error'); return; }
+  order = r.data.order;
+  const dur = r.data.resumed ? r.data.resumed.duration : 0;
+  renderSteps();
+  toast('已恢復生產（暫停 ' + fmtDuration(dur) + '）', 'success');
+}
+
+function fmtDuration(sec) {
+  if (!sec || sec < 0) return '0 秒';
+  if (sec < 60) return sec + ' 秒';
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  if (m < 60) return m + ' 分 ' + (s > 0 ? s + ' 秒' : '');
+  const h = Math.floor(m / 60);
+  return h + ' 時 ' + (m % 60) + ' 分';
+}
+
+// 即時計時器
+let timerInterval = null;
+function startLiveTimers() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(updateLiveTimers, 1000);
+  updateLiveTimers();
+}
+function updateLiveTimers() {
+  document.querySelectorAll('.live-timer').forEach(el => {
+    const start = new Date(el.dataset.start);
+    const sec = Math.round((Date.now() - start.getTime()) / 1000);
+    el.textContent = fmtDuration(sec);
+  });
+  // 沒有 timer 就停止
+  if (!document.querySelector('.live-timer')) {
+    clearInterval(timerInterval);
+    timerInterval = null;
   }
 }
 

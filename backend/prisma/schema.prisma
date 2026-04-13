@@ -41,8 +41,20 @@ model Order {
   step13At   DateTime?
   step13Note String?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  pauseEvents PauseEvent[]
 
   @@index([orderNo])
+}
+
+model PauseEvent {
+  id       Int       @id @default(autoincrement())
+  orderId  Int
+  order    Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type     String    // "12" = 正常暫停, "13" = 異常停止
+  startAt  DateTime  @default(now())
+  endAt    DateTime?
+  duration Int?      // 秒數（endAt - startAt）
+  note     String?
 }

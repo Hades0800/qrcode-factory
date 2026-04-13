@@ -13,22 +13,37 @@ const STEP_COLS = {
 
 function serializeOrder(o) {
   if (!o) return null;
+  const events = o.pauseEvents || [];
+  const summarize = (type) => {
+    const items = events.filter(e => e.type === type);
+    const closed = items.filter(e => e.endAt);
+    const active = items.find(e => !e.endAt) || null;
+    return {
+      count: closed.length,
+      totalSec: closed.reduce((s, e) => s + (e.duration || 0), 0),
+      active: active ? { id: active.id, startAt: active.startAt, note: active.note } : null,
+      history: items.map(e => ({
+        id: e.id, startAt: e.startAt, endAt: e.endAt,
+        duration: e.duration, note: e.note,
+      })),
+    };
+  };
   return {
     orderNo: o.orderNo,
     machineNo: o.machineNo || '',
     leaderId: o.leaderId,
     leaderName: o.leader?.displayName || '',
     step1At: o.step1At, step2At: o.step2At, step3At: o.step3At,
-    step4At: o.step4At, step4Note: o.step4Note,
-    step5At: o.step5At, step6At: o.step6At,
-    step7At: o.step7At, step7Note: o.step7Note,
-    step11At: o.step11At,
-    step12At: o.step12At, step12Note: o.step12Note,
-    step13At: o.step13At, step13Note: o.step13Note,
+    step4At: o.step4At, step5At: o.step5At, step6At: o.step6At,
+    step7At: o.step7At, step11At: o.step11At,
+    pause12: summarize('12'),
+    pause13: summarize('13'),
     createdAt: o.createdAt,
     updatedAt: o.updatedAt,
   };
 }
+
+const ORDER_INCLUDE = { leader: true, pauseEvents: true };
 
 export default async function orderRoutes(fastify) {
   fastify.addHook('onRequest', fastify.authenticate);
@@ -39,12 +54,12 @@ export default async function orderRoutes(fastify) {
     if (!orderNo) return reply.code(400).send({ error: '缺少工單號' });
     let order = await fastify.prisma.order.findUnique({
       where: { orderNo },
-      include: { leader: true },
+      include: ORDER_INCLUDE,
     });
     if (!order) {
       order = await fastify.prisma.order.create({
         data: { orderNo, leaderId: request.user.id },
-        include: { leader: true },
+        include: ORDER_INCLUDE,
       });
     }
     return { order: serializeOrder(order) };
@@ -67,7 +82,7 @@ export default async function orderRoutes(fastify) {
     const updated = await fastify.prisma.order.update({
       where: { orderNo },
       data: { machineNo: String(machineNo).trim().slice(0, 60), leaderId: request.user.id },
-      include: { leader: true },
+      include: ORDER_INCLUDE,
     });
     return { order: serializeOrder(updated) };
   });
@@ -89,7 +104,7 @@ export default async function orderRoutes(fastify) {
     if (order[cols.time]) {
       const existing = await fastify.prisma.order.findUnique({
         where: { orderNo },
-        include: { leader: true },
+        include: ORDER_INCLUDE,
       });
       return reply.code(409).send({
         error: `此項目已記錄過：${order[cols.time].toISOString()}`,
@@ -106,7 +121,7 @@ export default async function orderRoutes(fastify) {
     const updated = await fastify.prisma.order.update({
       where: { orderNo },
       data: updateData,
-      include: { leader: true },
+      include: ORDER_INCLUDE,
     });
     return { order: serializeOrder(updated) };
   });
@@ -126,9 +141,49 @@ export default async function orderRoutes(fastify) {
     const updated = await fastify.prisma.order.update({
       where: { orderNo },
       data: updateData,
-      include: { leader: true },
+      include: ORDER_INCLUDE,
     });
     return { order: serializeOrder(updated) };
+  });
+
+  // 開始暫停 / 異常
+  fastify.post('/:orderNo/pause', async (request, reply) => {
+    const { orderNo } = request.params;
+    const { type, note } = request.body || {};
+    if (!['12', '13'].includes(type)) return reply.code(400).send({ error: '無效類型' });
+    const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
+    if (!order) return reply.code(404).send({ error: '找不到工單' });
+    // 如果已有未結束的同類型暫停 → 拒絕
+    const active = await fastify.prisma.pauseEvent.findFirst({
+      where: { orderId: order.id, type, endAt: null },
+    });
+    if (active) return reply.code(409).send({ error: '已在暫停中，請先恢復' });
+    await fastify.prisma.pauseEvent.create({
+      data: { orderId: order.id, type, note: note || null },
+    });
+    const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
+    return { order: serializeOrder(updated) };
+  });
+
+  // 恢復（結束暫停）
+  fastify.post('/:orderNo/resume', async (request, reply) => {
+    const { orderNo } = request.params;
+    const { type } = request.body || {};
+    if (!['12', '13'].includes(type)) return reply.code(400).send({ error: '無效類型' });
+    const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
+    if (!order) return reply.code(404).send({ error: '找不到工單' });
+    const active = await fastify.prisma.pauseEvent.findFirst({
+      where: { orderId: order.id, type, endAt: null },
+    });
+    if (!active) return reply.code(404).send({ error: '沒有進行中的暫停' });
+    const now = new Date();
+    const duration = Math.round((now - active.startAt) / 1000);
+    await fastify.prisma.pauseEvent.update({
+      where: { id: active.id },
+      data: { endAt: now, duration },
+    });
+    const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
+    return { order: serializeOrder(updated), resumed: { type, duration } };
   });
 
   // 刪除工單（僅管理員）
@@ -151,7 +206,7 @@ export default async function orderRoutes(fastify) {
       where,
       orderBy: { updatedAt: 'desc' },
       take: limit,
-      include: { leader: true },
+      include: ORDER_INCLUDE,
     });
     return { orders: orders.map(serializeOrder) };
   });
