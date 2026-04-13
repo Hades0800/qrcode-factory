@@ -52,19 +52,26 @@
   header .brand-text { border-left: 2px solid var(--border); padding-left: 10px; }
   header .brand-text .title { font-size: 13px; font-weight: 700; color: var(--ink); white-space: nowrap; }
   header .brand-text .sub { font-size: 10px; color: var(--muted); white-space: nowrap; }
-  header .right { display: flex; gap: 2px; flex-shrink: 0; }
-  header .right a {
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 600;
-    text-decoration: none;
-    padding: 6px 8px;
-    border-radius: 6px;
-    white-space: nowrap;
+  .menu-toggle {
+    background: none; border: none; font-size: 22px; color: var(--ink);
+    cursor: pointer; padding: 6px 10px; border-radius: 8px; min-height: 36px;
+    display: flex; align-items: center; flex-shrink: 0;
   }
-  header .right a:hover { background: var(--brand-soft); color: var(--brand); }
-  header .right a.nav-active { color: var(--brand); background: var(--brand-soft); border-radius: 6px; }
-  header .right .nav-sep { width: 1px; height: 18px; background: var(--border); align-self: center; margin: 0 2px; }
+  .dropdown-menu {
+    display: none; position: absolute; top: 100%; right: 8px;
+    background: #fff; border-radius: 12px; min-width: 170px; z-index: 20; padding: 6px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.12), 0 0 0 1px rgba(0,0,0,.04);
+  }
+  .dropdown-menu.show { display: block; }
+  .dropdown-menu a {
+    display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+    font-size: 15px; font-weight: 600; color: var(--text);
+    text-decoration: none; border-radius: 8px;
+  }
+  .dropdown-menu a:hover { background: var(--bg); }
+  .dropdown-menu a.nav-active { color: var(--brand); background: var(--brand-soft); }
+  .dropdown-menu .menu-sep { height: 1px; background: var(--border); margin: 4px 8px; }
+  .dropdown-menu a.menu-logout { color: var(--muted); }
 
   /* Machine tabs (horizontal scroll) */
   .machine-tabs {
@@ -262,13 +269,14 @@
       <div class="sub" id="meShow"></div>
     </div>
   </div>
-  <div class="right">
-    <a href="index.html">掃描</a>
-    <a href="records.html">紀錄</a>
-    <a href="realtime.html" class="nav-active">即時</a>
-    <a href="admin.html" id="adminLink" style="display:none;">管理</a>
-    <span class="nav-sep"></span>
-    <a href="#" id="logoutLink">登出</a>
+  <button class="menu-toggle" id="menuBtn" onclick="document.getElementById('dropMenu').classList.toggle('show')">☰</button>
+  <div class="dropdown-menu" id="dropMenu">
+    <a href="index.html">📷 掃描</a>
+    <a href="records.html">📊 紀錄</a>
+    <a href="realtime.html" class="nav-active">⚡ 即時</a>
+    <a href="admin.html" id="adminLink" style="display:none;">⚙ 管理</a>
+    <div class="menu-sep"></div>
+    <a href="#" id="logoutLink" class="menu-logout">登出</a>
   </div>
 </header>
 
@@ -338,7 +346,11 @@ async function api(path) {
 
 if (!token || !me) { alert('請先登入'); location.href = 'index.html'; }
 $('meShow').textContent = me ? me.displayName : '';
-if (me && me.isAdmin) $('adminLink').style.display = 'inline';
+if (me && me.isAdmin) $('adminLink').style.display = 'flex';
+document.addEventListener('click', e => {
+  const menu = document.getElementById('dropMenu');
+  if (menu && !menu.contains(e.target) && e.target !== document.getElementById('menuBtn')) menu.classList.remove('show');
+});
 $('logoutLink').onclick = e => { e.preventDefault(); localStorage.clear(); location.href = 'index.html'; };
 
 // Machine tabs

@@ -85,19 +85,29 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  header .right { display: flex; gap: 2px; flex-shrink: 0; }
-  header .right a {
-    color: var(--brand);
-    font-size: 13px;
-    font-weight: 600;
-    text-decoration: none;
-    padding: 8px 10px;
-    border-radius: 8px;
-    min-height: 36px;
-    display: inline-flex;
-    align-items: center;
+  .menu-toggle {
+    background: none; border: none; font-size: 22px; color: var(--ink);
+    cursor: pointer; padding: 6px 10px; border-radius: 8px;
+    min-height: 36px; display: flex; align-items: center; flex-shrink: 0;
   }
-  header .right a:hover { background: var(--brand-soft); }
+  .menu-toggle:hover { background: var(--bg); }
+  .dropdown-menu {
+    display: none; position: absolute; top: 100%; right: 8px;
+    background: #fff; border-radius: 12px; min-width: 170px; z-index: 20; padding: 6px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.12), 0 0 0 1px rgba(0,0,0,.04);
+    animation: menuIn .15s ease;
+  }
+  .dropdown-menu.show { display: block; }
+  @keyframes menuIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+  .dropdown-menu a {
+    display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+    font-size: 15px; font-weight: 600; color: var(--text);
+    text-decoration: none; border-radius: 8px;
+  }
+  .dropdown-menu a:hover { background: var(--bg); }
+  .dropdown-menu a.nav-active { color: var(--brand); background: var(--brand-soft); }
+  .dropdown-menu .menu-sep { height: 1px; background: var(--border); margin: 4px 8px; }
+  .dropdown-menu a.menu-logout { color: var(--muted); }
 
   .container {
     padding: 14px;
@@ -194,9 +204,6 @@
   .btn-block { width: 100%; }
   .row { display: flex; gap: 10px; }
   .row > * { flex: 1; }
-
-  header .right a.nav-active { color: var(--brand); background: var(--brand-soft); border-radius: 6px; }
-  header .right .nav-sep { width: 1px; height: 18px; background: var(--border); align-self: center; margin: 0 2px; }
 
   /* 機台按鈕格 */
   .machine-grid {
@@ -587,13 +594,14 @@
       <div class="sub" id="leaderShow">未登入</div>
     </div>
   </div>
-  <div class="right" id="navRight" style="display:none;">
-    <a href="index.html" class="nav-active">掃描</a>
-    <a href="records.html">紀錄</a>
-    <a href="realtime.html">即時</a>
-    <a href="admin.html" id="adminLink" style="display:none;">管理</a>
-    <span class="nav-sep"></span>
-    <a href="#" id="logoutLink">登出</a>
+  <button class="menu-toggle" id="menuBtn" style="display:none;" onclick="$('dropMenu').classList.toggle('show')">☰</button>
+  <div class="dropdown-menu" id="dropMenu">
+    <a href="index.html" class="nav-active">📷 掃描</a>
+    <a href="records.html">📊 紀錄</a>
+    <a href="realtime.html">⚡ 即時</a>
+    <a href="admin.html" id="adminLink" style="display:none;">⚙ 管理</a>
+    <div class="menu-sep"></div>
+    <a href="#" id="logoutLink" class="menu-logout">登出</a>
   </div>
 </header>
 
@@ -842,13 +850,19 @@ $('logoutLink').onclick = e => { e.preventDefault(); if (confirm('確定登出�
 function renderHeader() {
   if (me) {
     $('leaderShow').textContent = me.displayName + (me.isAdmin ? '（管理員）' : '');
-    $('navRight').style.display = 'flex';
-    $('adminLink').style.display = me.isAdmin ? 'inline' : 'none';
+    $('menuBtn').style.display = 'flex';
+    $('adminLink').style.display = me.isAdmin ? 'flex' : 'none';
   } else {
     $('leaderShow').textContent = '未登入';
-    $('navRight').style.display = 'none';
+    $('menuBtn').style.display = 'none';
   }
 }
+document.addEventListener('click', e => {
+  const menu = $('dropMenu');
+  if (menu && !menu.contains(e.target) && e.target !== $('menuBtn')) {
+    menu.classList.remove('show');
+  }
+});
 
 // ====== 機台（第一步）======
 let selectedMachine = '';
