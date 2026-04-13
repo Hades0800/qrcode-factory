@@ -195,25 +195,8 @@
   .row { display: flex; gap: 10px; }
   .row > * { flex: 1; }
 
-  /* Tab bar */
-  .tab-bar {
-    display: flex;
-    background: #fff;
-    border-bottom: 1px solid var(--border);
-  }
-  .tab-bar a {
-    flex: 1;
-    text-align: center;
-    padding: 12px 0;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--muted);
-    text-decoration: none;
-    border-bottom: 3px solid transparent;
-    transition: all .15s;
-  }
-  .tab-bar a:hover { color: var(--brand); }
-  .tab-bar a.active { color: var(--brand); border-bottom-color: var(--brand); }
+  header .right a.nav-active { color: var(--brand); background: var(--brand-soft); border-radius: 6px; }
+  header .right .nav-sep { width: 1px; height: 18px; background: var(--border); align-self: center; margin: 0 2px; }
 
   /* 機台按鈕格 */
   .machine-grid {
@@ -604,17 +587,15 @@
       <div class="sub" id="leaderShow">未登入</div>
     </div>
   </div>
-  <div class="right">
+  <div class="right" id="navRight" style="display:none;">
+    <a href="index.html" class="nav-active">掃描</a>
+    <a href="records.html">紀錄</a>
+    <a href="realtime.html">即時</a>
     <a href="admin.html" id="adminLink" style="display:none;">管理</a>
-    <a href="#" id="logoutLink" style="display:none;">登出</a>
+    <span class="nav-sep"></span>
+    <a href="#" id="logoutLink">登出</a>
   </div>
 </header>
-
-<div class="tab-bar" id="tabBar" style="display:none;">
-  <a href="index.html" class="active">掃描</a>
-  <a href="records.html">紀錄</a>
-  <a href="realtime.html">即時</a>
-</div>
 
 <div class="container">
   <!-- 機台選擇（第一步） -->
@@ -861,14 +842,11 @@ $('logoutLink').onclick = e => { e.preventDefault(); if (confirm('確定登出�
 function renderHeader() {
   if (me) {
     $('leaderShow').textContent = me.displayName + (me.isAdmin ? '（管理員）' : '');
-    $('logoutLink').style.display = 'inline';
-    $('tabBar').style.display = 'flex';
+    $('navRight').style.display = 'flex';
     $('adminLink').style.display = me.isAdmin ? 'inline' : 'none';
   } else {
     $('leaderShow').textContent = '未登入';
-    $('logoutLink').style.display = 'none';
-    $('tabBar').style.display = 'none';
-    $('adminLink').style.display = 'none';
+    $('navRight').style.display = 'none';
   }
 }
 

@@ -63,30 +63,8 @@
     white-space: nowrap;
   }
   header .right a:hover { background: var(--brand-soft); color: var(--brand); }
-
-  /* Tab bar */
-  .tab-bar {
-    display: flex;
-    background: #fff;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-  .tab-bar a {
-    flex: 1;
-    text-align: center;
-    padding: 12px 0;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--muted);
-    text-decoration: none;
-    border-bottom: 3px solid transparent;
-    transition: all .15s;
-  }
-  .tab-bar a:hover { color: var(--brand); }
-  .tab-bar a.active {
-    color: var(--brand);
-    border-bottom-color: var(--brand);
-  }
+  header .right a.nav-active { color: var(--brand); background: var(--brand-soft); border-radius: 6px; }
+  header .right .nav-sep { width: 1px; height: 18px; background: var(--border); align-self: center; margin: 0 2px; }
 
   /* Machine tabs (horizontal scroll) */
   .machine-tabs {
@@ -285,16 +263,14 @@
     </div>
   </div>
   <div class="right">
+    <a href="index.html">掃描</a>
+    <a href="records.html">紀錄</a>
+    <a href="realtime.html" class="nav-active">即時</a>
     <a href="admin.html" id="adminLink" style="display:none;">管理</a>
+    <span class="nav-sep"></span>
     <a href="#" id="logoutLink">登出</a>
   </div>
 </header>
-
-<div class="tab-bar">
-  <a href="index.html">掃描</a>
-  <a href="records.html">紀錄</a>
-  <a href="realtime.html" class="active">即時</a>
-</div>
 
 <div class="machine-tabs" id="machineTabs"></div>
 
