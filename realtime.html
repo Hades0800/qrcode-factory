@@ -448,6 +448,9 @@ function renderContent() {
           </div>
           <div class="order-info">
             <span class="oi-label">製造單號</span><span class="oi-value">${escapeHtml(o.orderNo)}</span>
+            <span class="oi-label">生產規格</span><span class="oi-value">${escapeHtml(o.productSpec || '')}</span>
+            <span class="oi-label">模具規格</span><span class="oi-value">${escapeHtml(o.moldSpec || '')}</span>
+            <span class="oi-label">領用材料</span><span class="oi-value">${escapeHtml(o.material || '')}</span>
             <span class="oi-label">小組長</span><span class="oi-value">${escapeHtml(o.leaderName)}</span>
             <span class="oi-label">進度</span><span class="oi-value">${steps} / 7</span>
           </div>
