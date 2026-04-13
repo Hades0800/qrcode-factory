@@ -895,8 +895,9 @@ $('changeMachineBtn').onclick = () => {
 
 // ====== 工單號（第二步）======
 async function setOrder(no) {
-  no = String(no || '').trim();
+  no = String(no || '').trim().toUpperCase();
   if (!no) { toast('工單號不可空白', 'error'); return; }
+  if (!/^[A-Z]\d{10}$/.test(no)) { toast('工單號格式錯誤：需 1 個英文字母 + 10 個數字（例：F1150407024）', 'error'); return; }
   if (!selectedMachine) { toast('請先選擇機台', 'error'); return; }
   const r = await api('/api/orders/' + encodeURIComponent(no));
   if (!r.ok) { toast(r.error, 'error'); return; }
