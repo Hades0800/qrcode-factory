@@ -113,6 +113,13 @@
     border-bottom-color: var(--brand);
     background: var(--brand-soft);
   }
+  .machine-tab.idle {
+    opacity: .4;
+  }
+  .machine-tab.idle .mt-spec::after {
+    content: " 無工令";
+    color: #8e8e93;
+  }
 
   /* Content area */
   .content {
@@ -348,6 +355,7 @@ let token = localStorage.getItem('token') || '';
 let me = JSON.parse(localStorage.getItem('me') || 'null');
 let allOrders = [];
 let activeMachine = '';
+let idleMachinesToday = new Set();
 
 function $(id) { return document.getElementById(id); }
 function escapeHtml(s) { return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -394,12 +402,13 @@ $('logoutLink').onclick = e => { e.preventDefault(); localStorage.clear(); locat
 
 // Machine tabs
 function renderMachineTabs() {
-  $('machineTabs').innerHTML = MACHINES.map(m =>
-    `<button class="machine-tab${activeMachine === m.id ? ' active' : ''}" data-m="${m.id}">
+  $('machineTabs').innerHTML = MACHINES.map(m => {
+    const isIdle = idleMachinesToday.has(m.id);
+    return `<button class="machine-tab${activeMachine === m.id ? ' active' : ''}${isIdle ? ' idle' : ''}" data-m="${m.id}">
       <div class="mt-num">${m.num}</div>
       <div class="mt-spec">${m.spec}</div>
-    </button>`
-  ).join('');
+    </button>`;
+  }).join('');
   $('machineTabs').querySelectorAll('.machine-tab').forEach(b => {
     b.onclick = () => {
       activeMachine = b.dataset.m;
@@ -410,8 +419,20 @@ function renderMachineTabs() {
 }
 
 async function loadOrders() {
-  const r = await api('/api/orders?limit=200');
-  if (r.ok) allOrders = r.data.orders || [];
+  const [ordersRes, idleRes] = await Promise.all([
+    api('/api/orders?limit=200'),
+    api('/api/idle-events?limit=50'),
+  ]);
+  if (ordersRes.ok) allOrders = ordersRes.data.orders || [];
+  if (idleRes.ok) {
+    const now = new Date();
+    idleMachinesToday = new Set((idleRes.data.events || []).filter(e => {
+      const d = new Date(e.createdAt);
+      return d.getFullYear() === now.getFullYear() &&
+             d.getMonth() === now.getMonth() &&
+             d.getDate() === now.getDate();
+    }).map(e => e.machineNo));
+  }
   renderMachineTabs();
   if (MACHINES.length > 0 && !activeMachine) {
     activeMachine = MACHINES[0].id;
@@ -464,9 +485,9 @@ function renderContent() {
           <div class="s-label">生產日期</div>
           <div class="s-value" style="font-size:16px;">${dateStr}</div>
         </div>
-        <div class="stat highlight">
+        <div class="stat ${idleMachinesToday.has(activeMachine) ? '' : 'highlight'}">
           <div class="s-label">機台編號</div>
-          <div class="s-value" style="font-size:18px;">${escapeHtml(m.num)}-${escapeHtml(m.spec)}</div>
+          <div class="s-value" style="font-size:18px;">${escapeHtml(m.num)}-${escapeHtml(m.spec)}${idleMachinesToday.has(activeMachine) ? ' <span style="font-size:12px;color:var(--muted);background:#e5e5ea;padding:2px 8px;border-radius:10px;">今日無工令</span>' : ''}</div>
         </div>
         <div class="stat">
           <div class="s-label">今日工單數</div>

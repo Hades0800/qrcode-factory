@@ -239,6 +239,24 @@
   }
   .machine-btn.selected .m-num { color: #fff; }
   .machine-btn.selected .m-spec { color: rgba(255,255,255,.85); }
+  .machine-btn.disabled {
+    background: #e5e5ea;
+    border-color: #d1d1d6;
+    cursor: not-allowed;
+    opacity: .6;
+  }
+  .machine-btn.disabled .m-num { color: #8e8e93; }
+  .machine-btn.disabled .m-spec { color: #aeaeb2; }
+  .machine-btn.disabled:hover { background: #e5e5ea; border-color: #d1d1d6; }
+  .machine-btn .m-tag {
+    font-size: 9px;
+    color: #8e8e93;
+    background: #fff;
+    padding: 1px 6px;
+    border-radius: 8px;
+    margin-top: 4px;
+    font-weight: 600;
+  }
 
   /* 底部動作按鈕 */
   .action-buttons {
@@ -828,6 +846,7 @@ async function doLogin() {
   hideLogin();
   renderHeader();
   toast('登入成功', 'success');
+  loadIdleMachines();
 }
 
 function logout(silent) {
@@ -891,8 +910,48 @@ function selectMachine(no) {
   setTimeout(() => $('orderInput').focus(), 200);
 }
 
+let idleMachinesToday = new Set();
+
+async function loadIdleMachines() {
+  const r = await api('/api/idle-events?limit=50');
+  if (!r.ok) return;
+  const now = new Date();
+  idleMachinesToday = new Set((r.data.events || []).filter(e => {
+    const d = new Date(e.createdAt);
+    return d.getFullYear() === now.getFullYear() &&
+           d.getMonth() === now.getMonth() &&
+           d.getDate() === now.getDate();
+  }).map(e => e.machineNo));
+  renderMachineButtons();
+}
+
+function renderMachineButtons() {
+  document.querySelectorAll('.machine-btn').forEach(b => {
+    const m = b.getAttribute('data-machine');
+    const isIdle = idleMachinesToday.has(m);
+    b.classList.toggle('disabled', isIdle);
+    // 加/移除無工令標籤
+    let tag = b.querySelector('.m-tag');
+    if (isIdle && !tag) {
+      const s = document.createElement('div');
+      s.className = 'm-tag';
+      s.textContent = '今日無工令';
+      b.appendChild(s);
+    } else if (!isIdle && tag) {
+      tag.remove();
+    }
+  });
+}
+
 document.querySelectorAll('.machine-btn').forEach(b => {
-  b.onclick = () => selectMachine(b.getAttribute('data-machine'));
+  b.onclick = () => {
+    const m = b.getAttribute('data-machine');
+    if (idleMachinesToday.has(m)) {
+      toast('此機台今日已記錄無工令，請到紀錄頁取消後再選擇', 'error');
+      return;
+    }
+    selectMachine(m);
+  };
 });
 $('changeMachineBtn').onclick = () => {
   selectedMachine = '';
@@ -945,6 +1004,7 @@ $('idleBtn').onclick = async () => {
   $('orderCard').style.display = 'none';
   $('orderInput').value = '';
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  loadIdleMachines();
 };
 $('changeOrderBtn').onclick = () => {
   orderNo = ''; order = null;
@@ -1335,6 +1395,8 @@ if (API_URL.startsWith('PASTE_')) {
   toast('尚未設定 API_URL，請先部署後端', 'error');
 } else if (!token) {
   showLogin();
+} else {
+  loadIdleMachines();
 }
 </script>
 </body>
