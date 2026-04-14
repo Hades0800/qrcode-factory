@@ -618,6 +618,15 @@ function applyFilters(list) {
   $(id).addEventListener('input', () => { render(); renderIdleEvents(); });
   $(id).addEventListener('change', () => { render(); renderIdleEvents(); });
 });
+
+// 預設日期範圍 = 今天
+(function setDefaultDate() {
+  const today = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const ymd = today.getFullYear() + '-' + pad(today.getMonth()+1) + '-' + pad(today.getDate());
+  $('filterFrom').value = ymd;
+  $('filterTo').value = ymd;
+})();
 $('refreshBtn').onclick = loadOrders;
 
 $('exportBtn').onclick = () => {
