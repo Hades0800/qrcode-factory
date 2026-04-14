@@ -252,16 +252,22 @@ export default async function orderRoutes(fastify) {
     return { ok: true, created, updated, errors, total: rows.length };
   });
 
-  // 刪除工單（僅管理員）
+  // 刪除工單（僅管理員；允許清理任何舊格式資料）
   fastify.delete('/:orderNo', async (request, reply) => {
     if (!request.user.isAdmin) {
       return reply.code(403).send({ error: '只有管理員可以刪除工單' });
     }
-    const orderNo = String(request.params.orderNo || '').toUpperCase();
-    if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
-    const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
+    const rawNo = String(request.params.orderNo || '').trim();
+    if (!rawNo) return reply.code(400).send({ error: '缺少工單號' });
+    // 先試原樣，不存在再試轉大寫
+    let order = await fastify.prisma.order.findUnique({ where: { orderNo: rawNo } });
+    let orderNo = rawNo;
+    if (!order) {
+      orderNo = rawNo.toUpperCase();
+      order = await fastify.prisma.order.findUnique({ where: { orderNo } });
+    }
     if (!order) return reply.code(404).send({ error: '找不到工單' });
-    await fastify.prisma.order.delete({ where: { orderNo } });
+    await fastify.prisma.order.delete({ where: { orderNo: order.orderNo } });
     return { ok: true };
   });
 
