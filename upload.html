@@ -526,11 +526,17 @@ $('uploadBtn').onclick = async () => {
     return;
   }
   const d = res.data;
-  let html = `<div class="result ok">上傳完成：新增 ${d.created} 筆、更新 ${d.updated} 筆</div>`;
+  let html = `<div class="result ok">上傳完成：新增 ${d.created} 筆、更新 ${d.updated} 筆<br>可切到「📋 上傳紀錄」查看明細</div>`;
   if (d.errors && d.errors.length > 0) {
     html += `<div class="result fail" style="margin-top:8px;">錯誤 ${d.errors.length} 筆：<br>${d.errors.map(e => escapeHtml(e)).join('<br>')}</div>`;
   }
   $('result').innerHTML = html;
+  // 隱藏預覽卡片，清空檔案狀態
+  $('previewCard').style.display = 'none';
+  $('fileName').textContent = '';
+  uploadedFilename = '';
+  fileInput.value = '';
+  parsedRows = [];
   toast('上傳完成', 'success');
   loadTodayOrders();
 };
@@ -610,7 +616,7 @@ async function loadBatches() {
     $('batchBody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:30px;">目前沒有上傳紀錄</td></tr>';
     return;
   }
-  $('batchBody').innerHTML = batches.map(b => {
+  $('batchBody').innerHTML = batches.map((b, idx) => {
     const dt = new Date(b.uploadedAt);
     const pad = n => String(n).padStart(2, '0');
     const time = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
@@ -620,10 +626,10 @@ async function loadBatches() {
       : '<span style="color:var(--success);">有效</span>';
     const action = b.cancelledAt
       ? '—'
-      : `<button style="padding:6px 12px;font-size:12px;background:#fff;color:var(--brand);border:1.5px solid var(--brand);border-radius:6px;cursor:pointer;" onclick="cancelBatch(${b.id})">取消</button>`;
+      : `<button style="padding:6px 12px;font-size:12px;background:#fff;color:var(--brand);border:1.5px solid var(--brand);border-radius:6px;cursor:pointer;" onclick="event.stopPropagation();cancelBatch(${b.id})">取消</button>`;
     return `
-      <tr>
-        <td style="white-space:nowrap;">${escapeHtml(time)}</td>
+      <tr style="cursor:pointer;" onclick="toggleBatchDetail(${b.id}, ${JSON.stringify(b.orderNos || []).replace(/"/g, '&quot;')})">
+        <td style="white-space:nowrap;">${escapeHtml(time)} <span style="color:var(--brand);font-size:10px;">▶</span></td>
         <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(b.filename)}</td>
         <td style="white-space:nowrap;">${escapeHtml(prod)}</td>
         <td style="white-space:nowrap;">${escapeHtml(b.uploadedByName || '')}</td>
@@ -631,8 +637,63 @@ async function loadBatches() {
         <td>${status}</td>
         <td>${action}</td>
       </tr>
+      <tr class="detail-row" id="batch-detail-${b.id}" style="display:none;background:#fafafc;">
+        <td colspan="7" style="padding:0;">
+          <div id="batch-detail-content-${b.id}" style="padding:16px;"></div>
+        </td>
+      </tr>
     `;
   }).join('');
+}
+
+async function toggleBatchDetail(batchId, orderNos) {
+  const row = document.getElementById('batch-detail-' + batchId);
+  if (!row) return;
+  if (row.style.display === 'none') {
+    row.style.display = '';
+    const content = document.getElementById('batch-detail-content-' + batchId);
+    content.innerHTML = '<div style="color:var(--muted);padding:10px;">載入中...</div>';
+    // 抓所有工單
+    const r = await api('/api/orders?limit=500');
+    if (!r.ok) { content.innerHTML = '<div style="color:var(--brand);">載入失敗</div>'; return; }
+    const orderMap = {};
+    (r.data.orders || []).forEach(o => orderMap[o.orderNo] = o);
+    const detailRows = orderNos.map((no, i) => {
+      const o = orderMap[no] || { orderNo: no };
+      const hasData = o.productSpec || o.moldSpec || o.material || o.dispatchQty || o.totalWeight;
+      return `
+        <tr>
+          <td>${i + 1}</td>
+          <td><strong>${escapeHtml(o.orderNo)}</strong></td>
+          <td>${escapeHtml(o.productionDate ? String(o.productionDate).slice(0,10) : '')}</td>
+          <td style="max-width:240px;white-space:normal;">${escapeHtml(o.productSpec || '')}</td>
+          <td>${escapeHtml(o.moldSpec || '')}</td>
+          <td style="max-width:180px;white-space:normal;">${escapeHtml(o.material || '')}</td>
+          <td>${escapeHtml(o.machineNo || '')}</td>
+          <td>${o.dispatchQty || ''}</td>
+          <td>${o.bladeCount || ''}</td>
+          <td>${o.machineSPM || ''}</td>
+          <td>${o.unitWeight || ''}</td>
+          <td>${o.totalWeight || ''}</td>
+          <td>${hasData ? '<span style="color:var(--success);">有效</span>' : '<span style="color:var(--muted);">已清空</span>'}</td>
+        </tr>
+      `;
+    }).join('');
+    content.innerHTML = `
+      <h4 style="margin:0 0 8px;font-size:13px;">批次內容（${orderNos.length} 筆）</h4>
+      <table class="preview-table" style="font-size:12px;">
+        <thead>
+          <tr>
+            <th>#</th><th>製造單號</th><th>生產日期</th><th>生產規格</th><th>模具</th><th>領料</th>
+            <th>機台</th><th>派工數</th><th>刀數</th><th>SPM</th><th>單重</th><th>總重量</th><th>狀態</th>
+          </tr>
+        </thead>
+        <tbody>${detailRows}</tbody>
+      </table>
+    `;
+  } else {
+    row.style.display = 'none';
+  }
 }
 
 async function cancelBatch(id) {
