@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import compress from '@fastify/compress';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import jwt from '@fastify/jwt';
@@ -21,6 +22,13 @@ const fastify = Fastify({
 
 // 全域注入 prisma
 fastify.decorate('prisma', prisma);
+
+// 壓縮回應（gzip/brotli，大 JSON 回應可省 60~80% 流量）
+await fastify.register(compress, {
+  global: true,
+  encodings: ['br', 'gzip', 'deflate'],
+  threshold: 1024,
+});
 
 // 安全 headers
 await fastify.register(helmet, {

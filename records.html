@@ -7,6 +7,8 @@
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <title>上鎧鋼鐵 - 工單紀錄</title>
 <link rel="icon" href="logo.jpg">
+<link rel="preconnect" href="https://shangkai-manu-record.zeabur.app" crossorigin>
+<link rel="dns-prefetch" href="https://shangkai-manu-record.zeabur.app">
 <style>
   :root {
     --brand: #d23535;
@@ -465,18 +467,43 @@ $('logoutLink').onclick = e => {
 };
 
 let allIdleEvents = [];
+
+// 本地快取 key
+const CACHE_ORDERS = 'cache_orders_v1';
+const CACHE_IDLE = 'cache_idle_v1';
+
+function loadFromCache() {
+  try {
+    const ordersStr = localStorage.getItem(CACHE_ORDERS);
+    const idleStr = localStorage.getItem(CACHE_IDLE);
+    if (ordersStr) allOrders = JSON.parse(ordersStr);
+    if (idleStr) allIdleEvents = JSON.parse(idleStr);
+    return !!(ordersStr || idleStr);
+  } catch (e) { return false; }
+}
+
 async function loadOrders() {
-  $('ordersBody').innerHTML = '<tr><td colspan="19" class="empty">載入中...</td></tr>';
+  // 先用快取立即顯示
+  const hasCache = loadFromCache();
+  if (hasCache) { render(); renderIdleEvents(); }
+  else { $('ordersBody').innerHTML = '<tr><td colspan="17" class="empty">載入中...</td></tr>'; }
+
+  // 背景更新
   const [ordersRes, idleRes] = await Promise.all([
     api('/api/orders?limit=200'),
     api('/api/idle-events?limit=200'),
   ]);
   if (!ordersRes.ok) {
-    $('ordersBody').innerHTML = '<tr><td colspan="19" class="empty">' + (ordersRes.error || '載入失敗') + '</td></tr>';
+    if (!hasCache) $('ordersBody').innerHTML = '<tr><td colspan="17" class="empty">' + (ordersRes.error || '載入失敗') + '</td></tr>';
     return;
   }
   allOrders = ordersRes.data.orders || [];
   allIdleEvents = (idleRes.ok ? idleRes.data.events : []) || [];
+  // 寫入快取
+  try {
+    localStorage.setItem(CACHE_ORDERS, JSON.stringify(allOrders));
+    localStorage.setItem(CACHE_IDLE, JSON.stringify(allIdleEvents));
+  } catch (e) {}
   render();
   renderIdleEvents();
 }

@@ -10,6 +10,8 @@
 <title>上鎧鋼鐵 - 即時生產</title>
 <link rel="icon" href="logo.jpg">
 <link rel="apple-touch-icon" href="logo.jpg">
+<link rel="preconnect" href="https://shangkai-manu-record.zeabur.app" crossorigin>
+<link rel="dns-prefetch" href="https://shangkai-manu-record.zeabur.app">
 <style>
   :root {
     --brand: #d23535;
@@ -430,7 +432,22 @@ function renderMachineTabs() {
   });
 }
 
+const CACHE_RT = 'cache_rt_v1';
+
 async function loadOrders() {
+  // 先用快取立即顯示（減少等待感）
+  try {
+    const cached = JSON.parse(localStorage.getItem(CACHE_RT) || 'null');
+    if (cached && cached.orders) {
+      allOrders = cached.orders;
+      idleMachinesToday = new Set(cached.idleMachines || []);
+      renderMachineTabs();
+      if (MACHINES.length > 0 && !activeMachine) activeMachine = MACHINES[0].id;
+      renderMachineTabs();
+      renderContent();
+    }
+  } catch (e) {}
+
   const [ordersRes, idleRes] = await Promise.all([
     api('/api/orders?limit=200'),
     api('/api/idle-events?limit=50'),
@@ -445,6 +462,14 @@ async function loadOrders() {
              d.getDate() === now.getDate();
     }).map(e => e.machineNo));
   }
+  // 寫入快取
+  try {
+    localStorage.setItem(CACHE_RT, JSON.stringify({
+      orders: allOrders,
+      idleMachines: Array.from(idleMachinesToday),
+      savedAt: Date.now(),
+    }));
+  } catch (e) {}
   renderMachineTabs();
   if (MACHINES.length > 0 && !activeMachine) {
     activeMachine = MACHINES[0].id;
