@@ -252,6 +252,53 @@ export default async function orderRoutes(fastify) {
     return { ok: true, created, updated, errors, total: rows.length };
   });
 
+  // 批次取消上傳（保留掃描紀錄）
+  // - 沒有掃描紀錄的工單：完全刪除
+  // - 有掃描紀錄的工單：只清除上傳欄位，保留 step 時間
+  // 上傳資料與實態紀錄獨立，重傳時會自動重新配對
+  fastify.post('/bulk-cancel-upload', async (request, reply) => {
+    if (!request.user.isAdmin && !request.user.isPlanner) {
+      return reply.code(403).send({ error: '需要生管或管理員權限' });
+    }
+    const { orderNos } = request.body || {};
+    if (!Array.isArray(orderNos) || orderNos.length === 0) {
+      return reply.code(400).send({ error: '沒有資料' });
+    }
+    if (orderNos.length > 500) {
+      return reply.code(400).send({ error: '單次上限 500 筆' });
+    }
+    let deleted = 0, cleared = 0;
+    const errors = [];
+    for (const rawNo of orderNos) {
+      try {
+        const orderNo = String(rawNo || '').trim().toUpperCase();
+        if (!orderNo) continue;
+        const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
+        if (!order) continue;
+        const hasActivity = !!(order.step1At || order.step2At || order.step3At ||
+          order.step4At || order.step5At || order.step6At || order.step7At || order.step11At);
+        if (hasActivity) {
+          // 清除上傳欄位
+          await fastify.prisma.order.update({
+            where: { orderNo },
+            data: {
+              productionDate: null, productSpec: null, moldSpec: null,
+              material: null, dispatchQty: null, bladeCount: null,
+              machineSPM: null, unitWeight: null, totalWeight: null,
+            },
+          });
+          cleared++;
+        } else {
+          await fastify.prisma.order.delete({ where: { orderNo } });
+          deleted++;
+        }
+      } catch (e) {
+        errors.push(rawNo + ': ' + e.message);
+      }
+    }
+    return { ok: true, deleted, cleared, errors };
+  });
+
   // 刪除工單
   // - 管理員：可刪任何工單
   // - 生管：只能刪「還沒開始掃描」的工單（上傳錯了可取消重上傳）
