@@ -259,6 +259,21 @@ document.addEventListener('click', e => {
   if (menu && !menu.contains(e.target) && btn && !btn.contains(e.target)) menu.classList.remove('show');
 });
 
+// 機台號碼自動配對（Excel 可能只寫 "2"、"3"、"No2" 等）
+const MACHINE_MAP = {
+  '1': 'No1-350', 'No1': 'No1-350', 'No1-350': 'No1-350',
+  '2': 'No2-250', 'No2': 'No2-250', 'No2-250': 'No2-250',
+  '3': 'No3-60',  'No3': 'No3-60',  'No3-60':  'No3-60',
+  '4': 'No4-90',  'No4': 'No4-90',  'No4-90':  'No4-90',
+  '5': 'No5-40',  'No5': 'No5-40',  'No5-40':  'No5-40',
+  '6': 'No6-40',  'No6': 'No6-40',  'No6-40':  'No6-40',
+};
+function normalizeMachine(v) {
+  if (!v) return '';
+  const s = String(v).trim();
+  return MACHINE_MAP[s] || s;
+}
+
 // 欄位對應（Excel 欄位名 → 系統欄位）— 同義字都對應到同一欄位
 const FIELD_MAP = {
   // 製造單號
@@ -346,6 +361,8 @@ function parseRows(json) {
     obj.orderNo = String(obj.orderNo || '').trim();
     obj._valid = /^[A-Z]\d{10}$/.test(obj.orderNo.toUpperCase());
     if (obj._valid) obj.orderNo = obj.orderNo.toUpperCase();
+    // 機台號自動配對
+    if (obj.machineNo) obj.machineNo = normalizeMachine(obj.machineNo);
     return obj;
   });
 
