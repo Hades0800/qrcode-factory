@@ -264,7 +264,15 @@
         <thead>
           <tr>
             <th>工單號</th>
+            <th>生產日期</th>
             <th>機台</th>
+            <th>生產規格</th>
+            <th>模具</th>
+            <th>領料</th>
+            <th>數量</th>
+            <th>SPM</th>
+            <th>單重</th>
+            <th>總重量</th>
             <th>小組長</th>
             <th>進度</th>
             <th>01.原料</th>
@@ -392,12 +400,12 @@ function render() {
   `;
 
   if (filtered.length === 0) {
-    $('ordersBody').innerHTML = '<tr><td colspan="19" class="empty">沒有符合條件的工單</td></tr>';
+    $('ordersBody').innerHTML = '<tr><td colspan="26" class="empty">沒有符合條件的工單</td></tr>';
     return;
   }
 
   const isAdmin = me && me.isAdmin;
-  const colCount = isAdmin ? 19 : 18;
+  const colCount = isAdmin ? 26 : 25;
   $('ordersBody').innerHTML = filtered.map((o, idx) => {
     const done = countDone(o);
     const allEvents = [
@@ -438,7 +446,15 @@ function render() {
     return `
       <tr class="${hasEvents ? 'clickable' : ''}" ${hasEvents ? `onclick="toggleDetail(${idx})"` : ''}>
         <td class="order-no">${escapeHtml(o.orderNo)} ${hasEvents ? '<span style="font-size:10px;color:var(--brand);">▶ 明細</span>' : ''}</td>
+        <td style="font-size:12px;color:#666;">${escapeHtml(o.productionDate ? String(o.productionDate).slice(0,10) : '')}</td>
         <td class="machine">${escapeHtml(o.machineNo)}</td>
+        <td style="white-space:normal;max-width:220px;font-size:12px;">${escapeHtml(o.productSpec || '')}</td>
+        <td>${escapeHtml(o.moldSpec || '')}</td>
+        <td style="white-space:normal;max-width:180px;font-size:12px;">${escapeHtml(o.material || '')}</td>
+        <td>${o.dispatchQty || ''}</td>
+        <td>${o.machineSPM || ''}</td>
+        <td>${o.unitWeight || ''}</td>
+        <td>${o.totalWeight || ''}</td>
         <td>${escapeHtml(o.leaderName)}</td>
         <td><strong>${done}/7</strong></td>
         ${stepCell(o.step1At)}
@@ -533,12 +549,19 @@ $('refreshBtn').onclick = loadOrders;
 $('exportBtn').onclick = () => {
   const filtered = applyFilters(allOrders);
   if (filtered.length === 0) { toast('沒有資料可匯出', 'error'); return; }
-  const headers = ['工單號','機台','小組長','01.原料準備','02.模刀具','03.試模確認','04.斷續試稼','05.穩定生產','06.後工程','07.其他作業','11.完成','12.暫停次數','12.暫停秒數','13.異常次數','13.異常秒數','最後更新'];
+  const headers = [
+    '工單號','生產日期','機台','生產規格','模具','領料','數量','SPM','單重','總重量','刀數',
+    '小組長',
+    '01.原料準備','02.模刀具','03.試模確認','04.斷續試稼','05.穩定生產','06.後工程','07.其他作業','11.完成',
+    '12.暫停次數','12.暫停秒數','13.異常次數','13.異常秒數','最後更新',
+  ];
   const rows = filtered.map(o => [
-    o.orderNo, o.machineNo, o.leaderName,
+    o.orderNo, o.productionDate ? String(o.productionDate).slice(0,10) : '',
+    o.machineNo, o.productSpec || '', o.moldSpec || '', o.material || '',
+    o.dispatchQty || '', o.machineSPM || '', o.unitWeight || '', o.totalWeight || '', o.bladeCount || '',
+    o.leaderName,
     fmtTime(o.step1At), fmtTime(o.step2At), fmtTime(o.step3At), fmtTime(o.step4At),
-    fmtTime(o.step5At), fmtTime(o.step6At), fmtTime(o.step7At),
-    fmtTime(o.step11At),
+    fmtTime(o.step5At), fmtTime(o.step6At), fmtTime(o.step7At), fmtTime(o.step11At),
     o.pause12 ? o.pause12.count : 0, o.pause12 ? o.pause12.totalSec : 0,
     o.pause13 ? o.pause13.count : 0, o.pause13 ? o.pause13.totalSec : 0,
     fmtTime(o.updatedAt),
