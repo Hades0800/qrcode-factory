@@ -63,6 +63,21 @@ model Order {
   @@index([updatedAt])
 }
 
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  actorId   Int?
+  actorName String?
+  action    String   // e.g. "delete_order", "cancel_batch", "reset_password"
+  target    String?  // e.g. orderNo / batchId / leaderUsername
+  detail    String?  // 可選：原因 / 額外資訊
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId])
+  @@index([action])
+}
+
 model UploadBatch {
   id             Int       @id @default(autoincrement())
   filename       String

@@ -87,8 +87,8 @@ fastify.decorate('requireAdmin', async (request, reply) => {
 fastify.get('/', async () => ({ ok: true, msg: '工單記錄系統 API 運作中' }));
 fastify.get('/health', async () => ({ ok: true }));
 
-// 診斷端點（測 DB 連線、列出環境變數狀態，密碼遮蔽）
-fastify.get('/diag', async () => {
+// 診斷端點（僅管理員）
+fastify.get('/diag', { onRequest: [fastify.authenticate, fastify.requireAdmin] }, async () => {
   const env = {
     DATABASE_URL: process.env.DATABASE_URL ? '已設定 (' + process.env.DATABASE_URL.slice(0, 25) + '...)' : '❌ 未設定',
     JWT_SECRET: process.env.JWT_SECRET ? '已設定' : '❌ 未設定',
@@ -115,8 +115,13 @@ await fastify.register(authRoutes, { prefix: '/api/auth' });
 await fastify.register(orderRoutes, { prefix: '/api/orders' });
 await fastify.register(adminRoutes, { prefix: '/api/admin' });
 
-// 生產無工令事件
-fastify.post('/api/idle-events', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+// 生產無工令事件（加 rate limit 防連點）
+fastify.post('/api/idle-events', {
+  onRequest: [fastify.authenticate],
+  config: {
+    rateLimit: { max: 10, timeWindow: '1 minute' },
+  },
+}, async (request, reply) => {
   const { machineNo, note } = request.body || {};
   if (!machineNo) return reply.code(400).send({ error: '缺少機台號' });
   const ALLOWED = new Set(['No1-350','No2-250','No3-60','No4-90','No5-40','No6-40']);
@@ -141,11 +146,15 @@ fastify.get('/api/idle-events', { onRequest: [fastify.authenticate] }, async (re
   return { events };
 });
 
+// 刪除無工令事件（管理員或建立者本人）
 fastify.delete('/api/idle-events/:id', { onRequest: [fastify.authenticate] }, async (request, reply) => {
   const id = Number(request.params.id);
   if (!id) return reply.code(400).send({ error: '無效 id' });
   const event = await prisma.idleEvent.findUnique({ where: { id } });
   if (!event) return reply.code(404).send({ error: '找不到紀錄' });
+  if (!request.user.isAdmin && event.leaderId !== request.user.id) {
+    return reply.code(403).send({ error: '只能取消自己建立的紀錄' });
+  }
   await prisma.idleEvent.delete({ where: { id } });
   return { ok: true };
 });

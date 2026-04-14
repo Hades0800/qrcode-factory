@@ -462,6 +462,7 @@ document.addEventListener('click', e => {
 $('logoutLink').onclick = e => {
   e.preventDefault();
   if (!confirm('登出？')) return;
+  // 清除所有本地資料（包括快取），避免換帳號看到上一人資料
   localStorage.clear();
   location.href = 'index.html';
 };

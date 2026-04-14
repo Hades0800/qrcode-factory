@@ -5,6 +5,21 @@ function validOrderNo(s) { return typeof s === 'string' && ORDER_NO_RE.test(s); 
 function validMachine(s) { return !s || ALLOWED_MACHINES.has(String(s)); }
 function clipStr(s, max) { return s == null ? null : String(s).slice(0, max); }
 
+async function audit(prisma, request, action, target, detail) {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        actorId: request.user?.id || null,
+        actorName: request.user?.displayName || null,
+        action,
+        target: target ? String(target).slice(0, 200) : null,
+        detail: detail ? String(detail).slice(0, 500) : null,
+        ip: request.ip || null,
+      },
+    });
+  } catch (e) { /* ignore audit errors */ }
+}
+
 const STEP_COLS = {
   '1':  { time: 'step1At',  note: null },
   '2':  { time: 'step2At',  note: null },
@@ -107,6 +122,8 @@ export default async function orderRoutes(fastify) {
       where: { id },
       data: { cancelledAt: new Date() },
     });
+    await audit(fastify.prisma, request, 'cancel_batch', batch.id,
+      `filename=${batch.filename} deleted=${deleted} cleared=${cleared}`);
     return { ok: true, deleted, cleared };
   });
 
@@ -268,6 +285,9 @@ export default async function orderRoutes(fastify) {
     if (rows.length > 500) {
       return reply.code(400).send({ error: '單次上傳上限 500 筆' });
     }
+    // 清理檔名（去掉路徑、控制字元）
+    const cleanFilename = filename ? String(filename).replace(/[\\/\x00-\x1f]/g, '').slice(0, 200) : '未命名';
+
     let created = 0, updated = 0, errors = [];
     const processedOrderNos = [];
     let batchProductionDate = null;
@@ -278,8 +298,14 @@ export default async function orderRoutes(fastify) {
         if (row.machineNo && !validMachine(row.machineNo)) {
           errors.push(orderNo + '：不允許的機台號 ' + row.machineNo); continue;
         }
+        // 驗證日期不要離譜（2000~2100）
+        let prodDate = null;
+        if (row.productionDate) {
+          const d = new Date(row.productionDate);
+          if (!isNaN(d) && d.getFullYear() >= 2000 && d.getFullYear() <= 2100) prodDate = d;
+        }
         const data = {
-          productionDate: row.productionDate ? new Date(row.productionDate) : null,
+          productionDate: prodDate,
           productSpec: clipStr(row.productSpec, 200),
           moldSpec: clipStr(row.moldSpec, 100),
           material: clipStr(row.material, 200),
@@ -310,7 +336,7 @@ export default async function orderRoutes(fastify) {
     if (processedOrderNos.length > 0) {
       const batch = await fastify.prisma.uploadBatch.create({
         data: {
-          filename: String(filename || '未命名').slice(0, 200),
+          filename: cleanFilename,
           uploadedBy: request.user.id,
           uploadedByName: request.user.displayName || null,
           rowCount: processedOrderNos.length,
@@ -395,6 +421,8 @@ export default async function orderRoutes(fastify) {
       }
     }
     await fastify.prisma.order.delete({ where: { orderNo: order.orderNo } });
+    await audit(fastify.prisma, request, 'delete_order', order.orderNo,
+      isAdmin ? 'admin_delete' : 'planner_delete_unscanned');
     return { ok: true };
   });
 

@@ -42,6 +42,18 @@ export default async function adminRoutes(fastify) {
       data: { username, passwordHash, displayName, isAdmin: !!isAdmin, isPlanner: !!isPlanner },
       select: { id: true, username: true, displayName: true, isAdmin: true, isPlanner: true, createdAt: true },
     });
+    try {
+      await fastify.prisma.auditLog.create({
+        data: {
+          actorId: request.user?.id || null,
+          actorName: request.user?.displayName || null,
+          action: 'create_leader',
+          target: username,
+          detail: `admin=${!!isAdmin} planner=${!!isPlanner}`,
+          ip: request.ip || null,
+        },
+      });
+    } catch (e) {}
     return { leader };
   });
 
@@ -56,6 +68,17 @@ export default async function adminRoutes(fastify) {
     if (!leader) return reply.code(404).send({ error: '帳號不存在' });
     const passwordHash = await bcrypt.hash(newPassword, 10);
     await fastify.prisma.leader.update({ where: { id }, data: { passwordHash } });
+    try {
+      await fastify.prisma.auditLog.create({
+        data: {
+          actorId: request.user?.id || null,
+          actorName: request.user?.displayName || null,
+          action: 'reset_password',
+          target: leader.username,
+          ip: request.ip || null,
+        },
+      });
+    } catch (e) {}
     return { ok: true };
   });
 
@@ -70,6 +93,17 @@ export default async function adminRoutes(fastify) {
     // 清空關聯
     await fastify.prisma.order.updateMany({ where: { leaderId: id }, data: { leaderId: null } });
     await fastify.prisma.leader.delete({ where: { id } });
+    try {
+      await fastify.prisma.auditLog.create({
+        data: {
+          actorId: request.user?.id || null,
+          actorName: request.user?.displayName || null,
+          action: 'delete_leader',
+          target: leader.username,
+          ip: request.ip || null,
+        },
+      });
+    } catch (e) {}
     return { ok: true };
   });
 }
