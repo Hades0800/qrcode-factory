@@ -248,7 +248,7 @@
         <label>狀態</label>
         <select id="filterStatus">
           <option value="">全部</option>
-          <option value="done">已全部完成（7/7）</option>
+          <option value="done">已完成（按過工單完成）</option>
           <option value="ongoing">進行中</option>
           <option value="empty">尚未開始</option>
         </select>
@@ -381,10 +381,10 @@ async function loadOrders() {
 function render() {
   const filtered = applyFilters(allOrders);
 
-  // 統計
+  // 統計（已完成 = 按過「工單完成與結束」）
   const total = filtered.length;
-  const completed = filtered.filter(o => countDone(o) === 7).length;
-  const ongoing = filtered.filter(o => { const c = countDone(o); return c > 0 && c < 7; }).length;
+  const completed = filtered.filter(o => !!o.step11At).length;
+  const ongoing = filtered.filter(o => !o.step11At && countDone(o) > 0).length;
   $('stats').innerHTML = `
     <div class="stat-card"><div class="label">總工單數</div><div class="value">${total}</div></div>
     <div class="stat-card"><div class="label">已完成</div><div class="value">${completed}</div></div>
@@ -515,9 +515,10 @@ function applyFilters(list) {
     }
     if (status) {
       const c = countDone(o);
-      if (status === 'done' && c !== 7) return false;
-      if (status === 'ongoing' && (c === 0 || c === 7)) return false;
-      if (status === 'empty' && c !== 0) return false;
+      const isDone = !!o.step11At;
+      if (status === 'done' && !isDone) return false;
+      if (status === 'ongoing' && (isDone || c === 0)) return false;
+      if (status === 'empty' && (isDone || c > 0)) return false;
     }
     return true;
   });
