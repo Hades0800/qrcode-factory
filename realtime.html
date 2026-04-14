@@ -340,6 +340,18 @@ const MACHINES = [
   { id: 'No5-40',  num: 'No5', spec: '40' },
   { id: 'No6-40',  num: 'No6', spec: '40' },
 ];
+
+// 生產產能標準（每日）
+// capacityKg = 每日目標產能（公斤；10 噸 = 10000 kg）
+// workMinutes = 每日目標工時（分鐘）
+const MACHINE_STANDARDS = {
+  'No1-350': { capacityKg: 10000, workMinutes: 280 },
+  'No2-250': { capacityKg: 1200,  workMinutes: 140 },
+  'No3-60':  { capacityKg: 1200,  workMinutes: 320 },
+  'No4-90':  { capacityKg: 1200,  workMinutes: 320 },
+  'No5-40':  { capacityKg: 500,   workMinutes: 420 },
+  'No6-40':  { capacityKg: 500,   workMinutes: 420 },
+};
 const STEP_LABELS = [
   { key: 'step1At',  label: '原料準備與設置' },
   { key: 'step2At',  label: '模刀具準備與安裝' },
@@ -461,11 +473,28 @@ function renderContent() {
   const totalOrders = machineOrders.length;
   const completedOrders = machineOrders.filter(o => o.step11At).length;
 
-  // 生產產能 / 達成度（基於 Excel 匯入的 totalWeight）
-  const totalWeight = machineOrders.reduce((s, o) => s + (Number(o.totalWeight) || 0), 0);
+  // 生產產能 / 達成度
+  // 實際生產重量（kg）= 已完成工單的 totalWeight 加總
+  // 目標產能（kg/日）從機台標準表查
+  const std = MACHINE_STANDARDS[activeMachine] || { capacityKg: 0, workMinutes: 0 };
   const doneWeight = machineOrders.filter(o => o.step11At).reduce((s, o) => s + (Number(o.totalWeight) || 0), 0);
-  const capacityRate = totalWeight > 0 ? (doneWeight / totalWeight * 100).toFixed(1) : null;
+  const capacityRate = std.capacityKg > 0 ? (doneWeight / std.capacityKg * 100).toFixed(1) : null;
+
+  // 標準工時（分鐘）= 設定數字(刀數) / 每片秒數(SPM) × 數量(派工數)
+  // 累計今日該機台所有工單的標準工時
+  const stdMinutes = machineOrders.reduce((s, o) => {
+    const blades = Number(o.bladeCount) || 0;
+    const spm = Number(o.machineSPM) || 0;
+    const qty = Number(o.dispatchQty) || 0;
+    if (blades > 0 && spm > 0 && qty > 0) {
+      return s + (blades / spm * qty);
+    }
+    return s;
+  }, 0);
+  const efficiencyRate = std.workMinutes > 0 ? (stdMinutes / std.workMinutes * 100).toFixed(1) : null;
+
   const fmtNum = n => n > 0 ? n.toLocaleString('zh-TW', { maximumFractionDigits: 1 }) : '—';
+  const fmtKg = kg => kg > 0 ? kg.toLocaleString('zh-TW', { maximumFractionDigits: 1 }) : '—';
 
   // Find active order (has steps but no step11)
   const activeOrder = machineOrders.find(o => !o.step11At && countSteps(o) > 0);
@@ -499,8 +528,8 @@ function renderContent() {
           <div class="s-sub">/ ${totalOrders} 張</div>
         </div>
         <div class="stat">
-          <div class="s-label">生產產能(斤)</div>
-          <div class="s-value" style="font-size:18px;">${fmtNum(doneWeight)}${totalWeight > 0 ? ' <span style="font-size:13px;color:var(--muted);">/ ' + fmtNum(totalWeight) + '</span>' : ''}</div>
+          <div class="s-label">生產產能(kg)</div>
+          <div class="s-value" style="font-size:18px;">${fmtKg(doneWeight)}${std.capacityKg > 0 ? ' <span style="font-size:13px;color:var(--muted);">/ ' + fmtKg(std.capacityKg) + '</span>' : ''}</div>
         </div>
         <div class="stat ${capacityRate && parseFloat(capacityRate) >= 100 ? 'good' : ''}">
           <div class="s-label">生產達成度</div>
@@ -508,11 +537,11 @@ function renderContent() {
         </div>
         <div class="stat">
           <div class="s-label">生產效率(分)</div>
-          <div class="s-value">—</div>
+          <div class="s-value" style="font-size:18px;">${fmtNum(stdMinutes)}${std.workMinutes > 0 ? ' <span style="font-size:13px;color:var(--muted);">/ ' + std.workMinutes + '</span>' : ''}</div>
         </div>
-        <div class="stat">
+        <div class="stat ${efficiencyRate && parseFloat(efficiencyRate) >= 100 ? 'good' : ''}">
           <div class="s-label">效率達成度</div>
-          <div class="s-value">—</div>
+          <div class="s-value">${efficiencyRate !== null ? efficiencyRate + '%' : '—'}</div>
         </div>
       </div>
       </div>
