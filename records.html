@@ -270,7 +270,7 @@
     </h2>
     <div class="table-wrap">
       <table class="preview-table" style="font-size:13px;">
-        <thead><tr><th>時間</th><th>機台</th><th>小組長</th><th>備註</th></tr></thead>
+        <thead><tr><th>時間</th><th>機台</th><th>小組長</th><th>備註</th><th>操作</th></tr></thead>
         <tbody id="idleBody"></tbody>
       </table>
     </div>
@@ -420,8 +420,21 @@ function renderIdleEvents() {
       <td style="color:var(--brand);font-weight:600;white-space:nowrap;">${escapeHtml(e.machineNo)}</td>
       <td style="white-space:nowrap;">${escapeHtml(e.leaderName || '')}</td>
       <td>${escapeHtml(e.note || '')}</td>
+      <td><button class="btn-secondary" data-idle-del="${e.id}" style="padding:5px 10px;font-size:12px;color:var(--brand);border:1.5px solid var(--brand);background:#fff;border-radius:6px;cursor:pointer;">取消</button></td>
     </tr>
   `).join('');
+  $('idleBody').querySelectorAll('[data-idle-del]').forEach(b => {
+    b.onclick = () => cancelIdleEvent(b.getAttribute('data-idle-del'));
+  });
+}
+
+async function cancelIdleEvent(id) {
+  if (!confirm('確定取消這筆無工令紀錄？')) return;
+  const r = await api('/api/idle-events/' + id, { method: 'DELETE' });
+  if (!r.ok) { toast(r.error || '取消失敗', 'error'); return; }
+  allIdleEvents = allIdleEvents.filter(e => String(e.id) !== String(id));
+  renderIdleEvents();
+  toast('已取消', 'success');
 }
 
 function render() {

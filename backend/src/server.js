@@ -133,6 +133,15 @@ fastify.get('/api/idle-events', { onRequest: [fastify.authenticate] }, async (re
   return { events };
 });
 
+fastify.delete('/api/idle-events/:id', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  const id = Number(request.params.id);
+  if (!id) return reply.code(400).send({ error: '無效 id' });
+  const event = await prisma.idleEvent.findUnique({ where: { id } });
+  if (!event) return reply.code(404).send({ error: '找不到紀錄' });
+  await prisma.idleEvent.delete({ where: { id } });
+  return { ok: true };
+});
+
 // 自動建立第一位管理員
 async function ensureAdmin() {
   const count = await prisma.leader.count({ where: { isAdmin: true } });
