@@ -144,6 +144,14 @@
 
   <div class="card">
     <h2>上傳 Excel 工單檔</h2>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;background:var(--bg);padding:12px 14px;border-radius:10px;">
+      <label style="margin:0;font-weight:600;font-size:13px;color:var(--ink);white-space:nowrap;">生產日期：</label>
+      <input type="date" id="uploadDate" style="padding:8px 10px;font-size:14px;border:1.5px solid var(--border);border-radius:8px;background:#fff;">
+      <button id="todayBtn" style="padding:6px 12px;font-size:12px;background:#fff;color:var(--ink);border:1.5px solid var(--border);border-radius:8px;cursor:pointer;font-weight:600;">今日</button>
+      <div style="flex:1;min-width:150px;font-size:11px;color:var(--muted);">📅 補上傳可選過去日期</div>
+    </div>
+
     <div class="drop-zone" id="dropZone">
       <div class="dz-icon">&#128196;</div>
       <div class="dz-text">點擊選擇或拖曳 Excel 檔案</div>
@@ -300,6 +308,18 @@ const FIELD_MAP = {
   '總數': 'totalWeight', '全部總重量': 'totalWeight', '總重量': 'totalWeight',
 };
 
+// 預設生產日期為今日
+(function () {
+  const t = new Date();
+  const ymd = t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0');
+  $('uploadDate').value = ymd;
+})();
+$('todayBtn').onclick = () => {
+  const t = new Date();
+  const ymd = t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0');
+  $('uploadDate').value = ymd;
+};
+
 // Drop zone
 const dropZone = $('dropZone');
 const fileInput = $('fileInput');
@@ -342,9 +362,11 @@ function parseRows(json) {
     return;
   }
 
-  // 上傳當日（如果 Excel 沒有生產日期就用這個）
+  // 用使用者選的日期（預設今日）
+  const selectedDate = $('uploadDate').value;
   const today = new Date();
-  const todayStr = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+  const fallbackDate = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+  const todayStr = selectedDate || fallbackDate;
 
   const allRows = json.map(row => {
     const obj = {};
@@ -422,6 +444,12 @@ $('cancelBtn').onclick = () => {
 $('uploadBtn').onclick = async () => {
   const rows = parsedRows.filter(r => r._valid);
   if (rows.length === 0) { toast('沒有有效的工單', 'error'); return; }
+  const selectedDate = $('uploadDate').value;
+  const today = new Date();
+  const ymd = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+  if (selectedDate && selectedDate !== ymd) {
+    if (!confirm('你選的日期是 ' + selectedDate + '（非今日），確定要用這個日期上傳嗎？\n\n這是補上傳功能，工單的生產日期會標記為該日期。')) return;
+  }
   $('uploadBtn').disabled = true;
   $('uploadBtn').textContent = '上傳中...';
   const clean = rows.map(r => {
