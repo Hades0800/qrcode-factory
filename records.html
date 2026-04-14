@@ -165,6 +165,86 @@
   td.step-time.empty { color: #ccc; }
   td.note { white-space: normal; max-width: 200px; font-size: 12px; color: var(--text); }
 
+  /* 工單資訊卡片（手機優化） */
+  .info-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 14px;
+    border: 1px solid var(--border);
+  }
+  .info-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .info-text-group {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .info-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 12px;
+    background: var(--bg);
+    border-radius: 8px;
+  }
+  .info-label {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .info-icon { font-size: 14px; }
+  .info-value {
+    font-size: 14px;
+    color: var(--ink);
+    font-weight: 500;
+    word-break: break-all;
+    line-height: 1.4;
+  }
+  .info-empty { color: var(--muted); font-weight: 400; }
+  .info-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 8px;
+  }
+  .info-stat {
+    background: linear-gradient(135deg, var(--brand-soft), #fff);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .info-stat-label {
+    font-size: 10px;
+    color: var(--muted);
+    font-weight: 600;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .info-stat-value {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--ink);
+  }
+  .info-stat-unit {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 500;
+    margin-left: 2px;
+  }
+
   tr.clickable { cursor: pointer; }
   tr.clickable:hover { background: var(--brand-soft); }
   tr.detail-row td { background: #fafafc; padding: 0; border-bottom: 2px solid var(--border); }
@@ -464,30 +544,38 @@ function render() {
       ...((o.pause13 && o.pause13.history) || []).map(e => Object.assign({}, e, { label: '異常停止' })),
     ].sort((a, b) => new Date(a.startAt) - new Date(b.startAt));
     const hasEvents = allEvents.length > 0;
-    // 工單資訊區塊
-    const infoRows = [
-      ['生產日期', o.productionDate ? String(o.productionDate).slice(0,10) : ''],
-      ['生產規格', o.productSpec || ''],
-      ['模具', o.moldSpec || ''],
-      ['領料', o.material || ''],
-      ['派工數', o.dispatchQty || ''],
-      ['機器SPM', o.machineSPM || ''],
-      ['刀數', o.bladeCount || ''],
-      ['一片理論重', o.unitWeight || ''],
-      ['全部總重量', o.totalWeight || ''],
+    // 工單資訊區塊（手機優化）
+    const textFields = [
+      { label: '生產日期', icon: '📅', value: o.productionDate ? String(o.productionDate).slice(0,10) : '' },
+      { label: '生產規格', icon: '🔩', value: o.productSpec || '' },
+      { label: '模具', icon: '⚙️', value: o.moldSpec || '' },
+      { label: '領料', icon: '📦', value: o.material || '' },
     ];
+    const numberFields = [
+      { label: '派工數', value: o.dispatchQty, unit: '片' },
+      { label: '刀數', value: o.bladeCount, unit: '刀' },
+      { label: '機器SPM', value: o.machineSPM, unit: '' },
+      { label: '一片理論重', value: o.unitWeight, unit: 'kg' },
+      { label: '全部總重量', value: o.totalWeight, unit: 'kg' },
+    ];
+    const textHtml = textFields.map(f => `
+      <div class="info-row">
+        <div class="info-label"><span class="info-icon">${f.icon}</span>${f.label}</div>
+        <div class="info-value">${f.value ? escapeHtml(f.value) : '<span class="info-empty">—</span>'}</div>
+      </div>
+    `).join('');
+    const numberHtml = numberFields.map(f => `
+      <div class="info-stat">
+        <div class="info-stat-label">${f.label}</div>
+        <div class="info-stat-value">${f.value ? escapeHtml(f.value) + (f.unit ? `<span class="info-stat-unit">${f.unit}</span>` : '') : '<span class="info-empty">—</span>'}</div>
+      </div>
+    `).join('');
     const infoHtml = `
-      <h4>工單資訊</h4>
-      <table class="detail-table" style="margin-bottom:14px;">
-        <tbody>
-          ${infoRows.map(([k, v]) => `
-            <tr>
-              <td style="width:110px;color:var(--muted);font-weight:600;">${k}</td>
-              <td style="white-space:normal;">${escapeHtml(v)}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
+      <div class="info-card">
+        <div class="info-section-title">工單資訊</div>
+        <div class="info-text-group">${textHtml}</div>
+        <div class="info-stats-grid">${numberHtml}</div>
+      </div>
     `;
 
     let eventsHtml = '';
