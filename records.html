@@ -178,6 +178,11 @@
   .detail-none { color: var(--muted); font-size: 12px; padding: 8px 0; }
 
 
+  .preview-table { width: 100%; border-collapse: collapse; }
+  .preview-table th { background: var(--bg); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; padding: 8px; text-align: left; }
+  .preview-table td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .preview-table tr:last-child td { border-bottom: none; }
+
   .empty {
     text-align: center;
     color: var(--muted);
@@ -255,6 +260,19 @@
       </div>
       <button class="btn-secondary" id="refreshBtn">🔄 重新整理</button>
       <button class="btn-primary" id="exportBtn">📥 匯出 CSV</button>
+    </div>
+  </div>
+
+  <div class="card" id="idleCard" style="display:none;">
+    <h2 style="display:flex;justify-content:space-between;align-items:center;margin:0 0 10px;">
+      <span>🛑 生產無工令紀錄</span>
+      <span id="idleCount" style="font-size:12px;color:var(--muted);"></span>
+    </h2>
+    <div class="table-wrap">
+      <table class="preview-table" style="font-size:13px;">
+        <thead><tr><th>時間</th><th>機台</th><th>小組長</th><th>備註</th></tr></thead>
+        <tbody id="idleBody"></tbody>
+      </table>
     </div>
   </div>
 
@@ -366,15 +384,44 @@ $('logoutLink').onclick = e => {
   location.href = 'index.html';
 };
 
+let allIdleEvents = [];
 async function loadOrders() {
   $('ordersBody').innerHTML = '<tr><td colspan="19" class="empty">載入中...</td></tr>';
-  const r = await api('/api/orders?limit=200');
-  if (!r.ok) {
-    $('ordersBody').innerHTML = '<tr><td colspan="19" class="empty">' + (r.error || '載入失敗') + '</td></tr>';
+  const [ordersRes, idleRes] = await Promise.all([
+    api('/api/orders?limit=200'),
+    api('/api/idle-events?limit=200'),
+  ]);
+  if (!ordersRes.ok) {
+    $('ordersBody').innerHTML = '<tr><td colspan="19" class="empty">' + (ordersRes.error || '載入失敗') + '</td></tr>';
     return;
   }
-  allOrders = r.data.orders || [];
+  allOrders = ordersRes.data.orders || [];
+  allIdleEvents = (idleRes.ok ? idleRes.data.events : []) || [];
   render();
+  renderIdleEvents();
+}
+
+function renderIdleEvents() {
+  const from = $('filterFrom').value;
+  const to = $('filterTo').value;
+  const events = allIdleEvents.filter(e => {
+    if (!from && !to) return true;
+    const d = new Date(e.createdAt);
+    if (from && d < new Date(from + 'T00:00:00')) return false;
+    if (to && d > new Date(to + 'T23:59:59')) return false;
+    return true;
+  });
+  if (events.length === 0) { $('idleCard').style.display = 'none'; return; }
+  $('idleCard').style.display = 'block';
+  $('idleCount').textContent = '共 ' + events.length + ' 筆';
+  $('idleBody').innerHTML = events.map(e => `
+    <tr>
+      <td style="white-space:nowrap;">${escapeHtml(fmtTime(e.createdAt))}</td>
+      <td style="color:var(--brand);font-weight:600;white-space:nowrap;">${escapeHtml(e.machineNo)}</td>
+      <td style="white-space:nowrap;">${escapeHtml(e.leaderName || '')}</td>
+      <td>${escapeHtml(e.note || '')}</td>
+    </tr>
+  `).join('');
 }
 
 function render() {
@@ -555,8 +602,8 @@ function applyFilters(list) {
 }
 
 ['filterText','filterFrom','filterTo','filterStatus'].forEach(id => {
-  $(id).addEventListener('input', render);
-  $(id).addEventListener('change', render);
+  $(id).addEventListener('input', () => { render(); renderIdleEvents(); });
+  $(id).addEventListener('change', () => { render(); renderIdleEvents(); });
 });
 $('refreshBtn').onclick = loadOrders;
 
