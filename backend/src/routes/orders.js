@@ -241,12 +241,10 @@ export default async function orderRoutes(fastify) {
     return { ok: true };
   });
 
-  // 列出近期工單（給管理者或自己查）
+  // 列出近期工單（所有登入者都能看全部）
   fastify.get('/', async (request) => {
     const limit = Math.min(Number(request.query.limit) || 50, 200);
-    const where = request.user.isAdmin ? {} : { leaderId: request.user.id };
     const orders = await fastify.prisma.order.findMany({
-      where,
       orderBy: { updatedAt: 'desc' },
       take: limit,
       include: ORDER_INCLUDE,
