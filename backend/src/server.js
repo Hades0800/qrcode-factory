@@ -107,6 +107,32 @@ await fastify.register(authRoutes, { prefix: '/api/auth' });
 await fastify.register(orderRoutes, { prefix: '/api/orders' });
 await fastify.register(adminRoutes, { prefix: '/api/admin' });
 
+// 生產無工令事件
+fastify.post('/api/idle-events', { onRequest: [fastify.authenticate] }, async (request, reply) => {
+  const { machineNo, note } = request.body || {};
+  if (!machineNo) return reply.code(400).send({ error: '缺少機台號' });
+  const ALLOWED = new Set(['No1-350','No2-250','No3-60','No4-90','No5-40','No6-40']);
+  if (!ALLOWED.has(machineNo)) return reply.code(400).send({ error: '不允許的機台號' });
+  const event = await prisma.idleEvent.create({
+    data: {
+      machineNo,
+      leaderId: request.user.id,
+      leaderName: request.user.displayName || null,
+      note: note ? String(note).slice(0, 500) : null,
+    },
+  });
+  return { ok: true, event };
+});
+
+fastify.get('/api/idle-events', { onRequest: [fastify.authenticate] }, async (request) => {
+  const limit = Math.min(Number(request.query.limit) || 100, 500);
+  const events = await prisma.idleEvent.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+  });
+  return { events };
+});
+
 // 自動建立第一位管理員
 async function ensureAdmin() {
   const count = await prisma.leader.count({ where: { isAdmin: true } });

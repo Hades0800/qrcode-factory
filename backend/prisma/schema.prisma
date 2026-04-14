@@ -60,6 +60,18 @@ model Order {
   @@index([orderNo])
 }
 
+model IdleEvent {
+  id         Int      @id @default(autoincrement())
+  machineNo  String
+  leaderId   Int?
+  leaderName String?
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([machineNo])
+}
+
 model PauseEvent {
   id         Int       @id @default(autoincrement())
   orderId    Int

@@ -642,6 +642,11 @@
         <input type="text" id="orderInput" placeholder="手動輸入工單號">
         <button class="btn-secondary" id="setOrderBtn" style="flex:0 0 90px;">確定</button>
       </div>
+      <div class="or-divider">或</div>
+      <button class="btn-block" id="idleBtn" style="background:#6e6e73;color:#fff;box-shadow:0 2px 6px rgba(110,110,115,.25);">
+        🛑 生產無工令
+        <div style="font-size:11px;font-weight:500;margin-top:2px;opacity:.85;">設備無稼動</div>
+      </button>
     </div>
     <div id="orderShow" style="display:none;">
       <div class="order-display">
@@ -925,6 +930,22 @@ async function setOrder(no) {
 $('setOrderBtn').onclick = () => setOrder($('orderInput').value);
 $('orderInput').addEventListener('keydown', e => { if (e.key === 'Enter') setOrder($('orderInput').value); });
 $('scanOrderBtn').onclick = () => openScanner('order');
+$('idleBtn').onclick = async () => {
+  if (!selectedMachine) { toast('請先選擇機台', 'error'); return; }
+  if (!confirm('確定記錄「生產無工令」？\n\n機台：' + selectedMachine + '\n（記錄後會跳回選機台）')) return;
+  const note = prompt('備註（可留白）：', '') || '';
+  const r = await api('/api/idle-events', { method: 'POST', body: { machineNo: selectedMachine, note } });
+  if (!r.ok) { toast(r.error || '失敗', 'error'); return; }
+  toast('已記錄無工令：' + selectedMachine, 'success');
+  // 重置到選機台
+  selectedMachine = '';
+  document.querySelectorAll('.machine-btn').forEach(b => b.classList.remove('selected'));
+  $('machineEmpty').style.display = 'block';
+  $('machineShow').style.display = 'none';
+  $('orderCard').style.display = 'none';
+  $('orderInput').value = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
 $('changeOrderBtn').onclick = () => {
   orderNo = ''; order = null;
   $('orderEmpty').style.display = 'block';
