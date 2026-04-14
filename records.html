@@ -266,7 +266,6 @@
             <th>工單號</th>
             <th>機台</th>
             <th>小組長</th>
-            <th>進度</th>
             <th>01.原料</th>
             <th>02.模刀具</th>
             <th>03.試模</th>
@@ -392,12 +391,12 @@ function render() {
   `;
 
   if (filtered.length === 0) {
-    $('ordersBody').innerHTML = '<tr><td colspan="18" class="empty">沒有符合條件的工單</td></tr>';
+    $('ordersBody').innerHTML = '<tr><td colspan="17" class="empty">沒有符合條件的工單</td></tr>';
     return;
   }
 
   const isAdmin = me && me.isAdmin;
-  const colCount = isAdmin ? 18 : 17;
+  const colCount = isAdmin ? 17 : 16;
   $('ordersBody').innerHTML = filtered.map((o, idx) => {
     const done = countDone(o);
     const allEvents = [
@@ -471,7 +470,6 @@ function render() {
         <td class="order-no">${escapeHtml(o.orderNo)} <span style="font-size:10px;color:var(--brand);">▶ 明細</span></td>
         <td class="machine">${escapeHtml(o.machineNo)}</td>
         <td>${escapeHtml(o.leaderName)}</td>
-        <td><strong>${done}/7</strong></td>
         ${stepCell(o.step1At)}
         ${stepCell(o.step2At)}
         ${stepCell(o.step3At)}
