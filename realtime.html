@@ -464,10 +464,10 @@ function renderContent() {
   const today = new Date();
   const dateStr = today.getFullYear() + '/' + String(today.getMonth()+1).padStart(2,'0') + '/' + String(today.getDate()).padStart(2,'0');
 
-  // Filter orders for this machine (today only)
+  // 只抓「生產日期 = 今日」的工單
   const machineOrders = allOrders
     .filter(o => o.machineNo === activeMachine)
-    .filter(o => isToday(o.updatedAt) || isToday(o.createdAt))
+    .filter(o => isToday(o.productionDate))
     .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
   const totalOrders = machineOrders.length;
