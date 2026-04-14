@@ -230,19 +230,30 @@ document.addEventListener('click', e => {
   if (menu && !menu.contains(e.target) && btn && !btn.contains(e.target)) menu.classList.remove('show');
 });
 
-// 欄位對應（Excel 欄位名 → 系統欄位）
+// 欄位對應（Excel 欄位名 → 系統欄位）— 同義字都對應到同一欄位
 const FIELD_MAP = {
-  '製造單號': 'orderNo',
-  '生產日期': 'productionDate',
-  '生產規格': 'productSpec',
-  '模具規格': 'moldSpec',
-  '領用材料': 'material',
+  // 製造單號
+  '製造單號': 'orderNo', '工單號': 'orderNo', '工單編號': 'orderNo',
+  // 生產規格 / 品名
+  '品名規格': 'productSpec', '生產規格': 'productSpec', '品名': 'productSpec',
+  // 模具
+  '模具': 'moldSpec', '模具規格': 'moldSpec',
+  // 領料
+  '領料': 'material', '領用材料': 'material', '材料': 'material',
+  // 機台
   '機台': 'machineNo', '機台號': 'machineNo', '機台編號': 'machineNo',
-  '派工數': 'dispatchQty',
-  '刀數': 'bladeCount',
+  // 生產日期
+  '生產日期': 'productionDate', '日期': 'productionDate',
+  // 數量 / 派工數
+  '數量': 'dispatchQty', '派工數': 'dispatchQty',
+  // 設定數字 / 刀數
+  '設定數字': 'bladeCount', '刀數': 'bladeCount',
+  // 機器 SPM
   '機器SPM': 'machineSPM', 'SPM': 'machineSPM',
-  '一片理論重': 'unitWeight',
-  '全部總重量': 'totalWeight', '總重量': 'totalWeight',
+  // 單重 / 一片理論重
+  '單重': 'unitWeight', '一片理論重': 'unitWeight', '單片重': 'unitWeight',
+  // 總數 / 總重量
+  '總數': 'totalWeight', '全部總重量': 'totalWeight', '總重量': 'totalWeight',
 };
 
 // Drop zone
@@ -287,7 +298,7 @@ function parseRows(json) {
     return;
   }
 
-  parsedRows = json.map(row => {
+  const allRows = json.map(row => {
     const obj = {};
     Object.keys(mapping).forEach(excelKey => {
       let val = row[excelKey];
@@ -298,11 +309,23 @@ function parseRows(json) {
       obj[field] = val;
     });
     obj.orderNo = String(obj.orderNo || '').trim();
-    // 驗證
     obj._valid = /^[A-Z]\d{10}$/.test(obj.orderNo.toUpperCase());
     if (obj._valid) obj.orderNo = obj.orderNo.toUpperCase();
     return obj;
   });
+
+  // 同工單號只保留第一行（註記行多半 totalWeight=0、是附註）
+  const seen = new Set();
+  const deduped = [];
+  let dupSkipped = 0;
+  allRows.forEach(r => {
+    if (!r._valid) { deduped.push(r); return; }
+    if (seen.has(r.orderNo)) { dupSkipped++; return; }
+    seen.add(r.orderNo);
+    deduped.push(r);
+  });
+  parsedRows = deduped;
+  if (dupSkipped > 0) toast(`已合併 ${dupSkipped} 筆同工單號的註記行`, 'success');
 
   renderPreview();
 }
