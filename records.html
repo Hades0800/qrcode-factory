@@ -537,7 +537,8 @@ function applyFilters(list) {
       if (!hay.includes(text)) return false;
     }
     if (from || to) {
-      const d = o.updatedAt ? new Date(o.updatedAt) : null;
+      // 優先用生產日期，沒有就用最後更新
+      const d = o.productionDate ? new Date(o.productionDate) : (o.updatedAt ? new Date(o.updatedAt) : null);
       if (!d) return false;
       if (from && d < new Date(from + 'T00:00:00')) return false;
       if (to && d > new Date(to + 'T23:59:59')) return false;
@@ -587,7 +588,13 @@ $('exportBtn').onclick = () => {
   const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const stamp = new Date().toISOString().slice(0,10);
+  const from = $('filterFrom').value;
+  const to = $('filterTo').value;
+  let stamp;
+  if (from && to) stamp = `${from}_至_${to}`;
+  else if (from) stamp = `${from}_起`;
+  else if (to) stamp = `至_${to}`;
+  else stamp = new Date().toISOString().slice(0,10);
   a.href = url; a.download = `工單紀錄_${stamp}.csv`;
   a.click();
   URL.revokeObjectURL(url);
