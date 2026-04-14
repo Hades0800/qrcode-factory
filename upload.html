@@ -298,6 +298,10 @@ function parseRows(json) {
     return;
   }
 
+  // 上傳當日（如果 Excel 沒有生產日期就用這個）
+  const today = new Date();
+  const todayStr = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+
   const allRows = json.map(row => {
     const obj = {};
     Object.keys(mapping).forEach(excelKey => {
@@ -308,6 +312,8 @@ function parseRows(json) {
       }
       obj[field] = val;
     });
+    // 沒有生產日期就用上傳當日
+    if (!obj.productionDate) obj.productionDate = todayStr;
     obj.orderNo = String(obj.orderNo || '').trim();
     obj._valid = /^[A-Z]\d{10}$/.test(obj.orderNo.toUpperCase());
     if (obj._valid) obj.orderNo = obj.orderNo.toUpperCase();
