@@ -440,6 +440,12 @@ function renderContent() {
   const totalOrders = machineOrders.length;
   const completedOrders = machineOrders.filter(o => o.step11At).length;
 
+  // 生產產能 / 達成度（基於 Excel 匯入的 totalWeight）
+  const totalWeight = machineOrders.reduce((s, o) => s + (Number(o.totalWeight) || 0), 0);
+  const doneWeight = machineOrders.filter(o => o.step11At).reduce((s, o) => s + (Number(o.totalWeight) || 0), 0);
+  const capacityRate = totalWeight > 0 ? (doneWeight / totalWeight * 100).toFixed(1) : null;
+  const fmtNum = n => n > 0 ? n.toLocaleString('zh-TW', { maximumFractionDigits: 1 }) : '—';
+
   // Find active order (has steps but no step11)
   const activeOrder = machineOrders.find(o => !o.step11At && countSteps(o) > 0);
 
@@ -473,11 +479,11 @@ function renderContent() {
         </div>
         <div class="stat">
           <div class="s-label">生產產能(斤)</div>
-          <div class="s-value">—</div>
+          <div class="s-value" style="font-size:18px;">${fmtNum(doneWeight)}${totalWeight > 0 ? ' <span style="font-size:13px;color:var(--muted);">/ ' + fmtNum(totalWeight) + '</span>' : ''}</div>
         </div>
-        <div class="stat">
+        <div class="stat ${capacityRate && parseFloat(capacityRate) >= 100 ? 'good' : ''}">
           <div class="s-label">生產達成度</div>
-          <div class="s-value">—</div>
+          <div class="s-value">${capacityRate !== null ? capacityRate + '%' : '—'}</div>
         </div>
         <div class="stat">
           <div class="s-label">生產效率(分)</div>
