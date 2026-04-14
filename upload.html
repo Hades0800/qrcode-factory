@@ -52,6 +52,32 @@
   .dropdown-menu a.menu-logout { color: var(--muted); }
 
   .container { padding: 16px; max-width: 900px; margin: 0 auto; }
+
+  /* Tabs */
+  .page-tabs {
+    display: flex;
+    background: #fff;
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  .page-tab {
+    flex: 1;
+    text-align: center;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    border-radius: 8px;
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-family: inherit;
+    transition: all .15s;
+  }
+  .page-tab:hover { color: var(--brand); }
+  .page-tab.active { color: #fff; background: var(--brand); box-shadow: 0 2px 6px rgba(210,53,53,.25); }
   .card {
     background: var(--card); border-radius: 14px; padding: 20px; margin-bottom: 14px;
     box-shadow: 0 1px 3px rgba(0,0,0,.04);
@@ -142,6 +168,14 @@
 
 <div class="container">
 
+  <div class="page-tabs">
+    <button class="page-tab active" data-tab="upload">📤 上傳</button>
+    <button class="page-tab" data-tab="history">📋 上傳紀錄</button>
+  </div>
+
+  <!-- 上傳區 -->
+  <div id="tab-upload">
+
   <div class="card">
     <h2>上傳 Excel 工單檔</h2>
 
@@ -162,10 +196,7 @@
   </div>
 
   <div class="card" id="todayCard" style="display:none;">
-    <h2 style="display:flex;justify-content:space-between;align-items:center;">
-      <span>今日已上傳工單（可取消重傳）</span>
-      <button id="cancelAllBtn" style="padding:8px 14px;font-size:12px;background:#fff;color:var(--brand);border:1.5px solid var(--brand);border-radius:8px;cursor:pointer;font-weight:700;">取消整張表</button>
-    </h2>
+    <h2>今日已上傳工單</h2>
     <div id="todayStats" style="font-size:13px;color:var(--muted);margin-bottom:10px;"></div>
     <div class="preview-wrap">
       <table class="preview-table">
@@ -186,7 +217,7 @@
       </table>
     </div>
     <div style="margin-top:12px;font-size:12px;color:var(--muted);">
-      ⓘ 只能取消「尚未開始生產」的工單。已開始掃描的需聯絡管理員。
+      ⓘ 可在上方「📋 上傳紀錄」一次取消整批上傳。
     </div>
   </div>
 
@@ -222,6 +253,34 @@
     <div id="result"></div>
   </div>
 
+  </div><!-- /tab-upload -->
+
+  <!-- 上傳紀錄區 -->
+  <div id="tab-history" style="display:none;">
+    <div class="card">
+      <h2 style="display:flex;justify-content:space-between;align-items:center;">
+        <span>上傳紀錄</span>
+        <button id="refreshBatchBtn" style="padding:6px 12px;font-size:12px;background:#fff;color:var(--ink);border:1.5px solid var(--border);border-radius:6px;cursor:pointer;">🔄 重新整理</button>
+      </h2>
+      <div class="preview-wrap">
+        <table class="preview-table" style="font-size:13px;">
+          <thead>
+            <tr>
+              <th>上傳時間</th>
+              <th>檔名</th>
+              <th>生產日期</th>
+              <th>上傳者</th>
+              <th>筆數</th>
+              <th>狀態</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="batchBody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:30px;">載入中...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <div id="toast"></div>
@@ -231,6 +290,7 @@ const API_URL = 'https://shangkai-manu-record.zeabur.app';
 let token = localStorage.getItem('token') || '';
 let me = JSON.parse(localStorage.getItem('me') || 'null');
 let parsedRows = [];
+let uploadedFilename = '';
 
 function $(id) { return document.getElementById(id); }
 function toast(msg, type) {
@@ -333,6 +393,7 @@ function handleFile(file) {
   if (!file) return;
   if (file.size > 5 * 1024 * 1024) { toast('檔案過大（上限 5MB）', 'error'); return; }
   if (!/\.(xlsx|xls)$/i.test(file.name)) { toast('請選擇 .xlsx 或 .xls 檔', 'error'); return; }
+  uploadedFilename = file.name;
   $('fileName').textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
   const reader = new FileReader();
   reader.onload = e => {
@@ -457,7 +518,7 @@ $('uploadBtn').onclick = async () => {
     delete o._valid;
     return o;
   });
-  const res = await api('/api/orders/bulk-upload', { method: 'POST', body: { orders: clean } });
+  const res = await api('/api/orders/bulk-upload', { method: 'POST', body: { orders: clean, filename: uploadedFilename } });
   $('uploadBtn').disabled = false;
   $('uploadBtn').innerHTML = '&#128228; 確認上傳';
   if (!res.ok) {
@@ -528,33 +589,62 @@ async function deleteOrder(orderNo, isForce) {
   loadTodayOrders();
 }
 
-// 取消整張表（保留掃描紀錄）
-document.getElementById('cancelAllBtn').onclick = async () => {
-  // 抓目前頁面顯示的今日工單
-  const r = await api('/api/orders?limit=200');
-  if (!r.ok) { toast('讀取失敗', 'error'); return; }
-  const today = new Date();
-  const rows = (r.data.orders || []).filter(o => {
-    if (!o.productionDate) return false;
-    const d = new Date(o.productionDate);
-    return d.getFullYear() === today.getFullYear() &&
-           d.getMonth() === today.getMonth() &&
-           d.getDate() === today.getDate();
-  });
-  if (rows.length === 0) { toast('沒有今日上傳紀錄', 'error'); return; }
-  if (!confirm(
-    `確定取消今日上傳的 ${rows.length} 筆工單？\n\n` +
-    '• 未開始生產的工單：直接刪除\n' +
-    '• 已有掃描紀錄的工單：保留生產紀錄，只清除上傳欄位\n\n' +
-    '之後可重新上傳，系統會自動配對原本的生產紀錄。'
-  )) return;
-  const orderNos = rows.map(o => o.orderNo);
-  const res = await api('/api/orders/bulk-cancel-upload', { method: 'POST', body: { orderNos } });
-  if (!res.ok) { toast(res.error || '取消失敗', 'error'); return; }
-  const d = res.data;
-  toast(`已處理：刪除 ${d.deleted} 筆、保留生產紀錄 ${d.cleared} 筆`, 'success');
-  loadTodayOrders();
-};
+// ===== 頁面 tab 切換 =====
+document.querySelectorAll('.page-tab').forEach(btn => {
+  btn.onclick = () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.page-tab').forEach(b => b.classList.toggle('active', b === btn));
+    $('tab-upload').style.display = tab === 'upload' ? '' : 'none';
+    $('tab-history').style.display = tab === 'history' ? '' : 'none';
+    if (tab === 'history') loadBatches();
+  };
+});
+
+// ===== 上傳紀錄 =====
+async function loadBatches() {
+  $('batchBody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:30px;">載入中...</td></tr>';
+  const r = await api('/api/orders/upload-batches?limit=100');
+  if (!r.ok) { $('batchBody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--brand);padding:30px;">' + (r.error || '載入失敗') + '</td></tr>'; return; }
+  const batches = r.data.batches || [];
+  if (batches.length === 0) {
+    $('batchBody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:30px;">目前沒有上傳紀錄</td></tr>';
+    return;
+  }
+  $('batchBody').innerHTML = batches.map(b => {
+    const dt = new Date(b.uploadedAt);
+    const pad = n => String(n).padStart(2, '0');
+    const time = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+    const prod = b.productionDate ? String(b.productionDate).slice(0,10) : '—';
+    const status = b.cancelledAt
+      ? '<span style="color:var(--muted);">已取消</span>'
+      : '<span style="color:var(--success);">有效</span>';
+    const action = b.cancelledAt
+      ? '—'
+      : `<button style="padding:6px 12px;font-size:12px;background:#fff;color:var(--brand);border:1.5px solid var(--brand);border-radius:6px;cursor:pointer;" onclick="cancelBatch(${b.id})">取消</button>`;
+    return `
+      <tr>
+        <td style="white-space:nowrap;">${escapeHtml(time)}</td>
+        <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(b.filename)}</td>
+        <td style="white-space:nowrap;">${escapeHtml(prod)}</td>
+        <td style="white-space:nowrap;">${escapeHtml(b.uploadedByName || '')}</td>
+        <td>${b.rowCount}</td>
+        <td>${status}</td>
+        <td>${action}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function cancelBatch(id) {
+  if (!confirm('確定取消這次上傳？\n\n• 未開始生產的工單 → 刪除\n• 有掃描紀錄的工單 → 保留生產紀錄、清空上傳欄位\n\n可重新上傳配對原本的生產紀錄。')) return;
+  const r = await api('/api/orders/upload-batches/' + id, { method: 'DELETE' });
+  if (!r.ok) { toast(r.error || '取消失敗', 'error'); return; }
+  const d = r.data;
+  toast(`已取消：刪除 ${d.deleted} 筆、保留 ${d.cleared} 筆`, 'success');
+  loadBatches();
+}
+
+$('refreshBatchBtn').onclick = loadBatches;
 
 // 頁面載入就抓今日工單
 loadTodayOrders();

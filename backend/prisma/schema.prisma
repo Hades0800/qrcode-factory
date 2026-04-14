@@ -60,6 +60,20 @@ model Order {
   @@index([orderNo])
 }
 
+model UploadBatch {
+  id             Int       @id @default(autoincrement())
+  filename       String
+  uploadedBy     Int?
+  uploadedByName String?
+  rowCount       Int
+  productionDate DateTime?
+  orderNos       String[]
+  uploadedAt     DateTime  @default(now())
+  cancelledAt    DateTime?
+
+  @@index([uploadedAt])
+}
+
 model IdleEvent {
   id         Int      @id @default(autoincrement())
   machineNo  String

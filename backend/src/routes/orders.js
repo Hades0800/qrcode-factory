@@ -210,7 +210,7 @@ export default async function orderRoutes(fastify) {
     if (!request.user.isAdmin && !request.user.isPlanner) {
       return reply.code(403).send({ error: '需要生管或管理員權限' });
     }
-    const { orders: rows } = request.body || {};
+    const { orders: rows, filename } = request.body || {};
     if (!Array.isArray(rows) || rows.length === 0) {
       return reply.code(400).send({ error: '沒有資料' });
     }
@@ -218,6 +218,8 @@ export default async function orderRoutes(fastify) {
       return reply.code(400).send({ error: '單次上傳上限 500 筆' });
     }
     let created = 0, updated = 0, errors = [];
+    const processedOrderNos = [];
+    let batchProductionDate = null;
     for (const row of rows) {
       try {
         const orderNo = String(row.orderNo || '').toUpperCase();
@@ -245,11 +247,80 @@ export default async function orderRoutes(fastify) {
           await fastify.prisma.order.create({ data: { orderNo, ...data } });
           created++;
         }
+        processedOrderNos.push(orderNo);
+        if (!batchProductionDate && data.productionDate) batchProductionDate = data.productionDate;
       } catch (e) {
         errors.push((row.orderNo || '?') + ': ' + e.message);
       }
     }
-    return { ok: true, created, updated, errors, total: rows.length };
+
+    // 記錄上傳批次
+    let batchId = null;
+    if (processedOrderNos.length > 0) {
+      const batch = await fastify.prisma.uploadBatch.create({
+        data: {
+          filename: String(filename || '未命名').slice(0, 200),
+          uploadedBy: request.user.id,
+          uploadedByName: request.user.displayName || null,
+          rowCount: processedOrderNos.length,
+          productionDate: batchProductionDate,
+          orderNos: processedOrderNos,
+        },
+      });
+      batchId = batch.id;
+    }
+    return { ok: true, created, updated, errors, total: rows.length, batchId };
+  });
+
+  // 上傳批次列表
+  fastify.get('/upload-batches', async (request) => {
+    const limit = Math.min(Number(request.query.limit) || 50, 200);
+    const batches = await fastify.prisma.uploadBatch.findMany({
+      orderBy: { uploadedAt: 'desc' },
+      take: limit,
+    });
+    return { batches };
+  });
+
+  // 取消整個上傳批次
+  fastify.delete('/upload-batches/:id', async (request, reply) => {
+    if (!request.user.isAdmin && !request.user.isPlanner) {
+      return reply.code(403).send({ error: '需要生管或管理員權限' });
+    }
+    const id = Number(request.params.id);
+    if (!id) return reply.code(400).send({ error: '無效 id' });
+    const batch = await fastify.prisma.uploadBatch.findUnique({ where: { id } });
+    if (!batch) return reply.code(404).send({ error: '找不到上傳批次' });
+    if (batch.cancelledAt) return reply.code(400).send({ error: '此批次已取消過' });
+
+    let deleted = 0, cleared = 0;
+    for (const orderNo of (batch.orderNos || [])) {
+      try {
+        const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
+        if (!order) continue;
+        const hasActivity = !!(order.step1At || order.step2At || order.step3At ||
+          order.step4At || order.step5At || order.step6At || order.step7At || order.step11At);
+        if (hasActivity) {
+          await fastify.prisma.order.update({
+            where: { orderNo },
+            data: {
+              productionDate: null, productSpec: null, moldSpec: null,
+              material: null, dispatchQty: null, bladeCount: null,
+              machineSPM: null, unitWeight: null, totalWeight: null,
+            },
+          });
+          cleared++;
+        } else {
+          await fastify.prisma.order.delete({ where: { orderNo } });
+          deleted++;
+        }
+      } catch (e) { /* ignore individual errors */ }
+    }
+    await fastify.prisma.uploadBatch.update({
+      where: { id },
+      data: { cancelledAt: new Date() },
+    });
+    return { ok: true, deleted, cleared };
   });
 
   // 批次取消上傳（保留掃描紀錄）
