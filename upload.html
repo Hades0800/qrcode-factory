@@ -444,8 +444,15 @@ async function loadTodayOrders() {
   const hasActivity = o => !!(o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At || o.step11At);
   const active = rows.filter(hasActivity).length;
   $('todayStats').textContent = `今日上傳 ${rows.length} 筆（${active} 筆已開始生產，${rows.length - active} 筆可取消）`;
+  const isAdmin = me && me.isAdmin;
   $('todayBody').innerHTML = rows.map((o, i) => {
     const started = hasActivity(o);
+    let actionBtn = '—';
+    if (!started) {
+      actionBtn = `<button style="padding:6px 12px;font-size:12px;background:#fff;color:var(--brand);border:1.5px solid var(--brand);border-radius:6px;cursor:pointer;" onclick="deleteOrder('${escapeHtml(o.orderNo)}', false)">取消</button>`;
+    } else if (isAdmin) {
+      actionBtn = `<button style="padding:6px 12px;font-size:12px;background:var(--brand);color:#fff;border:none;border-radius:6px;cursor:pointer;" onclick="deleteOrder('${escapeHtml(o.orderNo)}', true)">強制取消</button>`;
+    }
     return `
       <tr>
         <td>${i + 1}</td>
@@ -456,14 +463,17 @@ async function loadTodayOrders() {
         <td>${o.dispatchQty || ''}</td>
         <td>${o.totalWeight || ''}</td>
         <td>${started ? '<span style="color:var(--success);">已生產</span>' : '<span style="color:var(--muted);">未開始</span>'}</td>
-        <td>${started ? '—' : `<button style="padding:6px 12px;font-size:12px;background:#fff;color:var(--brand);border:1.5px solid var(--brand);border-radius:6px;cursor:pointer;" onclick="deleteOrder('${escapeHtml(o.orderNo)}')">取消</button>`}</td>
+        <td>${actionBtn}</td>
       </tr>
     `;
   }).join('');
 }
 
-async function deleteOrder(orderNo) {
-  if (!confirm(`確定取消工單「${orderNo}」？\n\n⚠️ 該工單會從系統移除，可重新上傳新版本。`)) return;
+async function deleteOrder(orderNo, isForce) {
+  const msg = isForce
+    ? `⚠️ 強制取消工單「${orderNo}」\n\n此工單已開始生產，掃描紀錄會一併刪除！\n\n確定要繼續？`
+    : `確定取消工單「${orderNo}」？\n\n可重新上傳新版本。`;
+  if (!confirm(msg)) return;
   const r = await api('/api/orders/' + encodeURIComponent(orderNo), { method: 'DELETE' });
   if (!r.ok) { toast(r.error || '取消失敗', 'error'); return; }
   toast('已取消 ' + orderNo, 'success');
