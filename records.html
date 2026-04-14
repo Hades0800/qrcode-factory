@@ -264,15 +264,7 @@
         <thead>
           <tr>
             <th>工單號</th>
-            <th>生產日期</th>
             <th>機台</th>
-            <th>生產規格</th>
-            <th>模具</th>
-            <th>領料</th>
-            <th>數量</th>
-            <th>SPM</th>
-            <th>單重</th>
-            <th>總重量</th>
             <th>小組長</th>
             <th>進度</th>
             <th>01.原料</th>
@@ -400,12 +392,12 @@ function render() {
   `;
 
   if (filtered.length === 0) {
-    $('ordersBody').innerHTML = '<tr><td colspan="26" class="empty">沒有符合條件的工單</td></tr>';
+    $('ordersBody').innerHTML = '<tr><td colspan="18" class="empty">沒有符合條件的工單</td></tr>';
     return;
   }
 
   const isAdmin = me && me.isAdmin;
-  const colCount = isAdmin ? 26 : 25;
+  const colCount = isAdmin ? 18 : 17;
   $('ordersBody').innerHTML = filtered.map((o, idx) => {
     const done = countDone(o);
     const allEvents = [
@@ -413,9 +405,35 @@ function render() {
       ...((o.pause13 && o.pause13.history) || []).map(e => Object.assign({}, e, { label: '異常停止' })),
     ].sort((a, b) => new Date(a.startAt) - new Date(b.startAt));
     const hasEvents = allEvents.length > 0;
-    let detailHtml = '';
+    // 工單資訊區塊
+    const infoRows = [
+      ['生產日期', o.productionDate ? String(o.productionDate).slice(0,10) : ''],
+      ['生產規格', o.productSpec || ''],
+      ['模具', o.moldSpec || ''],
+      ['領料', o.material || ''],
+      ['派工數', o.dispatchQty || ''],
+      ['機器SPM', o.machineSPM || ''],
+      ['刀數', o.bladeCount || ''],
+      ['一片理論重', o.unitWeight || ''],
+      ['全部總重量', o.totalWeight || ''],
+    ];
+    const infoHtml = `
+      <h4>工單資訊</h4>
+      <table class="detail-table" style="margin-bottom:14px;">
+        <tbody>
+          ${infoRows.map(([k, v]) => `
+            <tr>
+              <td style="width:110px;color:var(--muted);font-weight:600;">${k}</td>
+              <td style="white-space:normal;">${escapeHtml(v)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+
+    let eventsHtml = '';
     if (hasEvents) {
-      const rows = allEvents.map((e, i) => {
+      const eventRows = allEvents.map((e, i) => {
         const typeClass = e.label === '異常停止' ? 'type-13' : 'type-12';
         return `<tr>
           <td>${i + 1}</td>
@@ -427,34 +445,31 @@ function render() {
           <td>${escapeHtml(e.note || '')}</td>
         </tr>`;
       }).join('');
-      detailHtml = `
-        <tr class="detail-row" id="detail-${idx}" style="display:none;">
-          <td colspan="${colCount}">
-            <div class="detail-panel">
-              <h4>暫停 / 異常明細（工單 ${escapeHtml(o.orderNo)}）</h4>
-              <table class="detail-table">
-                <thead><tr><th>#</th><th>類型</th><th>當下工序</th><th>暫停時間</th><th>恢復時間</th><th>持續時間</th><th>備註</th></tr></thead>
-                <tbody>${rows}</tbody>
-              </table>
-            </div>
-          </td>
-        </tr>
+      eventsHtml = `
+        <h4>暫停 / 異常明細</h4>
+        <table class="detail-table">
+          <thead><tr><th>#</th><th>類型</th><th>當下工序</th><th>暫停時間</th><th>恢復時間</th><th>持續時間</th><th>備註</th></tr></thead>
+          <tbody>${eventRows}</tbody>
+        </table>
       `;
     }
+
+    const detailHtml = `
+      <tr class="detail-row" id="detail-${idx}" style="display:none;">
+        <td colspan="${colCount}">
+          <div class="detail-panel">
+            ${infoHtml}
+            ${eventsHtml}
+          </div>
+        </td>
+      </tr>
+    `;
     const p12 = o.pause12 || { count: 0, totalSec: 0 };
     const p13 = o.pause13 || { count: 0, totalSec: 0 };
     return `
-      <tr class="${hasEvents ? 'clickable' : ''}" ${hasEvents ? `onclick="toggleDetail(${idx})"` : ''}>
-        <td class="order-no">${escapeHtml(o.orderNo)} ${hasEvents ? '<span style="font-size:10px;color:var(--brand);">▶ 明細</span>' : ''}</td>
-        <td style="font-size:12px;color:#666;">${escapeHtml(o.productionDate ? String(o.productionDate).slice(0,10) : '')}</td>
+      <tr class="clickable" onclick="toggleDetail(${idx})">
+        <td class="order-no">${escapeHtml(o.orderNo)} <span style="font-size:10px;color:var(--brand);">▶ 明細</span></td>
         <td class="machine">${escapeHtml(o.machineNo)}</td>
-        <td style="white-space:normal;max-width:220px;font-size:12px;">${escapeHtml(o.productSpec || '')}</td>
-        <td>${escapeHtml(o.moldSpec || '')}</td>
-        <td style="white-space:normal;max-width:180px;font-size:12px;">${escapeHtml(o.material || '')}</td>
-        <td>${o.dispatchQty || ''}</td>
-        <td>${o.machineSPM || ''}</td>
-        <td>${o.unitWeight || ''}</td>
-        <td>${o.totalWeight || ''}</td>
         <td>${escapeHtml(o.leaderName)}</td>
         <td><strong>${done}/7</strong></td>
         ${stepCell(o.step1At)}
