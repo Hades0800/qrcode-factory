@@ -252,21 +252,30 @@ export default async function orderRoutes(fastify) {
     return { ok: true, created, updated, errors, total: rows.length };
   });
 
-  // 刪除工單（僅管理員；允許清理任何舊格式資料）
+  // 刪除工單
+  // - 管理員：可刪任何工單
+  // - 生管：只能刪「還沒開始掃描」的工單（上傳錯了可取消重上傳）
   fastify.delete('/:orderNo', async (request, reply) => {
-    if (!request.user.isAdmin) {
-      return reply.code(403).send({ error: '只有管理員可以刪除工單' });
+    const isAdmin = request.user.isAdmin;
+    const isPlanner = request.user.isPlanner;
+    if (!isAdmin && !isPlanner) {
+      return reply.code(403).send({ error: '權限不足' });
     }
     const rawNo = String(request.params.orderNo || '').trim();
     if (!rawNo) return reply.code(400).send({ error: '缺少工單號' });
-    // 先試原樣，不存在再試轉大寫
     let order = await fastify.prisma.order.findUnique({ where: { orderNo: rawNo } });
-    let orderNo = rawNo;
     if (!order) {
-      orderNo = rawNo.toUpperCase();
-      order = await fastify.prisma.order.findUnique({ where: { orderNo } });
+      order = await fastify.prisma.order.findUnique({ where: { orderNo: rawNo.toUpperCase() } });
     }
     if (!order) return reply.code(404).send({ error: '找不到工單' });
+
+    if (!isAdmin) {
+      const hasActivity = !!(order.step1At || order.step2At || order.step3At ||
+        order.step4At || order.step5At || order.step6At || order.step7At || order.step11At);
+      if (hasActivity) {
+        return reply.code(403).send({ error: '工單已開始生產，無法刪除（請聯絡管理員）' });
+      }
+    }
     await fastify.prisma.order.delete({ where: { orderNo: order.orderNo } });
     return { ok: true };
   });
