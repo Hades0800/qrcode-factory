@@ -1,20 +1,37 @@
 import bcrypt from 'bcryptjs';
 
 export default async function authRoutes(fastify) {
-  // 登入
-  fastify.post('/login', async (request, reply) => {
+  // 登入：每 IP 每 15 分鐘最多 10 次（防暴力破解）
+  fastify.post('/login', {
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: '15 minutes',
+        errorResponseBuilder: () => ({
+          ok: false,
+          error: '登入嘗試過多，請 15 分鐘後再試',
+        }),
+      },
+    },
+  }, async (request, reply) => {
     const { username, password } = request.body || {};
     if (!username || !password) {
       return reply.code(400).send({ error: '請輸入帳號密碼' });
     }
+    if (typeof username !== 'string' || typeof password !== 'string' ||
+        username.length > 60 || password.length > 200) {
+      return reply.code(400).send({ error: '輸入格式錯誤' });
+    }
     const leader = await fastify.prisma.leader.findUnique({ where: { username } });
-    if (!leader) return reply.code(401).send({ error: '帳號或密碼錯誤' });
-    const ok = await bcrypt.compare(password, leader.passwordHash);
-    if (!ok) return reply.code(401).send({ error: '帳號或密碼錯誤' });
+    // 不區分帳號存在與否，避免帳號列舉
+    const fakeHash = '$2a$10$CwTycUXWue0Thq9StjUM0uJ8VjWZSp9YJ0.dFaVBRYHx3N4L5UoEe';
+    const hash = leader ? leader.passwordHash : fakeHash;
+    const ok = await bcrypt.compare(password, hash);
+    if (!leader || !ok) return reply.code(401).send({ error: '帳號或密碼錯誤' });
 
     const token = fastify.jwt.sign(
       { id: leader.id, username: leader.username, displayName: leader.displayName, isAdmin: leader.isAdmin, isPlanner: leader.isPlanner },
-      { expiresIn: '30d' },
+      { expiresIn: '7d' }, // 縮短到 7 天
     );
     return {
       token,
@@ -39,8 +56,8 @@ export default async function authRoutes(fastify) {
     if (!oldPassword || !newPassword) {
       return reply.code(400).send({ error: '請填寫舊密碼與新密碼' });
     }
-    if (newPassword.length < 6) {
-      return reply.code(400).send({ error: '新密碼至少 6 字' });
+    if (typeof newPassword !== 'string' || newPassword.length < 6 || newPassword.length > 200) {
+      return reply.code(400).send({ error: '新密碼長度需 6~200 字' });
     }
     const leader = await fastify.prisma.leader.findUnique({ where: { id: request.user.id } });
     if (!leader) return reply.code(404).send({ error: '帳號不存在' });

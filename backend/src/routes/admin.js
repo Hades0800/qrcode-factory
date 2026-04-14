@@ -26,8 +26,14 @@ export default async function adminRoutes(fastify) {
     if (!username || !password || !displayName) {
       return reply.code(400).send({ error: '請填寫帳號、密碼、顯示名稱' });
     }
-    if (password.length < 6) {
-      return reply.code(400).send({ error: '密碼至少 6 字' });
+    if (!/^[a-zA-Z0-9_]{2,30}$/.test(username)) {
+      return reply.code(400).send({ error: '帳號限英數底線 2~30 字' });
+    }
+    if (typeof displayName !== 'string' || displayName.length < 1 || displayName.length > 30) {
+      return reply.code(400).send({ error: '顯示名稱長度需 1~30 字' });
+    }
+    if (typeof password !== 'string' || password.length < 6 || password.length > 200) {
+      return reply.code(400).send({ error: '密碼長度需 6~200 字' });
     }
     const exists = await fastify.prisma.leader.findUnique({ where: { username } });
     if (exists) return reply.code(409).send({ error: '帳號已存在' });
@@ -43,8 +49,8 @@ export default async function adminRoutes(fastify) {
   fastify.post('/leaders/:id/reset-password', async (request, reply) => {
     const id = Number(request.params.id);
     const { newPassword } = request.body || {};
-    if (!newPassword || newPassword.length < 6) {
-      return reply.code(400).send({ error: '密碼至少 6 字' });
+    if (typeof newPassword !== 'string' || newPassword.length < 6 || newPassword.length > 200) {
+      return reply.code(400).send({ error: '密碼長度需 6~200 字' });
     }
     const leader = await fastify.prisma.leader.findUnique({ where: { id } });
     if (!leader) return reply.code(404).send({ error: '帳號不存在' });

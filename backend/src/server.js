@@ -1,5 +1,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
 import jwt from '@fastify/jwt';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
@@ -13,12 +15,47 @@ const prisma = new PrismaClient();
 
 const fastify = Fastify({
   logger: { level: process.env.LOG_LEVEL || 'info' },
+  bodyLimit: 2 * 1024 * 1024, // 2MB 限制避免 DoS
+  trustProxy: true,
 });
 
 // 全域注入 prisma
 fastify.decorate('prisma', prisma);
 
-await fastify.register(cors, { origin: true });
+// 安全 headers
+await fastify.register(helmet, {
+  contentSecurityPolicy: false, // 前端獨立部署，不由後端設 CSP
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  hsts: { maxAge: 31536000, includeSubDomains: true },
+});
+
+// CORS：限制白名單 origin
+const ALLOWED_ORIGINS = [
+  'https://hades0800.github.io',
+  'http://localhost:3000',
+  'http://localhost:5500',
+  'http://127.0.0.1:5500',
+];
+await fastify.register(cors, {
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true); // 允許 curl/Postman 測試
+    if (ALLOWED_ORIGINS.some(o => origin.startsWith(o))) return cb(null, true);
+    cb(new Error('不允許的來源'), false);
+  },
+  credentials: true,
+});
+
+// 全域速率限制：每 IP 每分鐘 120 次
+await fastify.register(rateLimit, {
+  global: true,
+  max: 120,
+  timeWindow: '1 minute',
+  errorResponseBuilder: (_req, ctx) => ({
+    ok: false,
+    error: `請求太頻繁，請稍候 ${Math.ceil(ctx.ttl / 1000)} 秒再試`,
+  }),
+});
+
 await fastify.register(jwt, {
   secret: process.env.JWT_SECRET || 'dev-secret-change-me',
 });

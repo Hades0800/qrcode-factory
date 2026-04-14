@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
 <title>上鎧鋼鐵 - 工單上傳</title>
 <link rel="icon" href="logo.jpg">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -254,6 +256,8 @@ fileInput.onchange = e => { if (e.target.files[0]) handleFile(e.target.files[0])
 
 function handleFile(file) {
   if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { toast('檔案過大（上限 5MB）', 'error'); return; }
+  if (!/\.(xlsx|xls)$/i.test(file.name)) { toast('請選擇 .xlsx 或 .xls 檔', 'error'); return; }
   $('fileName').textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
   const reader = new FileReader();
   reader.onload = e => {

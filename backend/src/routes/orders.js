@@ -1,3 +1,10 @@
+const ORDER_NO_RE = /^[A-Z]\d{10}$/;
+const ALLOWED_MACHINES = new Set(['No1-350','No2-250','No3-60','No4-90','No5-40','No6-40']);
+
+function validOrderNo(s) { return typeof s === 'string' && ORDER_NO_RE.test(s); }
+function validMachine(s) { return !s || ALLOWED_MACHINES.has(String(s)); }
+function clipStr(s, max) { return s == null ? null : String(s).slice(0, max); }
+
 const STEP_COLS = {
   '1':  { time: 'step1At',  note: null },
   '2':  { time: 'step2At',  note: null },
@@ -54,8 +61,8 @@ export default async function orderRoutes(fastify) {
 
   // 取得（不存在自動建立）
   fastify.get('/:orderNo', async (request, reply) => {
-    const { orderNo } = request.params;
-    if (!orderNo) return reply.code(400).send({ error: '缺少工單號' });
+    const orderNo = String(request.params.orderNo || '').toUpperCase();
+    if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤（需 1 英文 + 10 數字）' });
     let order = await fastify.prisma.order.findUnique({
       where: { orderNo },
       include: ORDER_INCLUDE,
@@ -71,11 +78,14 @@ export default async function orderRoutes(fastify) {
 
   // 設定機台號
   fastify.post('/:orderNo/machine', async (request, reply) => {
-    const { orderNo } = request.params;
+    const orderNo = String(request.params.orderNo || '').toUpperCase();
     const { machineNo } = request.body || {};
-    if (!orderNo) return reply.code(400).send({ error: '缺少工單號' });
+    if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
     if (!machineNo || !String(machineNo).trim()) {
       return reply.code(400).send({ error: '機台號不可空白' });
+    }
+    if (!validMachine(machineNo)) {
+      return reply.code(400).send({ error: '不允許的機台號' });
     }
     let order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) {
@@ -85,7 +95,7 @@ export default async function orderRoutes(fastify) {
     }
     const updated = await fastify.prisma.order.update({
       where: { orderNo },
-      data: { machineNo: String(machineNo).trim().slice(0, 60), leaderId: request.user.id },
+      data: { machineNo: clipStr(String(machineNo).trim(), 60), leaderId: request.user.id },
       include: ORDER_INCLUDE,
     });
     return { order: serializeOrder(updated) };
@@ -93,8 +103,10 @@ export default async function orderRoutes(fastify) {
 
   // 紀錄某步驟
   fastify.post('/:orderNo/steps/:step', async (request, reply) => {
-    const { orderNo, step } = request.params;
+    const orderNo = String(request.params.orderNo || '').toUpperCase();
+    const { step } = request.params;
     const { note } = request.body || {};
+    if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
     const cols = STEP_COLS[step];
     if (!cols) return reply.code(400).send({ error: '無效步驟' });
 
@@ -120,7 +132,7 @@ export default async function orderRoutes(fastify) {
       [cols.time]: new Date(),
       leaderId: request.user.id,
     };
-    if (cols.note && note) updateData[cols.note] = String(note).slice(0, 500);
+    if (cols.note && note) updateData[cols.note] = clipStr(note, 500);
 
     const updated = await fastify.prisma.order.update({
       where: { orderNo },
@@ -132,7 +144,9 @@ export default async function orderRoutes(fastify) {
 
   // 取消某步驟
   fastify.delete('/:orderNo/steps/:step', async (request, reply) => {
-    const { orderNo, step } = request.params;
+    const orderNo = String(request.params.orderNo || '').toUpperCase();
+    const { step } = request.params;
+    if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
     const cols = STEP_COLS[step];
     if (!cols) return reply.code(400).send({ error: '無效步驟' });
 
@@ -152,8 +166,9 @@ export default async function orderRoutes(fastify) {
 
   // 開始暫停 / 異常
   fastify.post('/:orderNo/pause', async (request, reply) => {
-    const { orderNo } = request.params;
+    const orderNo = String(request.params.orderNo || '').toUpperCase();
     const { type, note, activeStep } = request.body || {};
+    if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
     if (!['12', '13'].includes(type)) return reply.code(400).send({ error: '無效類型' });
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) return reply.code(404).send({ error: '找不到工單' });
@@ -162,7 +177,7 @@ export default async function orderRoutes(fastify) {
     });
     if (active) return reply.code(409).send({ error: '已在暫停中，請先恢復' });
     await fastify.prisma.pauseEvent.create({
-      data: { orderId: order.id, type, note: note || null, activeStep: activeStep || null },
+      data: { orderId: order.id, type, note: clipStr(note, 500), activeStep: clipStr(activeStep, 100) },
     });
     const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
     return { order: serializeOrder(updated) };
@@ -170,8 +185,9 @@ export default async function orderRoutes(fastify) {
 
   // 恢復（結束暫停）
   fastify.post('/:orderNo/resume', async (request, reply) => {
-    const { orderNo } = request.params;
+    const orderNo = String(request.params.orderNo || '').toUpperCase();
     const { type } = request.body || {};
+    if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
     if (!['12', '13'].includes(type)) return reply.code(400).send({ error: '無效類型' });
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) return reply.code(404).send({ error: '找不到工單' });
@@ -198,32 +214,39 @@ export default async function orderRoutes(fastify) {
     if (!Array.isArray(rows) || rows.length === 0) {
       return reply.code(400).send({ error: '沒有資料' });
     }
+    if (rows.length > 500) {
+      return reply.code(400).send({ error: '單次上傳上限 500 筆' });
+    }
     let created = 0, updated = 0, errors = [];
     for (const row of rows) {
       try {
-        if (!row.orderNo) { errors.push('缺少製造單號'); continue; }
+        const orderNo = String(row.orderNo || '').toUpperCase();
+        if (!validOrderNo(orderNo)) { errors.push((row.orderNo || '(空)') + '：工單號格式錯誤'); continue; }
+        if (row.machineNo && !validMachine(row.machineNo)) {
+          errors.push(orderNo + '：不允許的機台號 ' + row.machineNo); continue;
+        }
         const data = {
           productionDate: row.productionDate ? new Date(row.productionDate) : null,
-          productSpec: row.productSpec || null,
-          moldSpec: row.moldSpec || null,
-          material: row.material || null,
-          dispatchQty: row.dispatchQty ? Number(row.dispatchQty) : null,
-          bladeCount: row.bladeCount ? Number(row.bladeCount) : null,
-          machineSPM: row.machineSPM ? Number(row.machineSPM) : null,
-          unitWeight: row.unitWeight ? Number(row.unitWeight) : null,
-          totalWeight: row.totalWeight ? Number(row.totalWeight) : null,
-          machineNo: row.machineNo || null,
+          productSpec: clipStr(row.productSpec, 200),
+          moldSpec: clipStr(row.moldSpec, 100),
+          material: clipStr(row.material, 200),
+          dispatchQty: row.dispatchQty ? Math.max(0, Math.min(1e6, Number(row.dispatchQty) || 0)) : null,
+          bladeCount: row.bladeCount ? Math.max(0, Math.min(1e6, Number(row.bladeCount) || 0)) : null,
+          machineSPM: row.machineSPM ? Math.max(0, Math.min(1e5, Number(row.machineSPM) || 0)) : null,
+          unitWeight: row.unitWeight ? Math.max(0, Math.min(1e6, Number(row.unitWeight) || 0)) : null,
+          totalWeight: row.totalWeight ? Math.max(0, Math.min(1e9, Number(row.totalWeight) || 0)) : null,
+          machineNo: row.machineNo ? clipStr(row.machineNo, 60) : null,
         };
-        const existing = await fastify.prisma.order.findUnique({ where: { orderNo: String(row.orderNo) } });
+        const existing = await fastify.prisma.order.findUnique({ where: { orderNo } });
         if (existing) {
-          await fastify.prisma.order.update({ where: { orderNo: String(row.orderNo) }, data });
+          await fastify.prisma.order.update({ where: { orderNo }, data });
           updated++;
         } else {
-          await fastify.prisma.order.create({ data: { orderNo: String(row.orderNo), ...data } });
+          await fastify.prisma.order.create({ data: { orderNo, ...data } });
           created++;
         }
       } catch (e) {
-        errors.push(row.orderNo + ': ' + e.message);
+        errors.push((row.orderNo || '?') + ': ' + e.message);
       }
     }
     return { ok: true, created, updated, errors, total: rows.length };
@@ -234,7 +257,8 @@ export default async function orderRoutes(fastify) {
     if (!request.user.isAdmin) {
       return reply.code(403).send({ error: '只有管理員可以刪除工單' });
     }
-    const { orderNo } = request.params;
+    const orderNo = String(request.params.orderNo || '').toUpperCase();
+    if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) return reply.code(404).send({ error: '找不到工單' });
     await fastify.prisma.order.delete({ where: { orderNo } });
