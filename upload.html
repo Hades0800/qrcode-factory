@@ -661,6 +661,13 @@ async function toggleBatchDetail(batchId, orderNos) {
     const detailRows = orderNos.map((no, i) => {
       const o = orderMap[no] || { orderNo: no };
       const hasData = o.productSpec || o.moldSpec || o.material || o.dispatchQty || o.totalWeight;
+      const hasScan = !!(o.step1At || o.step2At || o.step3At || o.step4At ||
+        o.step5At || o.step6At || o.step7At || o.step11At);
+      let status;
+      if (!hasData) status = '<span style="color:var(--muted);">已清空</span>';
+      else if (o.step11At) status = '<span style="color:var(--success);">已完成</span>';
+      else if (hasScan) status = '<span style="color:#1f6feb;">生產中</span>';
+      else status = '<span style="color:#f0ad4e;font-weight:700;">待確認</span>';
       return `
         <tr>
           <td>${i + 1}</td>
@@ -675,7 +682,7 @@ async function toggleBatchDetail(batchId, orderNos) {
           <td>${o.machineSPM || ''}</td>
           <td>${o.unitWeight || ''}</td>
           <td>${o.totalWeight || ''}</td>
-          <td>${hasData ? '<span style="color:var(--success);">有效</span>' : '<span style="color:var(--muted);">已清空</span>'}</td>
+          <td>${status}</td>
         </tr>
       `;
     }).join('');
