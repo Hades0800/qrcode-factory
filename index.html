@@ -767,6 +767,22 @@ let scanner = null;
 let scanMode = null;
 let pendingStep = null;
 
+// 狀態保存（防止重新整理或不小心登出丟失工作進度）
+const STATE_KEY = 'scan_state';
+function saveState() {
+  if (!me || !me.id) return;
+  const state = { leaderId: me.id, selectedMachine, orderNo };
+  localStorage.setItem(STATE_KEY, JSON.stringify(state));
+}
+function clearState() { localStorage.removeItem(STATE_KEY); }
+function getSavedState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STATE_KEY) || 'null');
+    if (!s || !me || s.leaderId !== me.id) return null;
+    return s;
+  } catch (e) { return null; }
+}
+
 // ====== Helpers ======
 function $(id) { return document.getElementById(id); }
 
@@ -847,6 +863,25 @@ async function doLogin() {
   renderHeader();
   toast('登入成功', 'success');
   loadIdleMachines();
+  restoreSavedState();
+}
+
+// 恢復上次未完成的工作狀態
+async function restoreSavedState() {
+  const s = getSavedState();
+  if (!s) return;
+  // 恢復機台選擇
+  if (s.selectedMachine) {
+    selectMachine(s.selectedMachine);
+    // 恢復工單（如果有）
+    if (s.orderNo) {
+      setTimeout(() => {
+        $('orderInput').value = s.orderNo;
+        setOrder(s.orderNo);
+      }, 100);
+    }
+    toast('已恢復上次進度', 'success');
+  }
 }
 
 function logout(silent) {
@@ -902,11 +937,11 @@ function selectMachine(no) {
   document.querySelectorAll('.machine-btn').forEach(b => {
     b.classList.toggle('selected', b.getAttribute('data-machine') === no);
   });
-  // 選完機台 → 顯示工單號卡片
   $('orderCard').style.display = 'block';
   $('machineEmpty').style.display = 'none';
   $('machineShow').style.display = 'block';
   $('machineNoText').textContent = no;
+  saveState();
   setTimeout(() => $('orderInput').focus(), 200);
 }
 
@@ -954,6 +989,7 @@ document.querySelectorAll('.machine-btn').forEach(b => {
   };
 });
 $('changeMachineBtn').onclick = () => {
+  clearState();
   selectedMachine = '';
   document.querySelectorAll('.machine-btn').forEach(b => b.classList.remove('selected'));
   $('machineEmpty').style.display = 'block';
@@ -983,6 +1019,7 @@ async function setOrder(no) {
   $('orderShow').style.display = 'block';
   $('orderNoText').textContent = no;
   $('orderUpdated').textContent = order.updatedAt ? ('最後更新：' + fmtTime(order.updatedAt)) : '尚未開始';
+  saveState();
   renderSteps();
 }
 
@@ -1013,6 +1050,7 @@ $('changeOrderBtn').onclick = () => {
   $('orderInput').value = '';
   $('stepsArea').style.display = 'none';
   $('bottomBar').classList.remove('show');
+  saveState(); // 保留機台，但清空工單
 };
 
 // ====== 步驟渲染 ======
@@ -1222,6 +1260,7 @@ function updateLiveTimers() {
 }
 
 function finishOrder() {
+  clearState();
   orderNo = ''; order = null; selectedMachine = '';
   document.querySelectorAll('.machine-btn').forEach(b => b.classList.remove('selected'));
   $('machineEmpty').style.display = 'block';
@@ -1397,6 +1436,7 @@ if (API_URL.startsWith('PASTE_')) {
   showLogin();
 } else {
   loadIdleMachines();
+  restoreSavedState();
 }
 </script>
 </body>
