@@ -11,12 +11,23 @@ function hasActivity(o) {
     o.step21At || o.step22At || o.step23At);
 }
 
-// 更新 productionDate 為今天（如果不是今天的話）
+// 取得台灣時間的今天日期（UTC+8）
+function getTaiwanToday() {
+  const now = new Date();
+  // 轉換為台灣時間 (UTC+8)
+  const twTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  const y = twTime.getUTCFullYear();
+  const m = twTime.getUTCMonth();
+  const d = twTime.getUTCDate();
+  // 回傳 UTC 午夜的日期（僅作為日期標記）
+  return new Date(Date.UTC(y, m, d));
+}
+
+// 更新 productionDate 為今天（台灣時間，如果不是今天的話）
 async function updateProductionDateToday(fastify, order) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = getTaiwanToday();
   const currentPd = order.productionDate ? new Date(order.productionDate) : null;
-  if (!currentPd || currentPd.getFullYear() !== today.getFullYear() || currentPd.getMonth() !== today.getMonth() || currentPd.getDate() !== today.getDate()) {
+  if (!currentPd || currentPd.getTime() !== today.getTime()) {
     await fastify.prisma.order.update({
       where: { orderNo: order.orderNo },
       data: { productionDate: today },
