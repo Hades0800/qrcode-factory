@@ -366,9 +366,6 @@
             <th>工單號</th>
             <th>機台</th>
             <th>小組長</th>
-            <th>設備啓動</th>
-            <th>準備完成</th>
-            <th>無工令</th>
             <th>原料</th>
             <th>模刀具</th>
             <th>試模</th>
@@ -649,9 +646,6 @@ function render() {
         <td class="order-no">${escapeHtml(o.orderNo)} <span style="font-size:10px;color:var(--brand);">▶ 明細</span></td>
         <td class="machine">${escapeHtml(o.machineNo)}</td>
         <td>${escapeHtml(o.leaderName)}</td>
-        ${stepCell(o.step21At)}
-        ${stepCell(o.step22At)}
-        ${stepCell(o.step23At)}
         ${stepCell(o.step1At)}
         ${stepCell(o.step2At)}
         ${stepCell(o.step3At)}
