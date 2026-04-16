@@ -7,6 +7,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ───────────────────────────────
+// 帳號管理
+// ───────────────────────────────
+
 model Leader {
   id           Int      @id @default(autoincrement())
   username     String   @unique
@@ -19,6 +23,10 @@ model Leader {
   orders Order[]
 }
 
+// ───────────────────────────────
+// 工單
+// ───────────────────────────────
+
 model Order {
   id        Int      @id @default(autoincrement())
   orderNo   String   @unique
@@ -26,41 +34,44 @@ model Order {
   leaderId  Int?
   leader    Leader?  @relation(fields: [leaderId], references: [id])
 
-  // 匯入欄位（生管上傳）
-  productionDate DateTime?  // 生產日期
-  productSpec    String?     // 生產規格
-  moldSpec       String?     // 模具規格
-  material       String?     // 領用材料
-  dispatchQty    Int?        // 派工數
-  bladeCount     Int?        // 刀數
-  machineSPM     Int?        // 機器SPM
-  unitWeight     Float?      // 一片理論重(kg)
-  totalWeight    Float?      // 全部總重量(kg)
+  // 匯入欄位（生管 Excel 上傳）
+  productionDate DateTime?
+  productSpec    String?
+  moldSpec       String?
+  material       String?
+  dispatchQty    Int?
+  bladeCount     Int?
+  machineSPM     Int?
+  unitWeight     Float?
+  totalWeight    Float?
 
-  step21At  DateTime?  // 設備啓動準備
-  step22At  DateTime?  // 生產準備完成
-  step23At  DateTime?  // 生產無工令
+  // 前置步驟（21/22/23 按鈕直接記錄）
+  step21At DateTime?
+  step22At DateTime?
+  step23At DateTime?
 
-  step1At   DateTime?
-  step2At   DateTime?
-  step3At   DateTime?
-  step4At   DateTime?
-  step4Note String?
-  step5At   DateTime?
-  step6At   DateTime?
-  step7At   DateTime?
-  step7Note String?
+  // 工序 01-07（改用 StepEntry 日誌，以下欄位為舊資料相容）
+  step1At  DateTime?
+  step2At  DateTime?
+  step3At  DateTime?
+  step4At  DateTime?
+  step4Note String?  // 已棄用
+  step5At  DateTime?
+  step6At  DateTime?
+  step7At  DateTime?
+  step7Note String?  // 已棄用
 
+  // 完成/暫停/異常
   step11At   DateTime?
-  step12At   DateTime?
-  step12Note String?
-  step13At   DateTime?
-  step13Note String?
+  step12At   DateTime?  // 已棄用（改用 PauseEvent）
+  step12Note String?    // 已棄用
+  step13At   DateTime?  // 已棄用（改用 PauseEvent）
+  step13Note String?    // 已棄用
 
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-  pauseEvents  PauseEvent[]
-  stepEntries  StepEntry[]
+  pauseEvents PauseEvent[]
+  stepEntries StepEntry[]
 
   @@index([orderNo])
   @@index([productionDate])
@@ -68,12 +79,16 @@ model Order {
   @@index([updatedAt])
 }
 
+// ───────────────────────────────
+// 工序紀錄（日誌式，可多次）
+// ───────────────────────────────
+
 model StepEntry {
   id         Int      @id @default(autoincrement())
   orderId    Int
   order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   stepNo     String   // "1"~"7"
-  seq        Int      // 第幾次（1, 2, 3...）
+  seq        Int      // 第幾次
   recordedAt DateTime @default(now())
   leaderId   Int?
   leaderName String?
@@ -82,20 +97,27 @@ model StepEntry {
   @@index([orderId, stepNo])
 }
 
-model AuditLog {
-  id        Int      @id @default(autoincrement())
-  actorId   Int?
-  actorName String?
-  action    String   // e.g. "delete_order", "cancel_batch", "reset_password"
-  target    String?  // e.g. orderNo / batchId / leaderUsername
-  detail    String?  // 可選：原因 / 額外資訊
-  ip        String?
-  createdAt DateTime @default(now())
+// ───────────────────────────────
+// 暫停 / 異常事件（開關式計時）
+// ───────────────────────────────
 
-  @@index([createdAt])
-  @@index([actorId])
-  @@index([action])
+model PauseEvent {
+  id         Int       @id @default(autoincrement())
+  orderId    Int
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type       String    // "12" = 正常暫停, "13" = 異常停止
+  activeStep String?
+  startAt    DateTime  @default(now())
+  endAt      DateTime?
+  duration   Int?
+  note       String?
+
+  @@index([orderId])
 }
+
+// ───────────────────────────────
+// 上傳批次追蹤
+// ───────────────────────────────
 
 model UploadBatch {
   id             Int       @id @default(autoincrement())
@@ -111,6 +133,10 @@ model UploadBatch {
   @@index([uploadedAt])
 }
 
+// ───────────────────────────────
+// 無工令事件（機台閒置紀錄）
+// ───────────────────────────────
+
 model IdleEvent {
   id         Int      @id @default(autoincrement())
   machineNo  String
@@ -123,16 +149,21 @@ model IdleEvent {
   @@index([machineNo])
 }
 
-model PauseEvent {
-  id         Int       @id @default(autoincrement())
-  orderId    Int
-  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  type       String    // "12" = 正常暫停, "13" = 異常停止
-  activeStep String?
-  startAt    DateTime  @default(now())
-  endAt      DateTime?
-  duration   Int?
-  note       String?
+// ───────────────────────────────
+// 稽核日誌
+// ───────────────────────────────
 
-  @@index([orderId])
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  actorId   Int?
+  actorName String?
+  action    String
+  target    String?
+  detail    String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId])
+  @@index([action])
 }

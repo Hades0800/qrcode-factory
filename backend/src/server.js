@@ -115,7 +115,9 @@ await fastify.register(authRoutes, { prefix: '/api/auth' });
 await fastify.register(orderRoutes, { prefix: '/api/orders' });
 await fastify.register(adminRoutes, { prefix: '/api/admin' });
 
-// 生產無工令事件（加 rate limit 防連點）
+// ── 無工令事件 ──
+const ALLOWED_MACHINES = new Set(['No1-350','No2-250','No3-60','No4-90','No5-40','No6-40']);
+
 fastify.post('/api/idle-events', {
   onRequest: [fastify.authenticate],
   config: {
@@ -124,8 +126,7 @@ fastify.post('/api/idle-events', {
 }, async (request, reply) => {
   const { machineNo, note } = request.body || {};
   if (!machineNo) return reply.code(400).send({ error: '缺少機台號' });
-  const ALLOWED = new Set(['No1-350','No2-250','No3-60','No4-90','No5-40','No6-40']);
-  if (!ALLOWED.has(machineNo)) return reply.code(400).send({ error: '不允許的機台號' });
+  if (!ALLOWED_MACHINES.has(machineNo)) return reply.code(400).send({ error: '不允許的機台號' });
   const event = await prisma.idleEvent.create({
     data: {
       machineNo,

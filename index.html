@@ -1410,7 +1410,6 @@ function openScanner(mode) {
   scanMode = mode;
   const titles = {
     'order': '請對準工單條碼',
-    'machine': '請對準機台 QR Code',
     'step': '請掃描工項 QR Code',
   };
   $('scannerTitle').textContent = titles[mode] || '請掃描 QR Code';
@@ -1464,7 +1463,6 @@ async function closeScanner() {
   // 關閉時讓對應的輸入框獲得焦點，方便手動輸入
   setTimeout(() => {
     if (scanMode === 'order') $('orderInput').focus();
-    else if (scanMode === 'machine') $('machineInput').focus();
   }, 200);
 }
 $('closeScannerBtn').onclick = closeScanner;
@@ -1488,23 +1486,7 @@ async function onScanSuccess(decodedText) {
     return;
   }
 
-  if (scanMode === 'machine') {
-    await closeScanner();
-    let raw = String(decodedText || '').trim();
-    let extracted = raw;
-    try {
-      if (/^https?:\/\//i.test(raw)) {
-        const u = new URL(raw);
-        extracted = u.searchParams.get('machine') || u.pathname.split('/').filter(Boolean).pop() || raw;
-      }
-    } catch (e) {}
-    $('machineInput').value = extracted;
-    toast('掃到：' + raw.slice(0, 40) + (raw.length > 40 ? '…' : '') + '，請確認後按確定', 'success');
-    $('machineInput').focus();
-    return;
-  }
-
-  // step 模式
+  // step 模式（21/22/23）
   const m = String(decodedText).match(/^STEP[:\-]?(\d+)$/i);
   if (!m) { toast('不是工項 QR：' + decodedText, 'error'); return; }
   const scanned = m[1];

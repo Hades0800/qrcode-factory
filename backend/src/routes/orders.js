@@ -1,9 +1,15 @@
+// ── 共用常數與 helper ──
 const ORDER_NO_RE = /^[A-Z]\d{10}$/;
 const ALLOWED_MACHINES = new Set(['No1-350','No2-250','No3-60','No4-90','No5-40','No6-40']);
 
 function validOrderNo(s) { return typeof s === 'string' && ORDER_NO_RE.test(s); }
 function validMachine(s) { return !s || ALLOWED_MACHINES.has(String(s)); }
 function clipStr(s, max) { return s == null ? null : String(s).slice(0, max); }
+function hasActivity(o) {
+  return !!(o.step1At || o.step2At || o.step3At || o.step4At ||
+    o.step5At || o.step6At || o.step7At || o.step11At ||
+    o.step21At || o.step22At || o.step23At);
+}
 
 async function audit(prisma, request, action, target, detail) {
   try {
@@ -108,9 +114,7 @@ export default async function orderRoutes(fastify) {
       try {
         const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
         if (!order) continue;
-        const hasActivity = !!(order.step1At || order.step2At || order.step3At ||
-          order.step4At || order.step5At || order.step6At || order.step7At || order.step11At);
-        if (hasActivity) {
+        if (hasActivity(order)) {
           await fastify.prisma.order.update({
             where: { orderNo },
             data: {
@@ -423,9 +427,7 @@ export default async function orderRoutes(fastify) {
         if (!orderNo) continue;
         const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
         if (!order) continue;
-        const hasActivity = !!(order.step1At || order.step2At || order.step3At ||
-          order.step4At || order.step5At || order.step6At || order.step7At || order.step11At);
-        if (hasActivity) {
+        if (hasActivity(order)) {
           // 清除上傳欄位
           await fastify.prisma.order.update({
             where: { orderNo },
@@ -465,9 +467,7 @@ export default async function orderRoutes(fastify) {
     if (!order) return reply.code(404).send({ error: '找不到工單' });
 
     if (!isAdmin) {
-      const hasActivity = !!(order.step1At || order.step2At || order.step3At ||
-        order.step4At || order.step5At || order.step6At || order.step7At || order.step11At);
-      if (hasActivity) {
+      if (hasActivity(order)) {
         return reply.code(403).send({ error: '工單已開始生產，無法刪除（請聯絡管理員）' });
       }
     }
