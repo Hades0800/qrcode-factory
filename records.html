@@ -171,7 +171,6 @@
     padding: 18px;
     box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.02);
     border-left: 4px solid var(--border);
-    cursor: pointer;
     transition: box-shadow .15s;
   }
   .rec-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
@@ -718,12 +717,15 @@ function render() {
     }
 
     return `
-      <div class="rec-card${isComplete ? ' has-complete' : ''}" onclick="toggleDetail(${idx})">
+      <div class="rec-card${isComplete ? ' has-complete' : ''}">
         <div class="rc-header">
           <div class="rc-no">${escapeHtml(o.orderNo)}</div>
-          ${badge}
+          <div style="display:flex;align-items:center;gap:8px;">
+            ${badge}
+            ${isAdmin ? `<button class="btn-danger" data-del="${escapeHtml(o.orderNo)}" style="padding:4px 10px;font-size:11px;min-height:24px;" onclick="event.stopPropagation()">刪除</button>` : ''}
+          </div>
         </div>
-        <div class="rc-expand" style="margin-top:6px;" onclick="event.stopPropagation();toggleDetail(${idx})">▶ 展開工單明細${isAdmin ? ` <button class="btn-danger" data-del="${escapeHtml(o.orderNo)}" style="padding:4px 10px;font-size:11px;min-height:24px;margin-left:8px;" onclick="event.stopPropagation()">刪除</button>` : ''}</div>
+        <div class="rc-expand" style="margin-top:6px;cursor:pointer;" onclick="toggleDetail(${idx})">▶ 展開工單明細</div>
         <div class="rc-detail" id="detail-${idx}">
           ${infoHtml}
           ${eventsHtml}
