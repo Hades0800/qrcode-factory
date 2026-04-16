@@ -7,6 +7,7 @@
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <title>上鎧鋼鐵 - 帳號管理</title>
 <link rel="icon" href="logo.jpg">
+<link rel="stylesheet" href="styles.css">
 <link rel="preconnect" href="https://shangkai-manu-record.zeabur.app" crossorigin>
 <link rel="dns-prefetch" href="https://shangkai-manu-record.zeabur.app">
 <style>
@@ -246,56 +247,13 @@
 
 <div id="toast"></div>
 
+<script src="config.js"></script>
+<script src="utils.js"></script>
 <script>
-const API_URL = 'https://shangkai-manu-record.zeabur.app';
 
-let token = localStorage.getItem('token') || '';
-let me = JSON.parse(localStorage.getItem('me') || 'null');
-
-function $(id) { return document.getElementById(id); }
-function toast(msg, type) {
-  const t = $('toast');
-  t.textContent = msg;
-  t.className = '';
-  if (type) t.classList.add(type);
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2400);
-}
-
-function fmtDate(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const pad = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-}
-
-async function api(path, options = {}) {
-  try {
-    const headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
-    if (token) headers['Authorization'] = 'Bearer ' + token;
-    const res = await fetch(API_URL + path, {
-      method: options.method || 'GET',
-      headers,
-      body: options.body ? JSON.stringify(options.body) : undefined,
-    });
-    let data;
-    try { data = await res.json(); }
-    catch (e) { return { ok: false, status: res.status, error: '伺服器回應錯誤' }; }
-    if (res.status === 401 || res.status === 403) {
-      alert(data.error || '需要管理員權限');
-      location.href = 'index.html';
-      return { ok: false };
-    }
-    if (!res.ok) return { ok: false, error: data.error || '操作失敗', data };
-    return { ok: true, data };
-  } catch (err) {
-    return { ok: false, error: '網路錯誤：' + (err && err.message ? err.message : err) };
-  }
-}
-
-// 權限檢查
-if (!token || !me) {
-  alert('請先登入');
+const me = requireLogin();
+if (me && !me.isAdmin) {
+  alert('需要管理員權限');
   location.href = 'index.html';
 }
 if (me && !me.isAdmin) {
@@ -337,9 +295,7 @@ async function loadLeaders() {
   });
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
+initDropdownMenu();
 
 $('createBtn').onclick = async () => {
   const username = $('newUsername').value.trim();

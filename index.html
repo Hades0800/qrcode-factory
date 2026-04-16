@@ -13,6 +13,7 @@
 <title>上鎧鋼鐵 - 廠務工單系統</title>
 <link rel="icon" href="logo.jpg">
 <link rel="apple-touch-icon" href="logo.jpg">
+<link rel="stylesheet" href="styles.css">
 <link rel="preconnect" href="https://shangkai-manu-record.zeabur.app" crossorigin>
 <link rel="dns-prefetch" href="https://shangkai-manu-record.zeabur.app">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -726,11 +727,9 @@
 
 <div id="toast"></div>
 
+<script src="config.js"></script>
+<script src="utils.js"></script>
 <script>
-// ====== 設定 ======
-// 部署 Zeabur 後端後，把 URL 貼這裡
-const API_URL = 'https://shangkai-manu-record.zeabur.app';
-
 const PRE_STEPS = [
   { id: '21', title: '21. 設備啓動準備',   hint: '系統冷熱機與試模測試等' },
   { id: '22', title: '22. 生產準備完成',   hint: '同前一工單模具與原料' },
@@ -772,6 +771,7 @@ const STEP_FIELD = {
 // ====== State ======
 let token = localStorage.getItem('token') || '';
 let me = JSON.parse(localStorage.getItem('me') || 'null');
+initDropdownMenu();
 let orderNo = '';
 let order = null;
 let scanner = null;
@@ -794,29 +794,7 @@ function getSavedState() {
   } catch (e) { return null; }
 }
 
-// ====== Helpers ======
-function $(id) { return document.getElementById(id); }
-
-function toast(msg, type) {
-  const t = $('toast');
-  t.textContent = msg;
-  t.className = '';
-  if (type) t.classList.add(type);
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2400);
-}
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-function fmtTime(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const pad = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-
+// index.html 專用 api()：401 時觸發 logout 而非 redirect
 async function api(path, options = {}) {
   try {
     const headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
@@ -932,13 +910,6 @@ function renderHeader() {
     $('menuBtn').style.display = 'none';
   }
 }
-document.addEventListener('click', e => {
-  const menu = $('dropMenu');
-  const btn = $('menuBtn');
-  if (menu && !menu.contains(e.target) && btn && !btn.contains(e.target)) {
-    menu.classList.remove('show');
-  }
-});
 
 // ====== 機台（第一步）======
 let selectedMachine = '';
@@ -1326,15 +1297,6 @@ async function resumePause(type) {
   toast('已恢復生產（暫停 ' + fmtDuration(dur) + '）', 'success');
 }
 
-function fmtDuration(sec) {
-  if (!sec || sec < 0) return '0 秒';
-  if (sec < 60) return sec + ' 秒';
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  if (m < 60) return m + ' 分 ' + (s > 0 ? s + ' 秒' : '');
-  const h = Math.floor(m / 60);
-  return h + ' 時 ' + (m % 60) + ' 分';
-}
 
 // 即時計時器
 let timerInterval = null;
