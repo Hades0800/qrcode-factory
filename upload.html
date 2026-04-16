@@ -479,7 +479,7 @@ $('uploadBtn').onclick = async () => {
     delete o._valid;
     return o;
   });
-  const res = await api('/api/orders/bulk-upload', { method: 'POST', body: { orders: clean, filename: uploadedFilename } });
+  const res = await api('/api/orders/bulk-upload', { method: 'POST', body: { orders: clean, filename: uploadedFilename, uploadDate: $('uploadDate').value } });
   $('uploadBtn').disabled = false;
   $('uploadBtn').innerHTML = '&#128228; 確認上傳';
   if (!res.ok) {

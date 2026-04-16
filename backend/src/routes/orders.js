@@ -401,7 +401,7 @@ export default async function orderRoutes(fastify) {
     if (!request.user.isAdmin && !request.user.isPlanner) {
       return reply.code(403).send({ error: '需要生管或管理員權限' });
     }
-    const { orders: rows, filename } = request.body || {};
+    const { orders: rows, filename, uploadDate } = request.body || {};
     if (!Array.isArray(rows) || rows.length === 0) {
       return reply.code(400).send({ error: '沒有資料' });
     }
@@ -413,7 +413,12 @@ export default async function orderRoutes(fastify) {
 
     let created = 0, updated = 0, errors = [];
     const processedOrderNos = [];
+    // 上傳系統的日期（存在批次紀錄上，不寫入工單）
     let batchProductionDate = null;
+    if (uploadDate) {
+      const d = new Date(uploadDate);
+      if (!isNaN(d) && d.getFullYear() >= 2000 && d.getFullYear() <= 2100) batchProductionDate = d;
+    }
     for (const row of rows) {
       try {
         const orderNo = String(row.orderNo || '').toUpperCase();
@@ -442,7 +447,6 @@ export default async function orderRoutes(fastify) {
           created++;
         }
         processedOrderNos.push(orderNo);
-        if (!batchProductionDate && data.productionDate) batchProductionDate = data.productionDate;
       } catch (e) {
         errors.push((row.orderNo || '?') + ': ' + e.message);
       }
