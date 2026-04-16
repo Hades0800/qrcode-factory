@@ -641,10 +641,27 @@ function buildTimeline(o) {
     else if (it.type === 'pause') cls = 'done pause-event';
     else if (it.type === 'abnormal') cls = 'done abnormal-event';
     else if (it.type === 'resume') cls = 'done resume-event';
+
+    // 時間格式：MM/DD HH:MM（+與上一筆的時間差）
+    const pad = n => String(n).padStart(2, '0');
+    const d = it.time;
+    const dateStr = pad(d.getMonth()+1) + '/' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    let diffStr = '';
+    if (i > 0) {
+      const diffSec = Math.round((it.time - items[i-1].time) / 1000);
+      if (diffSec >= 0) {
+        const dm = Math.floor(diffSec / 60);
+        const dh = Math.floor(dm / 60);
+        if (dh > 0) diffStr = `（+${dh}時${dm % 60}分）`;
+        else if (dm > 0) diffStr = `（+${dm}分）`;
+        else diffStr = `（+${diffSec}秒）`;
+      }
+    }
+
     return `
       <li class="${cls}">
         <div class="tl-dot"></div>
-        <div class="tl-time">${fmtHM(it.time.toISOString())}</div>
+        <div class="tl-time">${dateStr}<span style="font-size:10px;color:var(--muted);font-weight:500;">${diffStr}</span></div>
         <div class="tl-label">${escapeHtml(it.label)}</div>
       </li>
     `;
