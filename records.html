@@ -704,14 +704,13 @@ function render() {
           <div class="rc-no">${escapeHtml(o.orderNo)}</div>
           ${badge}
         </div>
-        ${isAdmin ? `<div style="margin-top:6px;"><button class="btn-danger" data-del="${escapeHtml(o.orderNo)}" style="padding:4px 10px;font-size:11px;min-height:24px;" onclick="event.stopPropagation()">刪除</button></div>` : ''}
+        <div class="rc-expand" style="margin-top:6px;">▶ 展開工單明細${isAdmin ? ` <button class="btn-danger" data-del="${escapeHtml(o.orderNo)}" style="padding:4px 10px;font-size:11px;min-height:24px;margin-left:8px;" onclick="event.stopPropagation()">刪除</button>` : ''}</div>
         <div class="rc-meta">
           <span>🏭 <strong>${escapeHtml(o.machineNo || '—')}</strong></span>
           <span>👤 <strong>${escapeHtml(o.leaderName || '—')}</strong></span>
           <span>📅 ${o.productionDate ? String(o.productionDate).slice(0,10) : '—'}</span>
         </div>
         <ul class="rc-timeline">${stepsHtml}</ul>
-        <div class="rc-expand">▶ 展開工單明細</div>
         <div class="rc-detail" id="detail-${idx}">
           ${infoHtml}
           ${eventsHtml}
