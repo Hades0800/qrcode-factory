@@ -1417,42 +1417,87 @@ async function cancelStepEntry(entryId) {
   toast('已取消', 'success');
 }
 
-async function startPause(p) {
-  if (!orderNo) return;
-  let note = '';
-  if (p.type === '12') {
-    // 正常暫停：選單
-    const reasons = ['中午休息', '隔日生產', '其他原因'];
-    const choice = prompt('【必填】選擇暫停原因：\n1. 中午休息\n2. 隔日生產\n3. 其他原因（自行輸入）\n\n請輸入 1、2 或 3：');
-    if (!choice) return;
-    if (choice.trim() === '1') note = '中午休息';
-    else if (choice.trim() === '2') note = '隔日生產';
-    else if (choice.trim() === '3') {
-      note = prompt('請輸入暫停原因：', '') || '';
-      if (!note.trim()) { toast('原因為必填', 'error'); return; }
-    } else {
-      // 直接輸入文字也接受
-      note = choice.trim();
-    }
+function showPauseModal(p) {
+  // 移除舊的 modal
+  const old = document.getElementById('pauseModal');
+  if (old) old.remove();
+
+  const isNormal = p.type === '12';
+  const modal = document.createElement('div');
+  modal.id = 'pauseModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:24px;width:100%;max-width:340px;box-shadow:0 10px 40px rgba(0,0,0,.2);">
+      <h3 style="margin:0 0 16px;font-size:17px;color:var(--ink);">${escapeHtml(p.title)}</h3>
+      ${isNormal ? `
+        <div style="display:flex;flex-direction:column;gap:10px;" id="pauseReasonList">
+          <button class="btn-secondary pause-reason-btn" data-reason="中午休息" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;">☀️ 中午休息</button>
+          <button class="btn-secondary pause-reason-btn" data-reason="隔日生產" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;">🌙 隔日生產</button>
+          <button class="btn-secondary pause-reason-btn" data-reason="__other" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;">✏️ 其他原因</button>
+        </div>
+        <div id="pauseOtherWrap" style="display:none;margin-top:10px;">
+          <input type="text" id="pauseOtherInput" placeholder="請輸入暫停原因" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;box-sizing:border-box;">
+          <button class="btn-primary" id="pauseOtherConfirm" style="width:100%;margin-top:8px;padding:12px;font-size:15px;">確認暫停</button>
+        </div>
+      ` : `
+        <input type="text" id="pauseNoteInput" placeholder="${escapeHtml(p.noteLabel)}（必填）" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;box-sizing:border-box;margin-bottom:10px;">
+        <button class="btn-primary" id="pauseNoteConfirm" style="width:100%;padding:12px;font-size:15px;">確認</button>
+      `}
+      <button id="pauseModalCancel" style="width:100%;margin-top:10px;padding:12px;font-size:14px;background:none;border:1.5px solid var(--border);border-radius:10px;color:var(--muted);cursor:pointer;">取消</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  // 取消
+  document.getElementById('pauseModalCancel').onclick = () => modal.remove();
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+  if (isNormal) {
+    modal.querySelectorAll('.pause-reason-btn').forEach(btn => {
+      btn.onclick = () => {
+        const reason = btn.getAttribute('data-reason');
+        if (reason === '__other') {
+          document.getElementById('pauseReasonList').style.display = 'none';
+          document.getElementById('pauseOtherWrap').style.display = '';
+          document.getElementById('pauseOtherInput').focus();
+        } else {
+          modal.remove();
+          executePause(p, reason);
+        }
+      };
+    });
+    document.getElementById('pauseOtherConfirm').onclick = () => {
+      const val = document.getElementById('pauseOtherInput').value.trim();
+      if (!val) { toast('請輸入暫停原因', 'error'); return; }
+      modal.remove();
+      executePause(p, val);
+    };
   } else {
-    // 異常暫停：直接輸入
-    while (!note.trim()) {
-      note = prompt('【必填】' + p.noteLabel + '：', '') || '';
-      if (note === null || note === '') {
-        if (confirm('備註為必填。確定取消？')) return;
-        note = '';
-      }
-    }
+    document.getElementById('pauseNoteConfirm').onclick = () => {
+      const val = document.getElementById('pauseNoteInput').value.trim();
+      if (!val) { toast('請輸入' + p.noteLabel, 'error'); return; }
+      modal.remove();
+      executePause(p, val);
+    };
   }
+}
+
+async function executePause(p, note) {
+  if (!orderNo) return;
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/pause', {
     method: 'POST',
-    body: { type: p.type, note: note.trim(), activeStep: getCurrentStep() },
+    body: { type: p.type, note, activeStep: getCurrentStep() },
   });
   if (!r.ok) { toast(r.error, 'error'); return; }
   order = r.data.order;
   renderSteps();
   toast(p.title + ' — 開始計時', 'success');
   startLiveTimers();
+}
+
+async function startPause(p) {
+  if (!orderNo) return;
+  showPauseModal(p);
 }
 
 async function submitPauseBackfill(type) {
