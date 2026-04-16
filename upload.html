@@ -262,25 +262,10 @@
   <div id="tab-history" style="display:none;">
     <div class="card">
       <h2 style="display:flex;justify-content:space-between;align-items:center;">
-        <span>上傳紀錄</span>
+        <span>上傳紀錄（按日期）</span>
         <button id="refreshBatchBtn" style="padding:6px 12px;font-size:12px;background:#fff;color:var(--ink);border:1.5px solid var(--border);border-radius:6px;cursor:pointer;">🔄 重新整理</button>
       </h2>
-      <div class="preview-wrap">
-        <table class="preview-table" style="font-size:13px;">
-          <thead>
-            <tr>
-              <th>上傳時間</th>
-              <th>檔名</th>
-              <th>生產日期</th>
-              <th>上傳者</th>
-              <th>筆數</th>
-              <th>狀態</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="batchBody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:30px;">載入中...</td></tr></tbody>
-        </table>
-      </div>
+      <div id="historyContent" style="color:var(--muted);padding:30px;text-align:center;">載入中...</div>
     </div>
   </div>
 
@@ -582,109 +567,118 @@ document.querySelectorAll('.page-tab').forEach(btn => {
   };
 });
 
-// ===== 上傳紀錄 =====
+// ===== 上傳紀錄（按日期 group by） =====
+let historyOrders = [];
+
 async function loadBatches() {
-  $('batchBody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:30px;">載入中...</td></tr>';
-  const r = await api('/api/orders/upload-batches?limit=100');
-  if (!r.ok) { $('batchBody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--brand);padding:30px;">' + (r.error || '載入失敗') + '</td></tr>'; return; }
-  const batches = r.data.batches || [];
-  if (batches.length === 0) {
-    $('batchBody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:30px;">目前沒有上傳紀錄</td></tr>';
+  const content = $('historyContent');
+  content.innerHTML = '<div style="color:var(--muted);padding:30px;text-align:center;">載入中...</div>';
+  const r = await api('/api/orders?limit=500');
+  if (!r.ok) { content.innerHTML = '<div style="color:var(--brand);padding:30px;text-align:center;">' + (r.error || '載入失敗') + '</div>'; return; }
+  historyOrders = (r.data.orders || []);
+  if (historyOrders.length === 0) {
+    content.innerHTML = '<div style="color:var(--muted);padding:30px;text-align:center;">目前沒有工單紀錄</div>';
     return;
   }
-  $('batchBody').innerHTML = batches.map((b, idx) => {
-    const dt = new Date(b.uploadedAt);
-    const pad = n => String(n).padStart(2, '0');
-    const time = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
-    const prod = b.productionDate ? String(b.productionDate).slice(0,10) : '—';
-    const status = b.cancelledAt
-      ? '<span style="color:var(--muted);">已取消</span>'
-      : '<span style="color:var(--success);">有效</span>';
-    const action = b.cancelledAt
-      ? '—'
-      : `<button style="padding:6px 12px;font-size:12px;background:#fff;color:var(--brand);border:1.5px solid var(--brand);border-radius:6px;cursor:pointer;" onclick="event.stopPropagation();cancelBatch(${b.id})">取消</button>`;
+
+  // Group by productionDate
+  const groups = {};
+  historyOrders.forEach(o => {
+    const key = o.productionDate ? String(o.productionDate).slice(0, 10) : '未設定日期';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(o);
+  });
+
+  // 按日期倒序排列
+  const sortedDays = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+
+  const isAdmin = me && me.isAdmin;
+  const hasActivity = o => !!(o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At || o.step11At || (o.stepEntries && o.stepEntries.length > 0));
+
+  content.innerHTML = sortedDays.map(day => {
+    const orders = groups[day];
+    const completed = orders.filter(o => o.step11At).length;
+    const active = orders.filter(o => !o.step11At && hasActivity(o)).length;
+    const waiting = orders.length - completed - active;
     return `
-      <tr style="cursor:pointer;" onclick="toggleBatchDetail(${b.id}, ${JSON.stringify(b.orderNos || []).replace(/"/g, '&quot;')})">
-        <td style="white-space:nowrap;">${escapeHtml(time)} <span style="color:var(--brand);font-size:10px;">▶</span></td>
-        <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(b.filename)}</td>
-        <td style="white-space:nowrap;">${escapeHtml(prod)}</td>
-        <td style="white-space:nowrap;">${escapeHtml(b.uploadedByName || '')}</td>
-        <td>${b.rowCount}</td>
-        <td>${status}</td>
-        <td>${action}</td>
-      </tr>
-      <tr class="detail-row" id="batch-detail-${b.id}" style="display:none;background:#fafafc;">
-        <td colspan="7" style="padding:0;">
-          <div id="batch-detail-content-${b.id}" style="padding:16px;"></div>
-        </td>
-      </tr>
+      <div class="day-group" style="margin-bottom:12px;">
+        <div class="day-header" style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:10px;cursor:pointer;" onclick="toggleDayGroup('${day}')">
+          <div>
+            <strong style="font-size:16px;color:var(--ink);">${escapeHtml(day)}</strong>
+            <span style="font-size:13px;color:var(--muted);margin-left:12px;">${orders.length} 筆工單</span>
+            <span style="font-size:12px;margin-left:8px;">
+              ${completed > 0 ? '<span style="color:var(--success);">已完成 ' + completed + '</span> ' : ''}
+              ${active > 0 ? '<span style="color:#1f6feb;">生產中 ' + active + '</span> ' : ''}
+              ${waiting > 0 ? '<span style="color:#f0ad4e;">待生產 ' + waiting + '</span>' : ''}
+            </span>
+          </div>
+          <span class="day-arrow" id="arrow-${day}" style="color:var(--brand);font-size:12px;transition:transform .2s;">▶</span>
+        </div>
+        <div class="day-detail" id="day-detail-${day}" style="display:none;margin-top:4px;">
+          <div class="preview-wrap" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+            <table class="preview-table" style="font-size:12px;">
+              <thead>
+                <tr>
+                  <th>#</th><th>製造單號</th><th>機台</th><th>生產規格</th><th>模具</th><th>派工數</th><th>總重量</th><th>狀態</th>${isAdmin ? '<th>操作</th>' : ''}
+                </tr>
+              </thead>
+              <tbody>
+                ${orders.map((o, i) => {
+                  const started = hasActivity(o);
+                  let status;
+                  if (o.step11At) status = '<span style="color:var(--success);">已完成</span>';
+                  else if (started) status = '<span style="color:#1f6feb;">生產中</span>';
+                  else status = '<span style="color:#f0ad4e;">待生產</span>';
+                  let actionBtn = '';
+                  if (isAdmin) {
+                    if (!started) {
+                      actionBtn = `<td><button style="padding:4px 10px;font-size:11px;background:#fff;color:var(--brand);border:1.5px solid var(--brand);border-radius:6px;cursor:pointer;" onclick="deleteHistoryOrder('${escapeHtml(o.orderNo)}', false)">刪除</button></td>`;
+                    } else {
+                      actionBtn = `<td><button style="padding:4px 10px;font-size:11px;background:var(--brand);color:#fff;border:none;border-radius:6px;cursor:pointer;" onclick="deleteHistoryOrder('${escapeHtml(o.orderNo)}', true)">強制刪除</button></td>`;
+                    }
+                  }
+                  return `<tr>
+                    <td>${i + 1}</td>
+                    <td><strong>${escapeHtml(o.orderNo)}</strong></td>
+                    <td>${escapeHtml(o.machineNo || '')}</td>
+                    <td style="max-width:200px;white-space:normal;">${escapeHtml(o.productSpec || '')}</td>
+                    <td>${escapeHtml(o.moldSpec || '')}</td>
+                    <td>${o.dispatchQty || ''}</td>
+                    <td>${o.totalWeight || ''}</td>
+                    <td>${status}</td>
+                    ${actionBtn}
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     `;
   }).join('');
 }
 
-async function toggleBatchDetail(batchId, orderNos) {
-  const row = document.getElementById('batch-detail-' + batchId);
-  if (!row) return;
-  if (row.style.display === 'none') {
-    row.style.display = '';
-    const content = document.getElementById('batch-detail-content-' + batchId);
-    content.innerHTML = '<div style="color:var(--muted);padding:10px;">載入中...</div>';
-    // 抓所有工單
-    const r = await api('/api/orders?limit=500');
-    if (!r.ok) { content.innerHTML = '<div style="color:var(--brand);">載入失敗</div>'; return; }
-    const orderMap = {};
-    (r.data.orders || []).forEach(o => orderMap[o.orderNo] = o);
-    const detailRows = orderNos.map((no, i) => {
-      const o = orderMap[no] || { orderNo: no };
-      const hasData = o.productSpec || o.moldSpec || o.material || o.dispatchQty || o.totalWeight;
-      const hasScan = !!(o.step1At || o.step2At || o.step3At || o.step4At ||
-        o.step5At || o.step6At || o.step7At || o.step11At);
-      let status;
-      if (!hasData) status = '<span style="color:var(--muted);">已清空</span>';
-      else if (o.step11At) status = '<span style="color:var(--success);">已完成</span>';
-      else if (hasScan) status = '<span style="color:#1f6feb;">生產中</span>';
-      else status = '<span style="color:#f0ad4e;font-weight:700;">待確認</span>';
-      return `
-        <tr>
-          <td>${i + 1}</td>
-          <td><strong>${escapeHtml(o.orderNo)}</strong></td>
-          <td>${escapeHtml(o.productionDate ? String(o.productionDate).slice(0,10) : '')}</td>
-          <td style="max-width:240px;white-space:normal;">${escapeHtml(o.productSpec || '')}</td>
-          <td>${escapeHtml(o.moldSpec || '')}</td>
-          <td style="max-width:180px;white-space:normal;">${escapeHtml(o.material || '')}</td>
-          <td>${escapeHtml(o.machineNo || '')}</td>
-          <td>${o.dispatchQty || ''}</td>
-          <td>${o.bladeCount || ''}</td>
-          <td>${o.machineSPM || ''}</td>
-          <td>${o.unitWeight || ''}</td>
-          <td>${o.totalWeight || ''}</td>
-          <td>${status}</td>
-        </tr>
-      `;
-    }).join('');
-    content.innerHTML = `
-      <h4 style="margin:0 0 8px;font-size:13px;">批次內容（${orderNos.length} 筆）</h4>
-      <table class="preview-table" style="font-size:12px;">
-        <thead>
-          <tr>
-            <th>#</th><th>製造單號</th><th>生產日期</th><th>生產規格</th><th>模具</th><th>領料</th>
-            <th>機台</th><th>派工數</th><th>刀數</th><th>SPM</th><th>單重</th><th>總重量</th><th>狀態</th>
-          </tr>
-        </thead>
-        <tbody>${detailRows}</tbody>
-      </table>
-    `;
+function toggleDayGroup(day) {
+  const detail = document.getElementById('day-detail-' + day);
+  const arrow = document.getElementById('arrow-' + day);
+  if (!detail) return;
+  if (detail.style.display === 'none') {
+    detail.style.display = '';
+    if (arrow) arrow.style.transform = 'rotate(90deg)';
   } else {
-    row.style.display = 'none';
+    detail.style.display = 'none';
+    if (arrow) arrow.style.transform = '';
   }
 }
 
-async function cancelBatch(id) {
-  if (!confirm('確定取消這次上傳？\n\n• 未開始生產的工單 → 刪除\n• 有掃描紀錄的工單 → 保留生產紀錄、清空上傳欄位\n\n可重新上傳配對原本的生產紀錄。')) return;
-  const r = await api('/api/orders/upload-batches/' + id, { method: 'DELETE' });
-  if (!r.ok) { toast(r.error || '取消失敗', 'error'); return; }
-  const d = r.data;
-  toast(`已取消：刪除 ${d.deleted} 筆、保留 ${d.cleared} 筆`, 'success');
+async function deleteHistoryOrder(orderNo, isForce) {
+  const msg = isForce
+    ? `⚠️ 強制刪除工單「${orderNo}」\n\n此工單已開始生產，所有紀錄會一併刪除！\n\n確定要繼續？`
+    : `確定刪除工單「${orderNo}」？`;
+  if (!confirm(msg)) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo), { method: 'DELETE' });
+  if (!r.ok) { toast(r.error || '刪除失敗', 'error'); return; }
+  toast('已刪除 ' + orderNo, 'success');
   loadBatches();
 }
 
