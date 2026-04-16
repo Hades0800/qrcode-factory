@@ -626,10 +626,12 @@ function render() {
     });
     // 暫停事件
     ((o.pause12 && o.pause12.history) || []).forEach((e, i) => {
+      const isLunch = (e.note || '').includes('中午') || (e.note || '').includes('午休') || (e.note || '').includes('午餐');
       allItems.push({ time: new Date(e.startAt), label: '⏸ 暫停' + (e.note ? '（'+escapeHtml(e.note)+'）' : ''), style: 'pause' });
       if (e.endAt) {
         const dur = e.duration ? fmtDur(e.duration) : '';
-        allItems.push({ time: new Date(e.endAt), label: '▶ 恢復生產' + (dur ? '（暫停 ' + dur + '）' : ''), style: 'resume' });
+        const resumeLabel = isLunch ? '▶ 午後恢復生產' : '▶ 恢復生產' + (dur ? '（暫停 ' + dur + '）' : '');
+        allItems.push({ time: new Date(e.endAt), label: resumeLabel, style: 'resume' });
       }
     });
     // 異常事件
