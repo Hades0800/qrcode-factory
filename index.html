@@ -1123,7 +1123,7 @@ function renderSteps() {
       body += `</div>`;
       body += `<div class="backfill-form" id="backfill-${s.id}" style="display:none;">`;
       body += `<input type="date" id="bf-date-${s.id}" value="${todayYmd()}">`;
-      body += `<input type="time" id="bf-time-${s.id}" step="1" value="">`;
+      body += `<input type="time" id="bf-time-${s.id}" step="60" value="">`;
       body += `<button class="btn-primary" data-backfill-submit="${s.id}">確認補登</button>`;
       body += `<button class="btn-secondary" data-backfill-cancel="${s.id}">取消</button>`;
       body += `</div>`;
@@ -1182,7 +1182,7 @@ function renderSteps() {
       body += `</div>`;
       body += `<div class="backfill-form" id="backfill-${s.id}" style="display:none;">`;
       body += `<input type="date" id="bf-date-${s.id}" value="${todayYmd()}">`;
-      body += `<input type="time" id="bf-time-${s.id}" step="1" value="">`;
+      body += `<input type="time" id="bf-time-${s.id}" step="60" value="">`;
       body += `<button class="btn-primary" data-backfill-submit="${s.id}">確認補登</button>`;
       body += `<button class="btn-secondary" data-backfill-cancel="${s.id}">取消</button>`;
       body += `</div>`;
