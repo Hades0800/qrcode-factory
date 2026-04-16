@@ -226,7 +226,11 @@
   .rc-timeline li.done .tl-dot { background: var(--success); box-shadow: 0 0 0 2px var(--success); }
   .rc-timeline li.pause-event .tl-dot { background: #f0ad4e; box-shadow: 0 0 0 2px #f0ad4e; }
   .rc-timeline li.abnormal-event .tl-dot { background: var(--brand); box-shadow: 0 0 0 2px var(--brand); }
-  .rc-timeline li.resume-event .tl-dot { background: var(--success); box-shadow: 0 0 0 2px var(--success); }
+  .rc-timeline li.resume-event .tl-dot { background: #f0ad4e; box-shadow: 0 0 0 2px #f0ad4e; }
+  /* 暫停/異常/恢復事件往右縮排 */
+  .rc-timeline li.pause-event,
+  .rc-timeline li.abnormal-event,
+  .rc-timeline li.resume-event { margin-left: 20px; }
   .rc-timeline li .tl-time {
     font-size: 12px;
     color: var(--muted);
@@ -242,8 +246,8 @@
   .rc-timeline li.pause-event .tl-label { color: #b8860b; font-weight: 600; }
   .rc-timeline li.abnormal-event .tl-time { color: var(--brand); }
   .rc-timeline li.abnormal-event .tl-label { color: var(--brand); font-weight: 600; }
-  .rc-timeline li.resume-event .tl-time { color: var(--success); }
-  .rc-timeline li.resume-event .tl-label { color: var(--success); font-style: italic; }
+  .rc-timeline li.resume-event .tl-time { color: #b8860b; }
+  .rc-timeline li.resume-event .tl-label { color: #b8860b; font-weight: 600; }
   .rc-card-pause {
     display: flex; gap: 16px; margin-top: 10px; font-size: 13px; color: var(--muted);
     padding-top: 10px; border-top: 1px solid var(--border);
