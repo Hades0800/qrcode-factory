@@ -1146,14 +1146,6 @@ function renderSteps() {
     ${pauseNotice}
     ${preHtml}
     <h2 style="margin-top:16px;">工序進度</h2>
-    <div class="progress-summary">
-      <div class="text">
-        已完成 ${newDoneCount} / ${STEPS.length} 項
-        <small>點「已完成」記錄（可重複填寫）</small>
-      </div>
-      <div class="count">${newPct}%</div>
-      <div class="progress-bar"><div class="progress-bar-fill" style="width:${newPct}%"></div></div>
-    </div>
   `;
 
   STEPS.forEach(s => {
