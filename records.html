@@ -429,7 +429,6 @@ if (!me) {
 $('meShow').textContent = me ? (me.displayName + (me.isAdmin ? '（管理員）' : '')) : '';
 if (me && me.isAdmin) {
   $('adminLink').style.display = 'flex';
-  $('actionTh').style.display = '';
 }
 if (me && (me.isAdmin || me.isPlanner)) $('uploadLink').style.display = 'flex';
 initDropdownMenu();
