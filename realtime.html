@@ -463,10 +463,19 @@ function renderContent() {
   const today = new Date();
   const dateStr = today.getFullYear() + '/' + String(today.getMonth()+1).padStart(2,'0') + '/' + String(today.getDate()).padStart(2,'0');
 
-  // 只抓「生產日期 = 今日」的工單
+  // 今日工單 + 未完成的隔日工單（最後動作是暫停的）
   const machineOrders = allOrders
     .filter(o => o.machineNo === activeMachine)
-    .filter(o => isToday(o.productionDate))
+    .filter(o => {
+      if (isToday(o.productionDate)) return true;
+      // 未完成且有活動的隔日工單也顯示
+      if (!o.step11At && o.productionDate && !isToday(o.productionDate)) {
+        const hasPauseActive = (o.pause12 && o.pause12.active) || (o.pause13 && o.pause13.active);
+        const hasActivity = o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At || (o.stepEntries && o.stepEntries.length > 0);
+        if (hasPauseActive || hasActivity) return true;
+      }
+      return false;
+    })
     .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
   const totalOrders = machineOrders.length;
@@ -555,10 +564,12 @@ function renderContent() {
       const isActive = activeOrder && o.orderNo === activeOrder.orderNo;
       const steps = countSteps(o);
       const timeline = buildTimeline(o);
+      const isCarryOver = o.productionDate && !isToday(o.productionDate);
+      const carryOverTag = isCarryOver ? '<span style="background:#f0ad4e;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;margin-left:8px;font-weight:700;">隔日生產</span>' : '';
       html += `
         <div class="order-card${isActive ? ' active' : ''}">
           <div class="oc-header">
-            <div class="oc-no">${escapeHtml(o.orderNo)}</div>
+            <div class="oc-no">${escapeHtml(o.orderNo)}${carryOverTag}</div>
             <div class="oc-badge">${o.step11At ? '已完成' : (steps > 0 ? '生產中' : '等待中')}</div>
           </div>
           <div class="order-info">

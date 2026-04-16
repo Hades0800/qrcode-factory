@@ -180,10 +180,11 @@ export default async function orderRoutes(fastify) {
       }
       time = parsed;
     }
-    // 如果沒有生產日期，自動設為今天
-    if (!order.productionDate) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+    // 一律把 productionDate 更新為今天
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const currentPd = order.productionDate ? new Date(order.productionDate) : null;
+    if (!currentPd || currentPd.getFullYear() !== today.getFullYear() || currentPd.getMonth() !== today.getMonth() || currentPd.getDate() !== today.getDate()) {
       await fastify.prisma.order.update({
         where: { orderNo },
         data: { productionDate: today },
@@ -272,14 +273,17 @@ export default async function orderRoutes(fastify) {
       });
     }
 
-    // 如果沒有生產日期，自動設為今天
-    if (!order.productionDate) {
+    // 一律把 productionDate 更新為今天
+    {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      await fastify.prisma.order.update({
-        where: { orderNo },
-        data: { productionDate: today },
-      });
+      const currentPd = order.productionDate ? new Date(order.productionDate) : null;
+      if (!currentPd || currentPd.getFullYear() !== today.getFullYear() || currentPd.getMonth() !== today.getMonth() || currentPd.getDate() !== today.getDate()) {
+        await fastify.prisma.order.update({
+          where: { orderNo },
+          data: { productionDate: today },
+        });
+      }
     }
 
     const updateData = {
