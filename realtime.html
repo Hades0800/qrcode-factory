@@ -570,7 +570,10 @@ function renderContent() {
         <div class="order-card${isActive ? ' active' : ''}">
           <div class="oc-header">
             <div class="oc-no">${escapeHtml(o.orderNo)}${carryOverTag}</div>
-            <div class="oc-badge">${o.step11At ? '已完成' : (steps > 0 ? '生產中' : '等待中')}</div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div class="oc-badge">${o.step11At ? '已完成' : (steps > 0 ? '生產中' : '等待中')}</div>
+              ${me && me.isAdmin ? `<button style="background:var(--brand);color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;" data-del-order="${escapeHtml(o.orderNo)}">刪除</button>` : ''}
+            </div>
           </div>
           <div class="order-info">
             <span class="oi-label">製造單號</span><span class="oi-value">${escapeHtml(o.orderNo)}</span>
@@ -592,6 +595,20 @@ function renderContent() {
   }
 
   content.innerHTML = html;
+
+  // 刪除按鈕事件
+  content.querySelectorAll('[data-del-order]').forEach(b => {
+    b.onclick = () => deleteOrder(b.getAttribute('data-del-order'));
+  });
+}
+
+async function deleteOrder(orderNo) {
+  if (!confirm('確定刪除工單「' + orderNo + '」？\n\n⚠️ 此動作無法復原，所有掃描紀錄都會消失。')) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo), { method: 'DELETE' });
+  if (!r.ok) { toast(r.error || '刪除失敗', 'error'); return; }
+  allOrders = allOrders.filter(o => o.orderNo !== orderNo);
+  renderContent();
+  toast('已刪除 ' + orderNo, 'success');
 }
 
 function countSteps(o) {
