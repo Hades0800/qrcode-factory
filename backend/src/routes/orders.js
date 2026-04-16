@@ -385,8 +385,9 @@ export default async function orderRoutes(fastify) {
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) return reply.code(404).send({ error: '找不到工單' });
     const duration = Math.round((endAt - startAt) / 1000);
+    const backfillNote = '【補登】' + (note || '');
     await fastify.prisma.pauseEvent.create({
-      data: { orderId: order.id, type, note: clipStr(note, 500), startAt, endAt, duration },
+      data: { orderId: order.id, type, note: clipStr(backfillNote, 500), startAt, endAt, duration },
     });
     const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
     return { ok: true, order: serializeOrder(updated) };
