@@ -461,7 +461,7 @@ async function loadOrders() {
   // 先用快取立即顯示
   const hasCache = loadFromCache();
   if (hasCache) { render(); renderIdleEvents(); }
-  else { $('ordersBody').innerHTML = '<tr><td colspan="17" class="empty">載入中...</td></tr>'; }
+  else { $('ordersArea').innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px;">載入中...</div>'; }
 
   // 背景更新
   const [ordersRes, idleRes] = await Promise.all([
@@ -469,7 +469,7 @@ async function loadOrders() {
     api('/api/idle-events?limit=200'),
   ]);
   if (!ordersRes.ok) {
-    if (!hasCache) $('ordersBody').innerHTML = '<tr><td colspan="17" class="empty">' + (ordersRes.error || '載入失敗') + '</td></tr>';
+    if (!hasCache) $('ordersArea').innerHTML = '<div style="text-align:center;color:var(--brand);padding:40px;">' + (ordersRes.error || '載入失敗') + '</div>';
     return;
   }
   allOrders = ordersRes.data.orders || [];
