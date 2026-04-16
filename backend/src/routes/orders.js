@@ -202,6 +202,9 @@ export default async function orderRoutes(fastify) {
       if (isNaN(parsed) || parsed.getFullYear() < 2000 || parsed.getFullYear() > 2100) {
         return reply.code(400).send({ error: '補登時間格式錯誤' });
       }
+      if (parsed > new Date()) {
+        return reply.code(400).send({ error: '補登時間不能超過現在' });
+      }
       time = parsed;
     }
     await updateProductionDateToday(fastify, order);
@@ -382,6 +385,7 @@ export default async function orderRoutes(fastify) {
     const endAt = new Date(endStr);
     if (isNaN(startAt) || isNaN(endAt)) return reply.code(400).send({ error: '時間格式錯誤' });
     if (endAt <= startAt) return reply.code(400).send({ error: '結束時間必須晚於開始時間' });
+    if (endAt > new Date()) return reply.code(400).send({ error: '補登時間不能超過現在' });
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) return reply.code(404).send({ error: '找不到工單' });
     const duration = Math.round((endAt - startAt) / 1000);
