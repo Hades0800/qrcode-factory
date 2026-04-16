@@ -11,6 +11,19 @@ function hasActivity(o) {
     o.step21At || o.step22At || o.step23At);
 }
 
+// 更新 productionDate 為今天（如果不是今天的話）
+async function updateProductionDateToday(fastify, order) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const currentPd = order.productionDate ? new Date(order.productionDate) : null;
+  if (!currentPd || currentPd.getFullYear() !== today.getFullYear() || currentPd.getMonth() !== today.getMonth() || currentPd.getDate() !== today.getDate()) {
+    await fastify.prisma.order.update({
+      where: { orderNo: order.orderNo },
+      data: { productionDate: today },
+    });
+  }
+}
+
 async function audit(prisma, request, action, target, detail) {
   try {
     await prisma.auditLog.create({
@@ -180,16 +193,7 @@ export default async function orderRoutes(fastify) {
       }
       time = parsed;
     }
-    // 一律把 productionDate 更新為今天
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const currentPd = order.productionDate ? new Date(order.productionDate) : null;
-    if (!currentPd || currentPd.getFullYear() !== today.getFullYear() || currentPd.getMonth() !== today.getMonth() || currentPd.getDate() !== today.getDate()) {
-      await fastify.prisma.order.update({
-        where: { orderNo },
-        data: { productionDate: today },
-      });
-    }
+    await updateProductionDateToday(fastify, order);
     const entry = await fastify.prisma.stepEntry.create({
       data: {
         orderId: order.id,
@@ -273,18 +277,7 @@ export default async function orderRoutes(fastify) {
       });
     }
 
-    // 一律把 productionDate 更新為今天
-    {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const currentPd = order.productionDate ? new Date(order.productionDate) : null;
-      if (!currentPd || currentPd.getFullYear() !== today.getFullYear() || currentPd.getMonth() !== today.getMonth() || currentPd.getDate() !== today.getDate()) {
-        await fastify.prisma.order.update({
-          where: { orderNo },
-          data: { productionDate: today },
-        });
-      }
-    }
+    await updateProductionDateToday(fastify, order);
 
     const updateData = {
       [cols.time]: new Date(),
@@ -334,6 +327,8 @@ export default async function orderRoutes(fastify) {
       where: { orderId: order.id, type, endAt: null },
     });
     if (active) return reply.code(409).send({ error: '已在暫停中，請先恢復' });
+    // 更新 productionDate 為今天
+    await updateProductionDateToday(fastify, order);
     await fastify.prisma.pauseEvent.create({
       data: { orderId: order.id, type, note: clipStr(note, 500), activeStep: clipStr(activeStep, 100) },
     });
@@ -353,6 +348,8 @@ export default async function orderRoutes(fastify) {
       where: { orderId: order.id, type, endAt: null },
     });
     if (!active) return reply.code(404).send({ error: '沒有進行中的暫停' });
+    // 更新 productionDate 為今天
+    await updateProductionDateToday(fastify, order);
     const now = new Date();
     const duration = Math.round((now - active.startAt) / 1000);
     await fastify.prisma.pauseEvent.update({
