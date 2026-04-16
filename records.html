@@ -568,6 +568,17 @@ async function cancelIdleEvent(id) {
   toast('已取消', 'success');
 }
 
+// 判斷是否為不計入暫停（中午或隔日）
+function isExcludedPause(e) {
+  const note = (e.note || '').toLowerCase();
+  if (note.includes('中午') || note.includes('午休') || note.includes('午餐')) return true;
+  if (e.startAt && e.endAt) {
+    const s = new Date(e.startAt), t = new Date(e.endAt);
+    if (s.getFullYear() !== t.getFullYear() || s.getMonth() !== t.getMonth() || s.getDate() !== t.getDate()) return true;
+  }
+  return false;
+}
+
 function render() {
   const filtered = applyFilters(allOrders);
 
@@ -718,13 +729,18 @@ function render() {
       ...((o.pause12 && o.pause12.history) || []).map(e => Object.assign({}, e, { label: '正常暫停' })),
       ...((o.pause13 && o.pause13.history) || []).map(e => Object.assign({}, e, { label: '異常停止' })),
     ].sort((a, b) => new Date(a.startAt) - new Date(b.startAt));
+
     let eventsHtml = '';
     if (allEvents.length > 0) {
       eventsHtml = `<div style="margin-top:14px;"><div class="info-section-title">暫停 / 異常明細</div>` +
-        allEvents.map((e, i) => `<div class="rc-step ${e.label === '異常停止' ? 'done' : 'done'}" style="background:${e.label === '異常停止' ? 'var(--brand-soft)' : '#fffbe6'};margin-bottom:4px;">
-          <span class="rs-label" style="color:${e.label === '異常停止' ? 'var(--brand)' : '#b8860b'};">${e.label}${e.note ? '（' + escapeHtml(e.note) + '）' : ''}</span>
-          <span class="rs-time" style="color:var(--muted);">${fmtTimeShort(e.startAt)} → ${e.endAt ? fmtTimeShort(e.endAt) : '進行中'} ${e.duration ? fmtDur(e.duration) : ''}</span>
-        </div>`).join('') + '</div>';
+        allEvents.map((e, i) => {
+          const excluded = isExcludedPause(e);
+          const tag = excluded ? ' <span style="font-size:10px;color:var(--muted);">（不計入）</span>' : '';
+          return `<div style="background:${e.label === '異常停止' ? 'var(--brand-soft)' : '#fffbe6'};margin-bottom:4px;padding:6px 10px;border-radius:8px;font-size:14px;display:flex;align-items:center;gap:8px;">
+          <span style="font-weight:600;flex:1;color:${e.label === '異常停止' ? 'var(--brand)' : '#b8860b'};">${e.label}${e.note ? '（' + escapeHtml(e.note) + '）' : ''}${tag}</span>
+          <span style="font-size:12px;color:var(--muted);white-space:nowrap;">${fmtTimeShort(e.startAt)} → ${e.endAt ? fmtTimeShort(e.endAt) : '進行中'} ${!excluded && e.duration ? fmtDur(e.duration) : ''}</span>
+        </div>`;
+        }).join('') + '</div>';
     }
 
     return `
@@ -840,8 +856,10 @@ $('exportBtn').onclick = () => {
     fmtTime(o.step21At), fmtTime(o.step22At), fmtTime(o.step23At),
     fmtTime(o.step1At), fmtTime(o.step2At), fmtTime(o.step3At), fmtTime(o.step4At),
     fmtTime(o.step5At), fmtTime(o.step6At), fmtTime(o.step7At), fmtTime(o.step11At),
-    o.pause12 ? o.pause12.count : 0, o.pause12 ? o.pause12.totalSec : 0,
-    o.pause13 ? o.pause13.count : 0, o.pause13 ? o.pause13.totalSec : 0,
+    ((o.pause12 && o.pause12.history) || []).filter(e => !isExcludedPause(e)).length,
+    ((o.pause12 && o.pause12.history) || []).filter(e => !isExcludedPause(e)).reduce((s, e) => s + (e.duration || 0), 0),
+    ((o.pause13 && o.pause13.history) || []).filter(e => !isExcludedPause(e)).length,
+    ((o.pause13 && o.pause13.history) || []).filter(e => !isExcludedPause(e)).reduce((s, e) => s + (e.duration || 0), 0),
     fmtTime(o.updatedAt),
   ]);
   const csv = [headers, ...rows].map(r => r.map(v => {
