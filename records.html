@@ -723,7 +723,7 @@ function render() {
           <div class="rc-no">${escapeHtml(o.orderNo)}</div>
           ${badge}
         </div>
-        <div class="rc-expand" style="margin-top:6px;">▶ 展開工單明細${isAdmin ? ` <button class="btn-danger" data-del="${escapeHtml(o.orderNo)}" style="padding:4px 10px;font-size:11px;min-height:24px;margin-left:8px;" onclick="event.stopPropagation()">刪除</button>` : ''}</div>
+        <div class="rc-expand" style="margin-top:6px;" onclick="event.stopPropagation();toggleDetail(${idx})">▶ 展開工單明細${isAdmin ? ` <button class="btn-danger" data-del="${escapeHtml(o.orderNo)}" style="padding:4px 10px;font-size:11px;min-height:24px;margin-left:8px;" onclick="event.stopPropagation()">刪除</button>` : ''}</div>
         <div class="rc-meta">
           <span>機台 <strong>${escapeHtml(o.machineNo || '—')}</strong></span>
           <span>組長 <strong>${escapeHtml(o.leaderName || '—')}</strong></span>
