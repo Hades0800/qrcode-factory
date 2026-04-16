@@ -360,6 +360,27 @@ export default async function orderRoutes(fastify) {
     return { order: serializeOrder(updated), resumed: { type, duration } };
   });
 
+  // 補登暫停（已結束的暫停事件）
+  fastify.post('/:orderNo/pause-backfill', async (request, reply) => {
+    const orderNo = String(request.params.orderNo || '').toUpperCase();
+    const { type, note, startAt: startStr, endAt: endStr } = request.body || {};
+    if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
+    if (!['12', '13'].includes(type)) return reply.code(400).send({ error: '無效類型' });
+    if (!startStr || !endStr) return reply.code(400).send({ error: '請填寫開始和結束時間' });
+    const startAt = new Date(startStr);
+    const endAt = new Date(endStr);
+    if (isNaN(startAt) || isNaN(endAt)) return reply.code(400).send({ error: '時間格式錯誤' });
+    if (endAt <= startAt) return reply.code(400).send({ error: '結束時間必須晚於開始時間' });
+    const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
+    if (!order) return reply.code(404).send({ error: '找不到工單' });
+    const duration = Math.round((endAt - startAt) / 1000);
+    await fastify.prisma.pauseEvent.create({
+      data: { orderId: order.id, type, note: clipStr(note, 500), startAt, endAt, duration },
+    });
+    const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
+    return { ok: true, order: serializeOrder(updated) };
+  });
+
   // 批次上傳工單（生管 or 管理員）
   fastify.post('/bulk-upload', async (request, reply) => {
     if (!request.user.isAdmin && !request.user.isPlanner) {

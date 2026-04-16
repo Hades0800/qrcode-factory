@@ -1203,7 +1203,7 @@ function renderSteps() {
   const actDiv = document.createElement('div');
   actDiv.className = 'action-buttons';
 
-  // 暫停/異常按鈕（開關模式）
+  // 暫停/異常按鈕（開關模式）+ 補登
   PAUSE_TYPES.forEach(p => {
     const info = order['pause' + p.type]; // pause12 or pause13
     const isActive = info && info.active;
@@ -1235,6 +1235,57 @@ function renderSteps() {
       btn.onclick = () => startPause(p);
     }
     actDiv.appendChild(btn);
+
+    // 補登按鈕
+    if (!isActive) {
+      const bfBtn = document.createElement('button');
+      bfBtn.className = 'btn-secondary';
+      bfBtn.style.cssText = 'width:100%;margin-top:-4px;margin-bottom:8px;padding:10px;font-size:13px;color:#b8860b;';
+      bfBtn.textContent = '📝 補登' + (p.type === '12' ? '暫停' : '異常');
+      bfBtn.onclick = () => {
+        const form = document.getElementById('pause-bf-' + p.type);
+        form.style.display = form.style.display === 'none' ? '' : 'none';
+      };
+      actDiv.appendChild(bfBtn);
+
+      const bfForm = document.createElement('div');
+      bfForm.id = 'pause-bf-' + p.type;
+      bfForm.className = 'backfill-form';
+      bfForm.style.display = 'none';
+      bfForm.style.marginBottom = '12px';
+      if (p.type === '12') {
+        bfForm.innerHTML = `
+          <select id="pbf-reason-${p.type}" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:6px;">
+            <option value="">-- 選擇暫停原因 --</option>
+            <option value="中午休息">中午休息</option>
+            <option value="隔日生產">隔日生產</option>
+            <option value="__other">其他原因（自行輸入）</option>
+          </select>
+          <input type="text" id="pbf-note-${p.type}" placeholder="其他原因說明" style="display:none;width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:6px;box-sizing:border-box;">
+          <div style="display:flex;gap:6px;">
+            <div style="flex:1;"><label style="font-size:11px;color:var(--muted);">開始時間</label><input type="datetime-local" id="pbf-start-${p.type}" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></div>
+            <div style="flex:1;"><label style="font-size:11px;color:var(--muted);">結束時間</label><input type="datetime-local" id="pbf-end-${p.type}" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></div>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:6px;">
+            <button class="btn-primary" style="flex:1;" onclick="submitPauseBackfill('${p.type}')">確認補登</button>
+            <button class="btn-secondary" style="flex:0 0 auto;" onclick="document.getElementById('pause-bf-${p.type}').style.display='none'">取消</button>
+          </div>
+        `;
+      } else {
+        bfForm.innerHTML = `
+          <input type="text" id="pbf-note-${p.type}" placeholder="異常說明（必填）" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:6px;box-sizing:border-box;">
+          <div style="display:flex;gap:6px;">
+            <div style="flex:1;"><label style="font-size:11px;color:var(--muted);">開始時間</label><input type="datetime-local" id="pbf-start-${p.type}" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></div>
+            <div style="flex:1;"><label style="font-size:11px;color:var(--muted);">結束時間</label><input type="datetime-local" id="pbf-end-${p.type}" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></div>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:6px;">
+            <button class="btn-primary" style="flex:1;" onclick="submitPauseBackfill('${p.type}')">確認補登</button>
+            <button class="btn-secondary" style="flex:0 0 auto;" onclick="document.getElementById('pause-bf-${p.type}').style.display='none'">取消</button>
+          </div>
+        `;
+      }
+      actDiv.appendChild(bfForm);
+    }
   });
 
   // 完成按鈕
@@ -1264,6 +1315,16 @@ function renderSteps() {
   area.appendChild(actWrap);
 
   startLiveTimers();
+
+  // 暫停補登：其他原因輸入框切換
+  const reasonSel = document.getElementById('pbf-reason-12');
+  if (reasonSel) {
+    reasonSel.onchange = () => {
+      const noteInput = document.getElementById('pbf-note-12');
+      noteInput.style.display = reasonSel.value === '__other' ? '' : 'none';
+      if (reasonSel.value !== '__other') noteInput.value = '';
+    };
+  }
 
   // 21/22/23 的掃描和已完成
   area.querySelectorAll('[data-scan]').forEach(b => {
@@ -1359,11 +1420,28 @@ async function cancelStepEntry(entryId) {
 async function startPause(p) {
   if (!orderNo) return;
   let note = '';
-  while (!note.trim()) {
-    note = prompt('【必填】' + p.noteLabel + '：', '') || '';
-    if (note === null || note === '') {
-      if (confirm('備註為必填。確定取消暫停？')) return;
-      note = '';
+  if (p.type === '12') {
+    // 正常暫停：選單
+    const reasons = ['中午休息', '隔日生產', '其他原因'];
+    const choice = prompt('【必填】選擇暫停原因：\n1. 中午休息\n2. 隔日生產\n3. 其他原因（自行輸入）\n\n請輸入 1、2 或 3：');
+    if (!choice) return;
+    if (choice.trim() === '1') note = '中午休息';
+    else if (choice.trim() === '2') note = '隔日生產';
+    else if (choice.trim() === '3') {
+      note = prompt('請輸入暫停原因：', '') || '';
+      if (!note.trim()) { toast('原因為必填', 'error'); return; }
+    } else {
+      // 直接輸入文字也接受
+      note = choice.trim();
+    }
+  } else {
+    // 異常暫停：直接輸入
+    while (!note.trim()) {
+      note = prompt('【必填】' + p.noteLabel + '：', '') || '';
+      if (note === null || note === '') {
+        if (confirm('備註為必填。確定取消？')) return;
+        note = '';
+      }
     }
   }
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/pause', {
@@ -1375,6 +1453,38 @@ async function startPause(p) {
   renderSteps();
   toast(p.title + ' — 開始計時', 'success');
   startLiveTimers();
+}
+
+async function submitPauseBackfill(type) {
+  if (!orderNo) return;
+  let note = '';
+  if (type === '12') {
+    const sel = document.getElementById('pbf-reason-12');
+    const noteInput = document.getElementById('pbf-note-12');
+    if (sel.value === '') { toast('請選擇暫停原因', 'error'); return; }
+    if (sel.value === '__other') {
+      note = noteInput.value.trim();
+      if (!note) { toast('請輸入其他原因', 'error'); return; }
+    } else {
+      note = sel.value;
+    }
+  } else {
+    note = document.getElementById('pbf-note-' + type).value.trim();
+    if (!note) { toast('請輸入異常說明', 'error'); return; }
+  }
+  const startAt = document.getElementById('pbf-start-' + type).value;
+  const endAt = document.getElementById('pbf-end-' + type).value;
+  if (!startAt || !endAt) { toast('請填寫開始和結束時間', 'error'); return; }
+  if (!confirm('確認補登？\n原因：' + note + '\n開始：' + startAt + '\n結束：' + endAt)) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/pause-backfill', {
+    method: 'POST',
+    body: { type, note, startAt: new Date(startAt).toISOString(), endAt: new Date(endAt).toISOString() },
+  });
+  if (!r.ok) { toast(r.error || '補登失敗', 'error'); return; }
+  order = r.data.order;
+  renderSteps();
+  document.getElementById('pause-bf-' + type).style.display = 'none';
+  toast('✓ 已補登' + (type === '12' ? '暫停' : '異常'), 'success');
 }
 
 async function resumePause(type) {
