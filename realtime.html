@@ -600,9 +600,10 @@ function buildTimeline(o) {
 
   // 新格式 stepEntries（日誌式，可多次）
   (o.stepEntries || []).forEach(e => {
-    const labelMap = {'1':'原料準備與設置','2':'模刀具準備與安裝','3':'試模與規格品質確認','4':'斷續試稼生產製造','5':'穩定連續生產製造','6':'後工程接續生產','7':'其他作業'};
+    const labelMap = {'1':'原料準備與設置','2':'模刀具準備與安裝','3':'試模與規格品質確認','4':'斷續試稼生產製造','5':'穩定連續生產製造','6':'後工程接續生產','7':'其他作業','21':'設備啓動準備','22':'生產準備完成','23':'生產無工令'};
     const name = labelMap[e.stepNo] || ('工序 ' + e.stepNo);
-    items.push({ time: new Date(e.recordedAt), label: name + (e.seq > 1 ? e.seq : ''), type: 'step' });
+    const suffix = (e.seq > 1 ? e.seq : '') + (e.isManual ? '（補登）' : '');
+    items.push({ time: new Date(e.recordedAt), label: name + suffix, type: 'step' });
   });
 
   // 暫停事件

@@ -76,7 +76,8 @@ function serializeOrder(o) {
     pause13: summarize('13'),
     stepEntries: (o.stepEntries || []).map(e => ({
       id: e.id, stepNo: e.stepNo, seq: e.seq,
-      recordedAt: e.recordedAt, leaderName: e.leaderName,
+      recordedAt: e.recordedAt, isManual: e.isManual || false,
+      leaderName: e.leaderName,
     })),
     createdAt: o.createdAt,
     updatedAt: o.updatedAt,
@@ -156,25 +157,36 @@ export default async function orderRoutes(fastify) {
     return { order: serializeOrder(order) };
   });
 
-  // 記錄工序（可重複，日誌式）
+  // 記錄工序（可重複，日誌式；支援補登自訂時間）
   fastify.post('/:orderNo/step-entries', async (request, reply) => {
     const orderNo = String(request.params.orderNo || '').toUpperCase();
-    const { stepNo } = request.body || {};
+    const { stepNo, recordedAt: manualTime } = request.body || {};
     if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
-    if (!['1','2','3','4','5','6','7'].includes(stepNo)) {
+    const validSteps = ['1','2','3','4','5','6','7','21','22','23','12','13'];
+    if (!validSteps.includes(stepNo)) {
       return reply.code(400).send({ error: '無效工序編號' });
     }
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) return reply.code(404).send({ error: '找不到工單' });
-    // 計算此工序第幾次
     const prevCount = await fastify.prisma.stepEntry.count({
       where: { orderId: order.id, stepNo },
     });
+    const isManual = !!manualTime;
+    let time = new Date();
+    if (manualTime) {
+      const parsed = new Date(manualTime);
+      if (isNaN(parsed) || parsed.getFullYear() < 2000 || parsed.getFullYear() > 2100) {
+        return reply.code(400).send({ error: '補登時間格式錯誤' });
+      }
+      time = parsed;
+    }
     const entry = await fastify.prisma.stepEntry.create({
       data: {
         orderId: order.id,
         stepNo,
         seq: prevCount + 1,
+        recordedAt: time,
+        isManual,
         leaderId: request.user.id,
         leaderName: request.user.displayName || null,
       },

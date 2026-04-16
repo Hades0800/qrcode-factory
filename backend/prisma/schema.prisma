@@ -87,9 +87,10 @@ model StepEntry {
   id         Int      @id @default(autoincrement())
   orderId    Int
   order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  stepNo     String   // "1"~"7"
+  stepNo     String   // "1"~"7", "21"~"23", "12", "13"
   seq        Int      // 第幾次
   recordedAt DateTime @default(now())
+  isManual   Boolean  @default(false) // 補登
   leaderId   Int?
   leaderName String?
 

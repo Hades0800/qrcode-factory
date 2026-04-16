@@ -306,6 +306,40 @@
     0%, 100% { opacity: 1; }
     50% { opacity: .75; }
   }
+  .manual-tag {
+    display: inline-block;
+    background: #f0ad4e;
+    color: #fff;
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-weight: 700;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+  .backfill-form {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: #fffbe6;
+    border-radius: 8px;
+    border: 1px solid #f0ad4e;
+  }
+  .backfill-form input {
+    padding: 6px 8px;
+    font-size: 13px;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    min-height: 32px;
+  }
+  .backfill-form button {
+    padding: 6px 12px;
+    font-size: 12px;
+    min-height: 32px;
+  }
 
   .or-divider {
     display: flex;
@@ -1114,19 +1148,29 @@ function renderSteps() {
     entries.forEach((e, i) => {
       const elapsed = now - new Date(e.recordedAt).getTime();
       const canCancel = elapsed < 5 * 60 * 1000;
-      body += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${canCancel ? 'var(--success-soft)' : '#f5f5f7'};border-radius:8px;">`;
-      body += `<span style="font-size:12px;color:var(--success);font-weight:600;flex:1;">✓ ${escapeHtml(titleText)}${entries.length > 1 ? (i+1) : ''} — ${fmtTime(e.recordedAt)}</span>`;
+      const manualTag = e.isManual ? '<span class="manual-tag">補登</span>' : '';
+      body += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${e.isManual ? '#fffbe6' : (canCancel ? 'var(--success-soft)' : '#f5f5f7')};border-radius:8px;">`;
+      body += `<span style="font-size:12px;color:var(--success);font-weight:600;flex:1;">✓ ${escapeHtml(titleText)}${entries.length > 1 ? (i+1) : ''} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
       if (canCancel && !isPaused) {
         body += `<button class="btn-danger" data-cancel-entry="${e.id}" style="padding:4px 10px;font-size:11px;min-height:28px;">取消</button>`;
       }
       body += '</div>';
     });
 
-    // 已完成按鈕（永遠可再按）
+    // 已完成 + 補登按鈕
     if (isPaused) {
       body += '<button class="btn-success btn-block" disabled>✓ 已完成</button>';
     } else {
-      body += `<button class="btn-success btn-block" data-record-step="${s.id}">✓ 已完成</button>`;
+      body += `<div style="display:flex;gap:8px;">`;
+      body += `<button class="btn-success" style="flex:1;" data-record-step="${s.id}">✓ 已完成</button>`;
+      body += `<button class="btn-secondary" data-backfill="${s.id}" style="flex:0 0 auto;padding:10px 14px;font-size:13px;color:#b8860b;">📝 補登</button>`;
+      body += `</div>`;
+      body += `<div class="backfill-form" id="backfill-${s.id}" style="display:none;">`;
+      body += `<input type="date" id="bf-date-${s.id}" value="${todayYmd()}">`;
+      body += `<input type="time" id="bf-time-${s.id}" step="1" value="">`;
+      body += `<button class="btn-primary" data-backfill-submit="${s.id}">確認補登</button>`;
+      body += `<button class="btn-secondary" data-backfill-cancel="${s.id}">取消</button>`;
+      body += `</div>`;
     }
 
     const div = document.createElement('div');
@@ -1223,6 +1267,22 @@ function renderSteps() {
   area.querySelectorAll('[data-cancel-entry]').forEach(b => {
     b.onclick = () => cancelStepEntry(b.getAttribute('data-cancel-entry'));
   });
+  // 補登
+  area.querySelectorAll('[data-backfill]').forEach(b => {
+    b.onclick = () => {
+      const id = b.getAttribute('data-backfill');
+      const form = document.getElementById('backfill-' + id);
+      form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+    };
+  });
+  area.querySelectorAll('[data-backfill-cancel]').forEach(b => {
+    b.onclick = () => {
+      document.getElementById('backfill-' + b.getAttribute('data-backfill-cancel')).style.display = 'none';
+    };
+  });
+  area.querySelectorAll('[data-backfill-submit]').forEach(b => {
+    b.onclick = () => backfillStepEntry(b.getAttribute('data-backfill-submit'));
+  });
 
   $('bottomBar').classList.remove('show');
 }
@@ -1237,6 +1297,24 @@ function getCurrentStep() {
     }
   });
   return latest ? latest.title : '尚未開始';
+}
+
+// 補登工序（自訂日期時間）
+async function backfillStepEntry(stepNo) {
+  const dateVal = document.getElementById('bf-date-' + stepNo)?.value;
+  const timeVal = document.getElementById('bf-time-' + stepNo)?.value;
+  if (!dateVal || !timeVal) { toast('請填寫日期和時間', 'error'); return; }
+  const dt = new Date(dateVal + 'T' + timeVal);
+  if (isNaN(dt)) { toast('日期時間格式錯誤', 'error'); return; }
+  if (!confirm('確認補登？\n時間：' + fmtTime(dt.toISOString()) + '\n將標記為「補登」')) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/step-entries', {
+    method: 'POST',
+    body: { stepNo, recordedAt: dt.toISOString() },
+  });
+  if (!r.ok) { toast(r.error, 'error'); return; }
+  order = r.data.order;
+  renderSteps();
+  toast('✓ 已補登（標記為補登）', 'success');
 }
 
 // 記錄工序（日誌式，可重複）
