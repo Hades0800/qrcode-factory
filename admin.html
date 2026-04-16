@@ -343,7 +343,7 @@ $('fixDatesBtn').onclick = async () => {
   if (!confirm('確定修正所有工單的生產日期？\n\n將根據第一筆實際活動時間重新設定。')) return;
   $('fixDatesBtn').disabled = true;
   $('fixDatesBtn').textContent = '修正中...';
-  const r = await api('/api/orders/fix-production-dates', { method: 'POST', body: {} });
+  const r = await api('/api/admin/fix-production-dates', { method: 'POST', body: {} });
   $('fixDatesBtn').disabled = false;
   $('fixDatesBtn').textContent = '修正所有工單生產日期';
   if (!r.ok) { toast(r.error || '修正失敗', 'error'); return; }
