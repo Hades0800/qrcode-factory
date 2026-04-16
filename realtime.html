@@ -463,17 +463,31 @@ function renderContent() {
   const today = new Date();
   const dateStr = today.getFullYear() + '/' + String(today.getMonth()+1).padStart(2,'0') + '/' + String(today.getDate()).padStart(2,'0');
 
-  // 今日工單 + 未完成的隔日工單（最後動作是暫停的）
+  // 顯示：今天有活動的工單 或 未完成的工單（有暫停中或有活動紀錄）
+  function hasTodayActivity(o) {
+    // 檢查是否有任何時間戳落在今天
+    const times = [];
+    ['step1At','step2At','step3At','step4At','step5At','step6At','step7At','step11At','step21At','step22At','step23At'].forEach(k => {
+      if (o[k]) times.push(new Date(o[k]));
+    });
+    (o.stepEntries || []).forEach(e => { if (e.recordedAt) times.push(new Date(e.recordedAt)); });
+    ((o.pause12 && o.pause12.history) || []).forEach(e => {
+      if (e.startAt) times.push(new Date(e.startAt));
+      if (e.endAt) times.push(new Date(e.endAt));
+    });
+    ((o.pause13 && o.pause13.history) || []).forEach(e => {
+      if (e.startAt) times.push(new Date(e.startAt));
+      if (e.endAt) times.push(new Date(e.endAt));
+    });
+    return times.some(t => isToday(t.toISOString()));
+  }
   const machineOrders = allOrders
     .filter(o => o.machineNo === activeMachine)
     .filter(o => {
       if (isToday(o.productionDate)) return true;
-      // 未完成且有活動的隔日工單也顯示
-      if (!o.step11At && o.productionDate && !isToday(o.productionDate)) {
-        const hasPauseActive = (o.pause12 && o.pause12.active) || (o.pause13 && o.pause13.active);
-        const hasActivity = o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At || (o.stepEntries && o.stepEntries.length > 0);
-        if (hasPauseActive || hasActivity) return true;
-      }
+      if (hasTodayActivity(o)) return true;
+      // 未完成且暫停中的隔日工單
+      if (!o.step11At && ((o.pause12 && o.pause12.active) || (o.pause13 && o.pause13.active))) return true;
       return false;
     })
     .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));

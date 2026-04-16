@@ -806,11 +806,31 @@ function applyFilters(list) {
       if (!hay.includes(text)) return false;
     }
     if (from || to) {
-      // 優先用生產日期，沒有就用最後更新
-      const d = o.productionDate ? new Date(o.productionDate) : (o.updatedAt ? new Date(o.updatedAt) : null);
-      if (!d) return false;
-      if (from && d < new Date(from + 'T00:00:00')) return false;
-      if (to && d > new Date(to + 'T23:59:59')) return false;
+      // 收集所有活動時間（stepEntries + pauseEvents + 舊格式 stepXAt）
+      const times = [];
+      if (o.productionDate) times.push(new Date(o.productionDate));
+      ['step1At','step2At','step3At','step4At','step5At','step6At','step7At','step11At','step21At','step22At','step23At'].forEach(k => {
+        if (o[k]) times.push(new Date(o[k]));
+      });
+      (o.stepEntries || []).forEach(e => { if (e.recordedAt) times.push(new Date(e.recordedAt)); });
+      ((o.pause12 && o.pause12.history) || []).forEach(e => {
+        if (e.startAt) times.push(new Date(e.startAt));
+        if (e.endAt) times.push(new Date(e.endAt));
+      });
+      ((o.pause13 && o.pause13.history) || []).forEach(e => {
+        if (e.startAt) times.push(new Date(e.startAt));
+        if (e.endAt) times.push(new Date(e.endAt));
+      });
+      if (times.length === 0) return false;
+      const fromDate = from ? new Date(from + 'T00:00:00') : null;
+      const toDate = to ? new Date(to + 'T23:59:59') : null;
+      // 只要有任何一個時間點落在範圍內就顯示
+      const inRange = times.some(t => {
+        if (fromDate && t < fromDate) return false;
+        if (toDate && t > toDate) return false;
+        return true;
+      });
+      if (!inRange) return false;
     }
     if (status) {
       const c = countDone(o);

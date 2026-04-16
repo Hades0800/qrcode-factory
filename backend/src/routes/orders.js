@@ -23,16 +23,14 @@ function getTaiwanToday() {
   return new Date(Date.UTC(y, m, d));
 }
 
-// 更新 productionDate 為今天（台灣時間，如果不是今天的話）
+// 設定 productionDate（僅在尚未設定時才寫入，作為開始日期）
 async function updateProductionDateToday(fastify, order) {
+  if (order.productionDate) return; // 已有開始日期，不覆蓋
   const today = getTaiwanToday();
-  const currentPd = order.productionDate ? new Date(order.productionDate) : null;
-  if (!currentPd || currentPd.getTime() !== today.getTime()) {
-    await fastify.prisma.order.update({
-      where: { orderNo: order.orderNo },
-      data: { productionDate: today },
-    });
-  }
+  await fastify.prisma.order.update({
+    where: { orderNo: order.orderNo },
+    data: { productionDate: today },
+  });
 }
 
 async function audit(prisma, request, action, target, detail) {
