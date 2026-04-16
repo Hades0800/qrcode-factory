@@ -613,11 +613,19 @@ function render() {
     });
     // 暫停事件
     ((o.pause12 && o.pause12.history) || []).forEach((e, i) => {
-      allItems.push({ time: new Date(e.startAt), label: '⏸ 暫停' + (e.note ? '（'+escapeHtml(e.note)+'）' : '') + (e.duration ? ' ' + fmtDur(e.duration) : ''), style: 'pause' });
+      allItems.push({ time: new Date(e.startAt), label: '⏸ 暫停' + (e.note ? '（'+escapeHtml(e.note)+'）' : ''), style: 'pause' });
+      if (e.endAt) {
+        const dur = e.duration ? fmtDur(e.duration) : '';
+        allItems.push({ time: new Date(e.endAt), label: '▶ 恢復生產' + (dur ? '（暫停 ' + dur + '）' : ''), style: 'resume' });
+      }
     });
     // 異常事件
     ((o.pause13 && o.pause13.history) || []).forEach((e, i) => {
-      allItems.push({ time: new Date(e.startAt), label: '⚠ 異常' + (e.note ? '（'+escapeHtml(e.note)+'）' : '') + (e.duration ? ' ' + fmtDur(e.duration) : ''), style: 'abnormal' });
+      allItems.push({ time: new Date(e.startAt), label: '⚠ 異常' + (e.note ? '（'+escapeHtml(e.note)+'）' : ''), style: 'abnormal' });
+      if (e.endAt) {
+        const dur = e.duration ? fmtDur(e.duration) : '';
+        allItems.push({ time: new Date(e.endAt), label: '▶ 恢復生產' + (dur ? '（異常 ' + dur + '）' : ''), style: 'resume' });
+      }
     });
     // 按時間排序
     allItems.sort((a, b) => a.time - b.time);
@@ -629,6 +637,7 @@ function render() {
         let cls = 'done';
         if (it.style === 'pause') cls = 'done pause-event';
         else if (it.style === 'abnormal') cls = 'done abnormal-event';
+        else if (it.style === 'resume') cls = 'done resume-event';
 
         const d = it.time;
         const dateStr = pad(d.getMonth()+1) + '/' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
