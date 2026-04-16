@@ -666,19 +666,28 @@ function render() {
           }
         }
 
-        // 跨日標記
+        // 跨日判斷
         let dayDivider = '';
+        let isNextDay = false;
         if (i > 0) {
           const prev = allItems[i-1].time;
           if (d.getFullYear() !== prev.getFullYear() || d.getMonth() !== prev.getMonth() || d.getDate() !== prev.getDate()) {
+            isNextDay = true;
             dayDivider = `<li class="day-divider"><span>── 隔日生產 ${pad(d.getMonth()+1)}/${pad(d.getDate())} ──</span></li>`;
           }
+        }
+
+        // 跨日：隱藏時間差，恢復生產改寫
+        let displayLabel = it.label;
+        if (isNextDay) {
+          diffStr = '';
+          if (it.style === 'resume') displayLabel = '▶ 隔日恢復生產';
         }
 
         return dayDivider + `<li class="${cls}">
           <div class="tl-dot"></div>
           <div class="tl-time">${dateStr}<span style="font-size:10px;color:var(--muted);font-weight:500;">${diffStr}</span></div>
-          <div class="tl-label">${it.label}</div>
+          <div class="tl-label">${displayLabel}</div>
         </li>`;
       }).join('');
 
