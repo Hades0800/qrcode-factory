@@ -180,6 +180,15 @@ export default async function orderRoutes(fastify) {
       }
       time = parsed;
     }
+    // 如果沒有生產日期，自動設為今天
+    if (!order.productionDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      await fastify.prisma.order.update({
+        where: { orderNo },
+        data: { productionDate: today },
+      });
+    }
     const entry = await fastify.prisma.stepEntry.create({
       data: {
         orderId: order.id,
@@ -260,6 +269,16 @@ export default async function orderRoutes(fastify) {
       return reply.code(409).send({
         error: `此項目已記錄過：${order[cols.time].toISOString()}`,
         order: serializeOrder(existing),
+      });
+    }
+
+    // 如果沒有生產日期，自動設為今天
+    if (!order.productionDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      await fastify.prisma.order.update({
+        where: { orderNo },
+        data: { productionDate: today },
       });
     }
 
