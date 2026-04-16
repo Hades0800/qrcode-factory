@@ -111,6 +111,43 @@ const ORDER_INCLUDE = { leader: true, pauseEvents: true, stepEntries: { orderBy:
 export default async function orderRoutes(fastify) {
   fastify.addHook('onRequest', fastify.authenticate);
 
+  // 一次性修正：把所有工單的 productionDate 設為第一筆活動日期
+  fastify.post('/fix-production-dates', async (request, reply) => {
+    if (!request.user.isAdmin) return reply.code(403).send({ error: '需要管理員權限' });
+    const orders = await fastify.prisma.order.findMany({
+      include: { stepEntries: { orderBy: { recordedAt: 'asc' }, take: 1 }, pauseEvents: { orderBy: { startAt: 'asc' }, take: 1 } },
+    });
+    let fixed = 0;
+    for (const o of orders) {
+      // 收集所有活動時間
+      const times = [];
+      ['step1At','step2At','step3At','step4At','step5At','step6At','step7At','step11At','step21At','step22At','step23At'].forEach(k => {
+        if (o[k]) times.push(new Date(o[k]));
+      });
+      if (o.stepEntries && o.stepEntries.length > 0) times.push(new Date(o.stepEntries[0].recordedAt));
+      if (o.pauseEvents && o.pauseEvents.length > 0) times.push(new Date(o.pauseEvents[0].startAt));
+      if (times.length === 0) {
+        // 沒有活動，清除 productionDate
+        if (o.productionDate) {
+          await fastify.prisma.order.update({ where: { id: o.id }, data: { productionDate: null } });
+          fixed++;
+        }
+        continue;
+      }
+      // 取最早的活動時間，轉為台灣日期
+      const earliest = new Date(Math.min(...times.map(t => t.getTime())));
+      const twTime = new Date(earliest.getTime() + 8 * 60 * 60 * 1000);
+      const y = twTime.getUTCFullYear(), m = twTime.getUTCMonth(), d = twTime.getUTCDate();
+      const correctDate = new Date(Date.UTC(y, m, d));
+      const current = o.productionDate ? new Date(o.productionDate).getTime() : null;
+      if (current !== correctDate.getTime()) {
+        await fastify.prisma.order.update({ where: { id: o.id }, data: { productionDate: correctDate } });
+        fixed++;
+      }
+    }
+    return { ok: true, total: orders.length, fixed };
+  });
+
   // 上傳批次列表（必須在 /:orderNo 之前定義避免路由衝突）
   fastify.get('/upload-batches', async (request) => {
     const limit = Math.min(Number(request.query.limit) || 50, 200);
