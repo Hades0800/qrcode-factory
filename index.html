@@ -1105,7 +1105,7 @@ function renderSteps() {
     } else {
       body += '<div class="step-actions"><button class="btn-primary" data-scan="' + s.id + '">📷 掃描完成</button><button class="btn-success" data-done="' + s.id + '">✓ 已完成</button></div>';
     }
-    preHtml += `<div class="step${done ? ' done' : ''}"><div class="step-num">${numLabel}</div><div class="step-body">${body}</div></div>`;
+    preHtml += `<div class="step${done ? ' done' : ''}"><div class="step-body">${body}</div></div>`;
   });
 
   // stepEntries 按 stepNo 分組
@@ -1175,7 +1175,7 @@ function renderSteps() {
 
     const div = document.createElement('div');
     div.className = 'step' + (hasEntries ? ' done' : '');
-    div.innerHTML = `<div class="step-num">${numLabel}</div><div class="step-body">${body}</div>`;
+    div.innerHTML = `<div class="step-body">${body}</div>`;
     wrap.appendChild(div);
   });
 
