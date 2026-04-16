@@ -21,6 +21,9 @@ async function audit(prisma, request, action, target, detail) {
 }
 
 const STEP_COLS = {
+  '21': { time: 'step21At', note: null },
+  '22': { time: 'step22At', note: null },
+  '23': { time: 'step23At', note: null },
   '1':  { time: 'step1At',  note: null },
   '2':  { time: 'step2At',  note: null },
   '3':  { time: 'step3At',  note: null },
@@ -55,6 +58,7 @@ function serializeOrder(o) {
     machineNo: o.machineNo || '',
     leaderId: o.leaderId,
     leaderName: o.leader?.displayName || '',
+    step21At: o.step21At, step22At: o.step22At, step23At: o.step23At,
     step1At: o.step1At, step2At: o.step2At, step3At: o.step3At,
     step4At: o.step4At, step5At: o.step5At, step6At: o.step6At,
     step7At: o.step7At, step11At: o.step11At,

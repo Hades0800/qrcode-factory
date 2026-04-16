@@ -731,6 +731,12 @@
 // 部署 Zeabur 後端後，把 URL 貼這裡
 const API_URL = 'https://shangkai-manu-record.zeabur.app';
 
+const PRE_STEPS = [
+  { id: '21', title: '21. 設備啓動準備',   hint: '系統冷熱機與試模測試等' },
+  { id: '22', title: '22. 生產準備完成',   hint: '同前一工單模具與原料' },
+  { id: '23', title: '23. 生產無工令',     hint: '設備無稼動、預排作業' },
+];
+
 const STEPS = [
   { id: '1', title: '01. 原料準備與設置',     hint: '' },
   { id: '2', title: '02. 模刀具準備與安裝',   hint: '' },
@@ -743,11 +749,14 @@ const STEPS = [
 
 const ACTIONS_FINISH = { id: '11', title: '工單完成與結束', hint: '開始新的製造工單', style: 'act-success', icon: '✓' };
 const PAUSE_TYPES = [
-  { type: '12', title: '生產正常暫停稼動', hint: '休息時間、人力支援、隔日生產、順位調整、外賓參觀', style: 'act-warning', icon: '⏸', noteLabel: '暫停原因（可留白）' },
-  { type: '13', title: '生產異常停止稼動', hint: '設備故障、模具頓刀、品質異常', style: 'act-danger', icon: '⚠', noteLabel: '異常說明（可留白）' },
+  { type: '12', title: '生產正常暫停稼動', hint: '休息時間、人力支援、隔日生產、順位調整、外賓參觀', style: 'act-warning', icon: '⏸', noteLabel: '暫停原因' },
+  { type: '13', title: '生產異常停止稼動', hint: '設備故障、模具頓刀、品質異常', style: 'act-danger', icon: '⚠', noteLabel: '異常說明' },
 ];
 
 const STEP_FIELD = {
+  '21': { time: 'step21At', note: null },
+  '22': { time: 'step22At', note: null },
+  '23': { time: 'step23At', note: null },
   '1':  { time: 'step1At',  note: null },
   '2':  { time: 'step2At',  note: null },
   '3':  { time: 'step3At',  note: null },
@@ -1071,9 +1080,33 @@ function renderSteps() {
     wrap.style.pointerEvents = 'none';
   }
   const pauseNotice = isPaused ? '<div style="background:var(--brand);color:#fff;padding:10px 14px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;margin-bottom:12px;">⏸ 暫停中 — 請先恢復生產才能繼續操作</div>' : '';
+
+  // 21/22/23 作業準備
+  let preHtml = '<h2>作業準備</h2>';
+  PRE_STEPS.forEach(s => {
+    const f = STEP_FIELD[s.id];
+    const time = order[f.time];
+    const done = !!time;
+    const numLabel = s.title.match(/^(\d+)\./)?.[1] || s.id;
+    const titleText = s.title.replace(/^\d+\.\s*/, '');
+    let body = `<div class="title">${escapeHtml(titleText)}` +
+      (done ? '<span class="badge ok">已完成</span>' : '') + '</div>';
+    if (s.hint) body += '<div class="hint">' + s.hint + '</div>';
+    if (done) {
+      body += '<div class="time">✓ ' + fmtTime(time) + '</div>';
+      body += '<button class="btn-danger btn-block" data-clear="' + s.id + '"' + (isPaused ? ' disabled' : '') + '>取消此項</button>';
+    } else if (isPaused) {
+      body += '<div class="step-actions"><button class="btn-primary" disabled>📷 掃描完成</button><button class="btn-success" disabled>✓ 已完成</button></div>';
+    } else {
+      body += '<div class="step-actions"><button class="btn-primary" data-scan="' + s.id + '">📷 掃描完成</button><button class="btn-success" data-done="' + s.id + '">✓ 已完成</button></div>';
+    }
+    preHtml += `<div class="step${done ? ' done' : ''}"><div class="step-num">${numLabel}</div><div class="step-body">${body}</div></div>`;
+  });
+
   wrap.innerHTML = `
-    <h2>工序進度</h2>
     ${pauseNotice}
+    ${preHtml}
+    <h2 style="margin-top:16px;">工序進度</h2>
     <div class="progress-summary">
       <div class="text">
         已完成 ${doneCount} / ${STEPS.length} 項

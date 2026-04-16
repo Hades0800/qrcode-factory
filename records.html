@@ -366,6 +366,9 @@
             <th>工單號</th>
             <th>機台</th>
             <th>小組長</th>
+            <th>設備啓動</th>
+            <th>準備完成</th>
+            <th>無工令</th>
             <th>原料</th>
             <th>模刀具</th>
             <th>試模</th>
@@ -646,6 +649,9 @@ function render() {
         <td class="order-no">${escapeHtml(o.orderNo)} <span style="font-size:10px;color:var(--brand);">▶ 明細</span></td>
         <td class="machine">${escapeHtml(o.machineNo)}</td>
         <td>${escapeHtml(o.leaderName)}</td>
+        ${stepCell(o.step21At)}
+        ${stepCell(o.step22At)}
+        ${stepCell(o.step23At)}
         ${stepCell(o.step1At)}
         ${stepCell(o.step2At)}
         ${stepCell(o.step3At)}
@@ -751,14 +757,16 @@ $('exportBtn').onclick = () => {
   const headers = [
     '工單號','生產日期','機台','生產規格','模具','領料','數量','SPM','單重','總重量','刀數',
     '小組長',
+    '21.設備啓動','22.準備完成','23.無工令',
     '01.原料準備','02.模刀具','03.試模確認','04.斷續試稼','05.穩定生產','06.後工程','07.其他作業','11.完成',
-    '12.暫停次數','12.暫停秒數','13.異常次數','13.異常秒數','最後更新',
+    '暫停次數','暫停秒數','異常次數','異常秒數','最後更新',
   ];
   const rows = filtered.map(o => [
     o.orderNo, o.productionDate ? String(o.productionDate).slice(0,10) : '',
     o.machineNo, o.productSpec || '', o.moldSpec || '', o.material || '',
     o.dispatchQty || '', o.machineSPM || '', o.unitWeight || '', o.totalWeight || '', o.bladeCount || '',
     o.leaderName,
+    fmtTime(o.step21At), fmtTime(o.step22At), fmtTime(o.step23At),
     fmtTime(o.step1At), fmtTime(o.step2At), fmtTime(o.step3At), fmtTime(o.step4At),
     fmtTime(o.step5At), fmtTime(o.step6At), fmtTime(o.step7At), fmtTime(o.step11At),
     o.pause12 ? o.pause12.count : 0, o.pause12 ? o.pause12.totalSec : 0,

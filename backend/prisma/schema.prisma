@@ -37,6 +37,10 @@ model Order {
   unitWeight     Float?      // 一片理論重(kg)
   totalWeight    Float?      // 全部總重量(kg)
 
+  step21At  DateTime?  // 設備啓動準備
+  step22At  DateTime?  // 生產準備完成
+  step23At  DateTime?  // 生產無工令
+
   step1At   DateTime?
   step2At   DateTime?
   step3At   DateTime?
