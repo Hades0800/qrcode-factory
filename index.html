@@ -1103,40 +1103,63 @@ function renderSteps() {
     preHtml += `<div class="step${done ? ' done' : ''}"><div class="step-num">${numLabel}</div><div class="step-body">${body}</div></div>`;
   });
 
+  // stepEntries 按 stepNo 分組
+  const entriesByStep = {};
+  (order.stepEntries || []).forEach(e => {
+    if (!entriesByStep[e.stepNo]) entriesByStep[e.stepNo] = [];
+    entriesByStep[e.stepNo].push(e);
+  });
+  const stepsWithEntries = new Set(Object.keys(entriesByStep));
+  const newDoneCount = stepsWithEntries.size;
+  const newPct = Math.round(newDoneCount / STEPS.length * 100);
+
   wrap.innerHTML = `
     ${pauseNotice}
     ${preHtml}
     <h2 style="margin-top:16px;">工序進度</h2>
     <div class="progress-summary">
       <div class="text">
-        已完成 ${doneCount} / ${STEPS.length} 項
-        <small>掃描對應 QR 即可記錄時間</small>
+        已完成 ${newDoneCount} / ${STEPS.length} 項
+        <small>點「已完成」記錄（可重複填寫）</small>
       </div>
-      <div class="count">${pct}%</div>
-      <div class="progress-bar"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
+      <div class="count">${newPct}%</div>
+      <div class="progress-bar"><div class="progress-bar-fill" style="width:${newPct}%"></div></div>
     </div>
   `;
 
+  const now = Date.now();
   STEPS.forEach(s => {
-    const f = STEP_FIELD[s.id];
-    const time = order[f.time];
-    const done = !!time;
-    const div = document.createElement('div');
-    div.className = 'step' + (done ? ' done' : '');
+    const entries = entriesByStep[s.id] || [];
+    const hasEntries = entries.length > 0;
     const numLabel = s.title.match(/^(\d+)\./)?.[1] || s.id;
     const titleText = s.title.replace(/^\d+\.\s*/, '');
+
     let body = `<div class="title">${escapeHtml(titleText)}` +
-      (done ? '<span class="badge ok">已完成</span>' : '') +
+      (hasEntries ? `<span class="badge ok">×${entries.length}</span>` : '') +
       '</div>';
     if (s.hint) body += '<div class="hint">' + s.hint + '</div>';
-    if (done) {
-      body += '<div class="time">✓ ' + fmtTime(time) + '</div>';
-      body += '<button class="btn-danger btn-block" data-clear="' + s.id + '"' + (isPaused ? ' disabled' : '') + '>取消此項</button>';
-    } else if (isPaused) {
-      body += '<div class="step-actions"><button class="btn-primary" disabled>📷 掃描完成</button><button class="btn-success" disabled>✓ 已完成</button></div>';
+
+    // 每次紀錄
+    entries.forEach((e, i) => {
+      const elapsed = now - new Date(e.recordedAt).getTime();
+      const canCancel = elapsed < 5 * 60 * 1000;
+      body += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${canCancel ? 'var(--success-soft)' : '#f5f5f7'};border-radius:8px;">`;
+      body += `<span style="font-size:12px;color:var(--success);font-weight:600;flex:1;">✓ ${escapeHtml(titleText)}${entries.length > 1 ? (i+1) : ''} — ${fmtTime(e.recordedAt)}</span>`;
+      if (canCancel && !isPaused) {
+        body += `<button class="btn-danger" data-cancel-entry="${e.id}" style="padding:4px 10px;font-size:11px;min-height:28px;">取消</button>`;
+      }
+      body += '</div>';
+    });
+
+    // 已完成按鈕（永遠可再按）
+    if (isPaused) {
+      body += '<button class="btn-success btn-block" disabled>✓ 已完成</button>';
     } else {
-      body += '<div class="step-actions"><button class="btn-primary" data-scan="' + s.id + '">📷 掃描完成</button><button class="btn-success" data-done="' + s.id + '">✓ 已完成</button></div>';
+      body += `<button class="btn-success btn-block" data-record-step="${s.id}">✓ 已完成</button>`;
     }
+
+    const div = document.createElement('div');
+    div.className = 'step' + (hasEntries ? ' done' : '');
     div.innerHTML = `<div class="step-num">${numLabel}</div><div class="step-body">${body}</div>`;
     wrap.appendChild(div);
   });
@@ -1212,6 +1235,7 @@ function renderSteps() {
 
   startLiveTimers();
 
+  // 21/22/23 的掃描和已完成
   area.querySelectorAll('[data-scan]').forEach(b => {
     b.onclick = () => startStepScan(b.getAttribute('data-scan'));
   });
@@ -1220,6 +1244,13 @@ function renderSteps() {
   });
   area.querySelectorAll('[data-clear]').forEach(b => {
     b.onclick = () => clearStep(b.getAttribute('data-clear'));
+  });
+  // 01-07 的日誌式記錄
+  area.querySelectorAll('[data-record-step]').forEach(b => {
+    b.onclick = () => recordStepEntry(b.getAttribute('data-record-step'));
+  });
+  area.querySelectorAll('[data-cancel-entry]').forEach(b => {
+    b.onclick = () => cancelStepEntry(b.getAttribute('data-cancel-entry'));
   });
 
   $('bottomBar').classList.remove('show');
@@ -1235,6 +1266,30 @@ function getCurrentStep() {
     }
   });
   return latest ? latest.title : '尚未開始';
+}
+
+// 記錄工序（日誌式，可重複）
+async function recordStepEntry(stepNo) {
+  if (!orderNo) return;
+  const stepDef = STEPS.find(s => s.id === stepNo);
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/step-entries', {
+    method: 'POST',
+    body: { stepNo },
+  });
+  if (!r.ok) { toast(r.error, 'error'); return; }
+  order = r.data.order;
+  renderSteps();
+  toast('✓ ' + (stepDef ? stepDef.title : '工序 ' + stepNo), 'success');
+}
+
+// 取消工序紀錄（5 分鐘內）
+async function cancelStepEntry(entryId) {
+  if (!confirm('確定取消此筆紀錄？（5 分鐘內可取消）')) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/step-entries/' + entryId, { method: 'DELETE' });
+  if (!r.ok) { toast(r.error, 'error'); return; }
+  order = r.data.order;
+  renderSteps();
+  toast('已取消', 'success');
 }
 
 async function startPause(p) {

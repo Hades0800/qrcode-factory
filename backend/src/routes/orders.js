@@ -68,12 +68,16 @@ function serializeOrder(o) {
     machineSPM: o.machineSPM, unitWeight: o.unitWeight, totalWeight: o.totalWeight,
     pause12: summarize('12'),
     pause13: summarize('13'),
+    stepEntries: (o.stepEntries || []).map(e => ({
+      id: e.id, stepNo: e.stepNo, seq: e.seq,
+      recordedAt: e.recordedAt, leaderName: e.leaderName,
+    })),
     createdAt: o.createdAt,
     updatedAt: o.updatedAt,
   };
 }
 
-const ORDER_INCLUDE = { leader: true, pauseEvents: true };
+const ORDER_INCLUDE = { leader: true, pauseEvents: true, stepEntries: { orderBy: { recordedAt: 'asc' } } };
 
 export default async function orderRoutes(fastify) {
   fastify.addHook('onRequest', fastify.authenticate);
@@ -146,6 +150,49 @@ export default async function orderRoutes(fastify) {
       });
     }
     return { order: serializeOrder(order) };
+  });
+
+  // 記錄工序（可重複，日誌式）
+  fastify.post('/:orderNo/step-entries', async (request, reply) => {
+    const orderNo = String(request.params.orderNo || '').toUpperCase();
+    const { stepNo } = request.body || {};
+    if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
+    if (!['1','2','3','4','5','6','7'].includes(stepNo)) {
+      return reply.code(400).send({ error: '無效工序編號' });
+    }
+    const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
+    if (!order) return reply.code(404).send({ error: '找不到工單' });
+    // 計算此工序第幾次
+    const prevCount = await fastify.prisma.stepEntry.count({
+      where: { orderId: order.id, stepNo },
+    });
+    const entry = await fastify.prisma.stepEntry.create({
+      data: {
+        orderId: order.id,
+        stepNo,
+        seq: prevCount + 1,
+        leaderId: request.user.id,
+        leaderName: request.user.displayName || null,
+      },
+    });
+    const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
+    return { entry, order: serializeOrder(updated) };
+  });
+
+  // 取消工序紀錄（5 分鐘內）
+  fastify.delete('/:orderNo/step-entries/:id', async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!id) return reply.code(400).send({ error: '無效 id' });
+    const entry = await fastify.prisma.stepEntry.findUnique({ where: { id } });
+    if (!entry) return reply.code(404).send({ error: '找不到紀錄' });
+    const elapsed = Date.now() - new Date(entry.recordedAt).getTime();
+    if (elapsed > 5 * 60 * 1000 && !request.user.isAdmin) {
+      return reply.code(403).send({ error: '已超過 5 分鐘，無法取消（管理員不受此限制）' });
+    }
+    await fastify.prisma.stepEntry.delete({ where: { id } });
+    const orderNo = String(request.params.orderNo || '').toUpperCase();
+    const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
+    return { ok: true, order: updated ? serializeOrder(updated) : null };
   });
 
   // 設定機台號

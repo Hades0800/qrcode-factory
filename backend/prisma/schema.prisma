@@ -59,12 +59,27 @@ model Order {
 
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-  pauseEvents PauseEvent[]
+  pauseEvents  PauseEvent[]
+  stepEntries  StepEntry[]
 
   @@index([orderNo])
   @@index([productionDate])
   @@index([machineNo])
   @@index([updatedAt])
+}
+
+model StepEntry {
+  id         Int      @id @default(autoincrement())
+  orderId    Int
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  stepNo     String   // "1"~"7"
+  seq        Int      // 第幾次（1, 2, 3...）
+  recordedAt DateTime @default(now())
+  leaderId   Int?
+  leaderName String?
+
+  @@index([orderId])
+  @@index([orderId, stepNo])
 }
 
 model AuditLog {
