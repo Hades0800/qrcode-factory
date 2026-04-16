@@ -1085,27 +1085,51 @@ function renderSteps() {
     wrap.style.pointerEvents = 'none';
   }
   const pauseNotice = isPaused ? '<div style="background:var(--brand);color:#fff;padding:10px 14px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;margin-bottom:12px;">⏸ 暫停中 — 請先恢復生產才能繼續操作</div>' : '';
+  const now = Date.now();
 
-  // 21/22/23 作業準備
+  // 21/22/23 作業準備（邏輯同工序進度）
   let preHtml = '<h2>作業準備</h2>';
+  const preEntriesByStep = {};
+  (order.stepEntries || []).filter(e => ['21','22','23'].includes(e.stepNo)).forEach(e => {
+    if (!preEntriesByStep[e.stepNo]) preEntriesByStep[e.stepNo] = [];
+    preEntriesByStep[e.stepNo].push(e);
+  });
   PRE_STEPS.forEach(s => {
-    const f = STEP_FIELD[s.id];
-    const time = order[f.time];
-    const done = !!time;
-    const numLabel = s.title.match(/^(\d+)\./)?.[1] || s.id;
+    const entries = preEntriesByStep[s.id] || [];
+    const hasEntries = entries.length > 0;
     const titleText = s.title.replace(/^\d+\.\s*/, '');
     let body = `<div class="title">${escapeHtml(titleText)}` +
-      (done ? '<span class="badge ok">已完成</span>' : '') + '</div>';
+      (hasEntries ? `<span class="badge ok">×${entries.length}</span>` : '') + '</div>';
     if (s.hint) body += '<div class="hint">' + s.hint + '</div>';
-    if (done) {
-      body += '<div class="time">✓ ' + fmtTime(time) + '</div>';
-      body += '<button class="btn-danger btn-block" data-clear="' + s.id + '"' + (isPaused ? ' disabled' : '') + '>取消此項</button>';
-    } else if (isPaused) {
-      body += '<div class="step-actions"><button class="btn-primary" disabled>📷 掃描完成</button><button class="btn-success" disabled>✓ 已完成</button></div>';
+
+    entries.forEach((e, i) => {
+      const elapsed = now - new Date(e.recordedAt).getTime();
+      const canCancel = elapsed < 5 * 60 * 1000;
+      const manualTag = e.isManual ? '<span class="manual-tag">補登</span>' : '';
+      body += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${e.isManual ? '#fffbe6' : (canCancel ? 'var(--success-soft)' : '#f5f5f7')};border-radius:8px;">`;
+      body += `<span style="font-size:12px;color:var(--success);font-weight:600;flex:1;">✓ ${escapeHtml(titleText)}${entries.length > 1 ? (i+1) : ''} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
+      if (canCancel && !isPaused) {
+        body += `<button class="btn-danger" data-cancel-entry="${e.id}" style="padding:4px 10px;font-size:11px;min-height:28px;">取消</button>`;
+      }
+      body += '</div>';
+    });
+
+    if (isPaused) {
+      body += '<button class="btn-success btn-block" disabled>✓ 已完成</button>';
     } else {
-      body += '<div class="step-actions"><button class="btn-primary" data-scan="' + s.id + '">📷 掃描完成</button><button class="btn-success" data-done="' + s.id + '">✓ 已完成</button></div>';
+      body += `<div style="display:flex;gap:8px;">`;
+      body += `<button class="btn-success" style="flex:1;" data-record-step="${s.id}">✓ 已完成</button>`;
+      body += `<button class="btn-secondary" data-backfill="${s.id}" style="flex:0 0 auto;padding:10px 14px;font-size:13px;color:#b8860b;">📝 補登</button>`;
+      body += `</div>`;
+      body += `<div class="backfill-form" id="backfill-${s.id}" style="display:none;">`;
+      body += `<input type="date" id="bf-date-${s.id}" value="${todayYmd()}">`;
+      body += `<input type="time" id="bf-time-${s.id}" step="1" value="">`;
+      body += `<button class="btn-primary" data-backfill-submit="${s.id}">確認補登</button>`;
+      body += `<button class="btn-secondary" data-backfill-cancel="${s.id}">取消</button>`;
+      body += `</div>`;
     }
-    preHtml += `<div class="step${done ? ' done' : ''}"><div class="step-body">${body}</div></div>`;
+
+    preHtml += `<div class="step${hasEntries ? ' done' : ''}"><div class="step-body">${body}</div></div>`;
   });
 
   // stepEntries 按 stepNo 分組
@@ -1132,7 +1156,6 @@ function renderSteps() {
     </div>
   `;
 
-  const now = Date.now();
   STEPS.forEach(s => {
     const entries = entriesByStep[s.id] || [];
     const hasEntries = entries.length > 0;
@@ -1320,7 +1343,7 @@ async function backfillStepEntry(stepNo) {
 // 記錄工序（日誌式，可重複）
 async function recordStepEntry(stepNo) {
   if (!orderNo) return;
-  const stepDef = STEPS.find(s => s.id === stepNo);
+  const stepDef = STEPS.find(s => s.id === stepNo) || PRE_STEPS.find(s => s.id === stepNo);
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/step-entries', {
     method: 'POST',
     body: { stepNo },
