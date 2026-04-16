@@ -243,6 +243,13 @@
     <div id="leadersTable">載入中...</div>
   </div>
 
+  <div class="card">
+    <h2>系統工具</h2>
+    <button class="btn-primary btn-block" id="fixDatesBtn" style="margin-bottom:8px;">修正所有工單生產日期</button>
+    <p style="font-size:12px;color:var(--muted);margin:0;">將所有工單的生產日期更新為第一筆實際活動的日期</p>
+    <div id="fixDatesResult" style="margin-top:8px;"></div>
+  </div>
+
 </div>
 
 <div id="toast"></div>
@@ -331,6 +338,18 @@ async function deleteLeader(id, name) {
   toast('已刪除', 'success');
   loadLeaders();
 }
+
+$('fixDatesBtn').onclick = async () => {
+  if (!confirm('確定修正所有工單的生產日期？\n\n將根據第一筆實際活動時間重新設定。')) return;
+  $('fixDatesBtn').disabled = true;
+  $('fixDatesBtn').textContent = '修正中...';
+  const r = await api('/api/orders/fix-production-dates', { method: 'POST' });
+  $('fixDatesBtn').disabled = false;
+  $('fixDatesBtn').textContent = '修正所有工單生產日期';
+  if (!r.ok) { toast(r.error || '修正失敗', 'error'); return; }
+  $('fixDatesResult').innerHTML = `<span style="color:var(--success);font-weight:600;">✓ 完成：共 ${r.data.total} 筆工單，修正了 ${r.data.fixed} 筆</span>`;
+  toast('修正完成', 'success');
+};
 
 if (API_URL.startsWith('PASTE_')) {
   toast('尚未設定 API_URL，請先部署後端', 'error');
