@@ -115,6 +115,41 @@ await fastify.register(authRoutes, { prefix: '/api/auth' });
 await fastify.register(orderRoutes, { prefix: '/api/orders' });
 await fastify.register(adminRoutes, { prefix: '/api/admin' });
 
+// ── 修正工單日期 ──
+fastify.post('/api/fix-dates', {
+  onRequest: [fastify.authenticate, fastify.requireAdmin],
+}, async () => {
+  const orders = await fastify.prisma.order.findMany({
+    include: { stepEntries: { orderBy: { recordedAt: 'asc' }, take: 1 }, pauseEvents: { orderBy: { startAt: 'asc' }, take: 1 } },
+  });
+  let fixed = 0;
+  for (const o of orders) {
+    const times = [];
+    ['step1At','step2At','step3At','step4At','step5At','step6At','step7At','step11At','step21At','step22At','step23At'].forEach(k => {
+      if (o[k]) times.push(new Date(o[k]));
+    });
+    if (o.stepEntries && o.stepEntries.length > 0) times.push(new Date(o.stepEntries[0].recordedAt));
+    if (o.pauseEvents && o.pauseEvents.length > 0) times.push(new Date(o.pauseEvents[0].startAt));
+    if (times.length === 0) {
+      if (o.productionDate) {
+        await fastify.prisma.order.update({ where: { id: o.id }, data: { productionDate: null } });
+        fixed++;
+      }
+      continue;
+    }
+    const earliest = new Date(Math.min(...times.map(t => t.getTime())));
+    const twTime = new Date(earliest.getTime() + 8 * 60 * 60 * 1000);
+    const y = twTime.getUTCFullYear(), m = twTime.getUTCMonth(), d = twTime.getUTCDate();
+    const correctDate = new Date(Date.UTC(y, m, d));
+    const current = o.productionDate ? new Date(o.productionDate).getTime() : null;
+    if (current !== correctDate.getTime()) {
+      await fastify.prisma.order.update({ where: { id: o.id }, data: { productionDate: correctDate } });
+      fixed++;
+    }
+  }
+  return { ok: true, total: orders.length, fixed };
+});
+
 // ── 無工令事件 ──
 const ALLOWED_MACHINES = new Set(['No1-350','No2-250','No3-60','No4-90','No5-40','No6-40']);
 
