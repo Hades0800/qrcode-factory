@@ -563,17 +563,14 @@ function renderContent() {
     machineOrders.forEach(o => {
       const isActive = activeOrder && o.orderNo === activeOrder.orderNo;
       const steps = countSteps(o);
-      const timeline = buildTimeline(o);
+      const timeline = buildTimeline(o, me && me.isAdmin);
       const isCarryOver = o.productionDate && !isToday(o.productionDate);
       const carryOverTag = isCarryOver ? '<span style="background:#f0ad4e;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;margin-left:8px;font-weight:700;">隔日生產</span>' : '';
       html += `
         <div class="order-card${isActive ? ' active' : ''}">
           <div class="oc-header">
             <div class="oc-no">${escapeHtml(o.orderNo)}${carryOverTag}</div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <div class="oc-badge">${o.step11At ? '已完成' : (steps > 0 ? '生產中' : '等待中')}</div>
-              ${me && me.isAdmin ? `<button style="background:var(--brand);color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;" data-del-order="${escapeHtml(o.orderNo)}">刪除</button>` : ''}
-            </div>
+            <div class="oc-badge">${o.step11At ? '已完成' : (steps > 0 ? '生產中' : '等待中')}</div>
           </div>
           <div class="order-info">
             <span class="oi-label">製造單號</span><span class="oi-value">${escapeHtml(o.orderNo)}</span>
@@ -596,26 +593,29 @@ function renderContent() {
 
   content.innerHTML = html;
 
-  // 刪除按鈕事件
-  content.querySelectorAll('[data-del-order]').forEach(b => {
-    b.onclick = () => deleteOrder(b.getAttribute('data-del-order'));
+  // 刪除單筆實態按鈕事件
+  content.querySelectorAll('[data-del-entry]').forEach(b => {
+    b.onclick = () => deleteEntry(b.getAttribute('data-del-entry'), b.getAttribute('data-order'));
   });
 }
 
-async function deleteOrder(orderNo) {
-  if (!confirm('確定刪除工單「' + orderNo + '」？\n\n⚠️ 此動作無法復原，所有掃描紀錄都會消失。')) return;
-  const r = await api('/api/orders/' + encodeURIComponent(orderNo), { method: 'DELETE' });
+async function deleteEntry(entryId, orderNo) {
+  if (!confirm('確定刪除這筆實態紀錄？')) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/step-entries/' + entryId, { method: 'DELETE' });
   if (!r.ok) { toast(r.error || '刪除失敗', 'error'); return; }
-  allOrders = allOrders.filter(o => o.orderNo !== orderNo);
+  if (r.data && r.data.order) {
+    const idx = allOrders.findIndex(o => o.orderNo === orderNo);
+    if (idx >= 0) allOrders[idx] = r.data.order;
+  }
   renderContent();
-  toast('已刪除 ' + orderNo, 'success');
+  toast('已刪除', 'success');
 }
 
 function countSteps(o) {
   return ['step1At','step2At','step3At','step4At','step5At','step6At','step7At'].filter(k => o[k]).length;
 }
 
-function buildTimeline(o) {
+function buildTimeline(o, isAdmin) {
   const items = [];
   const stepNameMap = {};
   STEP_LABELS.forEach(s => stepNameMap[s.key] = s.label);
@@ -623,7 +623,7 @@ function buildTimeline(o) {
   // 舊格式 stepXAt
   STEP_LABELS.forEach(s => {
     if (o[s.key]) {
-      items.push({ time: new Date(o[s.key]), label: s.label, type: 'step' });
+      items.push({ time: new Date(o[s.key]), label: s.label, type: 'step', entryId: null });
     }
   });
 
@@ -632,7 +632,7 @@ function buildTimeline(o) {
     const labelMap = {'1':'原料準備與設置','2':'模刀具準備與安裝','3':'試模與規格品質確認','4':'斷續試稼生產製造','5':'穩定連續生產製造','6':'後工程接續生產','7':'其他作業','21':'設備啓動準備','22':'生產準備完成','23':'生產無工令'};
     const name = labelMap[e.stepNo] || ('工序 ' + e.stepNo);
     const suffix = (e.seq > 1 ? e.seq : '') + (e.isManual ? '（補登）' : '');
-    items.push({ time: new Date(e.recordedAt), label: name + suffix, type: 'step' });
+    items.push({ time: new Date(e.recordedAt), label: name + suffix, type: 'step', entryId: e.id });
   });
 
   // 暫停事件
@@ -687,11 +687,12 @@ function buildTimeline(o) {
       }
     }
 
+    const delBtn = isAdmin && it.entryId ? ` <button data-del-entry="${it.entryId}" data-order="${escapeHtml(o.orderNo)}" style="background:var(--brand);color:#fff;border:none;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer;margin-left:6px;">✕</button>` : '';
     return `
       <li class="${cls}">
         <div class="tl-dot"></div>
         <div class="tl-time">${dateStr}<span style="font-size:10px;color:var(--muted);font-weight:500;">${diffStr}</span></div>
-        <div class="tl-label">${escapeHtml(it.label)}</div>
+        <div class="tl-label">${escapeHtml(it.label)}${delBtn}</div>
       </li>
     `;
   }).join('');
