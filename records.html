@@ -162,11 +162,61 @@
     white-space: nowrap;
   }
   tr:hover { background: #fafafc; }
-  td.order-no { font-weight: 700; color: var(--ink); }
-  td.machine { color: var(--brand); font-weight: 600; }
-  td.step-time { font-size: 11px; color: var(--success); }
-  td.step-time.empty { color: #ccc; }
-  td.note { white-space: normal; max-width: 200px; font-size: 12px; color: var(--text); }
+  /* 工單卡片（直向顯示） */
+  .order-list { display: flex; flex-direction: column; gap: 12px; }
+  .rec-card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.02);
+    border-left: 4px solid var(--border);
+    cursor: pointer;
+    transition: box-shadow .15s;
+  }
+  .rec-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+  .rec-card.has-complete { border-left-color: var(--success); }
+  .rec-card .rc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .rec-card .rc-no { font-size: 20px; font-weight: 800; color: var(--ink); }
+  .rec-card .rc-badge {
+    font-size: 11px; font-weight: 700; padding: 4px 12px;
+    border-radius: 10px; background: var(--border); color: var(--muted);
+  }
+  .rec-card .rc-badge.done { background: var(--success); color: #fff; }
+  .rec-card .rc-badge.active { background: var(--brand-soft); color: var(--brand); }
+  .rec-card .rc-meta {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    font-size: 14px; color: var(--muted); margin-bottom: 14px;
+  }
+  .rec-card .rc-meta strong { color: var(--ink); }
+  .rec-card .rc-steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 6px;
+  }
+  .rc-step {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border-radius: 8px; font-size: 14px;
+  }
+  .rc-step.done { background: var(--success-soft); }
+  .rc-step.empty { background: var(--bg); color: #ccc; }
+  .rc-step .rs-label { font-weight: 600; color: var(--text); flex: 1; white-space: nowrap; }
+  .rc-step.done .rs-label { color: var(--success); }
+  .rc-step .rs-time { font-size: 12px; color: var(--success); font-weight: 600; white-space: nowrap; }
+  .rc-card-pause {
+    display: flex; gap: 16px; margin-top: 10px; font-size: 13px; color: var(--muted);
+    padding-top: 10px; border-top: 1px solid var(--border);
+  }
+  .rc-card-pause strong { color: var(--ink); }
+  .rc-expand { font-size: 12px; color: var(--brand); margin-top: 10px; text-align: right; }
+  .rc-detail {
+    display: none; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
+  }
+  .rc-detail.show { display: block; }
 
   /* 工單資訊卡片（手機優化） */
   .info-card {
@@ -359,35 +409,8 @@
     </div>
   </div>
 
-  <div class="card">
-    <div class="table-wrap">
-      <table id="ordersTable">
-        <thead>
-          <tr>
-            <th>工單號</th>
-            <th>機台</th>
-            <th>小組長</th>
-            <th>原料</th>
-            <th>模刀具</th>
-            <th>試模</th>
-            <th>斷續</th>
-            <th>穩定</th>
-            <th>後工程</th>
-            <th>其他</th>
-            <th>完成</th>
-            <th>暫停次數</th>
-            <th>暫停累計</th>
-            <th>異常次數</th>
-            <th>異常累計</th>
-            <th>最後更新</th>
-            <th id="actionTh" style="display:none;">操作</th>
-          </tr>
-        </thead>
-        <tbody id="ordersBody">
-          <tr><td colspan="15" class="empty">載入中...</td></tr>
-        </tbody>
-      </table>
-    </div>
+  <div class="order-list" id="ordersArea">
+    <div style="text-align:center;color:var(--muted);padding:40px;font-size:15px;">載入中...</div>
   </div>
 
 </div>
@@ -509,21 +532,59 @@ function render() {
     <div class="stat-card"><div class="label">進行中</div><div class="value">${ongoing}</div></div>
   `;
 
+  const area = $('ordersArea');
   if (filtered.length === 0) {
-    $('ordersBody').innerHTML = '<tr><td colspan="17" class="empty">沒有符合條件的工單</td></tr>';
+    area.innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px;font-size:15px;">沒有符合條件的工單</div>';
     return;
   }
 
   const isAdmin = me && me.isAdmin;
-  const colCount = isAdmin ? 17 : 16;
-  $('ordersBody').innerHTML = filtered.map((o, idx) => {
-    const done = countDone(o);
-    const allEvents = [
-      ...((o.pause12 && o.pause12.history) || []).map(e => Object.assign({}, e, { label: '正常暫停' })),
-      ...((o.pause13 && o.pause13.history) || []).map(e => Object.assign({}, e, { label: '異常停止' })),
-    ].sort((a, b) => new Date(a.startAt) - new Date(b.startAt));
-    const hasEvents = allEvents.length > 0;
-    // 工單資訊區塊（手機優化）
+  const STEP_NAMES = [
+    { key: 'step1At', label: '原料準備' },
+    { key: 'step2At', label: '模刀具' },
+    { key: 'step3At', label: '試模確認' },
+    { key: 'step4At', label: '斷續試稼' },
+    { key: 'step5At', label: '穩定生產' },
+    { key: 'step6At', label: '後工程' },
+    { key: 'step7At', label: '其他作業' },
+    { key: 'step11At', label: '完成' },
+  ];
+
+  area.innerHTML = filtered.map((o, idx) => {
+    const isComplete = !!o.step11At;
+    const p12 = o.pause12 || { count: 0, totalSec: 0 };
+    const p13 = o.pause13 || { count: 0, totalSec: 0 };
+
+    // Header
+    let badge = '';
+    if (isComplete) badge = '<span class="rc-badge done">已完成</span>';
+    else if (countDone(o) > 0) badge = '<span class="rc-badge active">生產中</span>';
+    else badge = '<span class="rc-badge">待生產</span>';
+
+    // Steps grid
+    const stepsHtml = STEP_NAMES.map(s => {
+      const t = o[s.key];
+      return `<div class="rc-step ${t ? 'done' : 'empty'}">
+        <span class="rs-label">${s.label}</span>
+        <span class="rs-time">${t ? fmtTimeShort(t) : '—'}</span>
+      </div>`;
+    }).join('');
+
+    // stepEntries（新日誌式）
+    let entriesHtml = '';
+    if (o.stepEntries && o.stepEntries.length > 0) {
+      const entryLabels = {'1':'原料準備','2':'模刀具','3':'試模確認','4':'斷續試稼','5':'穩定生產','6':'後工程','7':'其他作業','21':'設備啓動','22':'準備完成','23':'無工令'};
+      entriesHtml = o.stepEntries.map(e => {
+        const name = entryLabels[e.stepNo] || ('工序'+e.stepNo);
+        const manual = e.isManual ? '<span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;margin-left:4px;">補登</span>' : '';
+        return `<div class="rc-step done">
+          <span class="rs-label">${escapeHtml(name)}${e.seq > 1 ? e.seq : ''}${manual}</span>
+          <span class="rs-time">${fmtTimeShort(e.recordedAt)}</span>
+        </div>`;
+      }).join('');
+    }
+
+    // Detail (工單資訊 + 暫停明細)
     const textFields = [
       { label: '生產日期', icon: '📅', value: o.productionDate ? String(o.productionDate).slice(0,10) : '' },
       { label: '生產規格', icon: '🔩', value: o.productSpec || '' },
@@ -537,94 +598,61 @@ function render() {
       { label: '一片理論重', value: o.unitWeight, unit: 'kg' },
       { label: '全部總重量', value: o.totalWeight, unit: 'kg' },
     ];
-    const textHtml = textFields.map(f => `
-      <div class="info-row">
-        <div class="info-label"><span class="info-icon">${f.icon}</span>${f.label}</div>
-        <div class="info-value">${f.value ? escapeHtml(f.value) : '<span class="info-empty">—</span>'}</div>
-      </div>
-    `).join('');
-    const numberHtml = numberFields.map(f => `
-      <div class="info-stat">
-        <div class="info-stat-label">${f.label}</div>
-        <div class="info-stat-value">${f.value ? escapeHtml(f.value) + (f.unit ? `<span class="info-stat-unit">${f.unit}</span>` : '') : '<span class="info-empty">—</span>'}</div>
-      </div>
-    `).join('');
     const infoHtml = `
       <div class="info-card">
         <div class="info-section-title">工單資訊</div>
-        <div class="info-text-group">${textHtml}</div>
-        <div class="info-stats-grid">${numberHtml}</div>
+        <div class="info-text-group">${textFields.map(f => `<div class="info-row"><div class="info-label"><span class="info-icon">${f.icon}</span>${f.label}</div><div class="info-value">${f.value ? escapeHtml(f.value) : '<span class="info-empty">—</span>'}</div></div>`).join('')}</div>
+        <div class="info-stats-grid">${numberFields.map(f => `<div class="info-stat"><div class="info-stat-label">${f.label}</div><div class="info-stat-value">${f.value ? escapeHtml(f.value) + (f.unit ? '<span class="info-stat-unit">' + f.unit + '</span>' : '') : '<span class="info-empty">—</span>'}</div></div>`).join('')}</div>
       </div>
     `;
-
+    const allEvents = [
+      ...((o.pause12 && o.pause12.history) || []).map(e => Object.assign({}, e, { label: '正常暫停' })),
+      ...((o.pause13 && o.pause13.history) || []).map(e => Object.assign({}, e, { label: '異常停止' })),
+    ].sort((a, b) => new Date(a.startAt) - new Date(b.startAt));
     let eventsHtml = '';
-    if (hasEvents) {
-      const eventRows = allEvents.map((e, i) => {
-        const typeClass = e.label === '異常停止' ? 'type-13' : 'type-12';
-        return `<tr>
-          <td>${i + 1}</td>
-          <td class="${typeClass}">${e.label}</td>
-          <td>${escapeHtml(e.activeStep || '—')}</td>
-          <td>${fmtTimeShort(e.startAt)}</td>
-          <td>${e.endAt ? fmtTimeShort(e.endAt) : '進行中…'}</td>
-          <td>${e.duration ? fmtDur(e.duration) : '—'}</td>
-          <td>${escapeHtml(e.note || '')}</td>
-        </tr>`;
-      }).join('');
-      eventsHtml = `
-        <h4>暫停 / 異常明細</h4>
-        <table class="detail-table">
-          <thead><tr><th>#</th><th>類型</th><th>當下工序</th><th>暫停時間</th><th>恢復時間</th><th>持續時間</th><th>備註</th></tr></thead>
-          <tbody>${eventRows}</tbody>
-        </table>
-      `;
+    if (allEvents.length > 0) {
+      eventsHtml = `<div style="margin-top:14px;"><div class="info-section-title">暫停 / 異常明細</div>` +
+        allEvents.map((e, i) => `<div class="rc-step ${e.label === '異常停止' ? 'done' : 'done'}" style="background:${e.label === '異常停止' ? 'var(--brand-soft)' : '#fffbe6'};margin-bottom:4px;">
+          <span class="rs-label" style="color:${e.label === '異常停止' ? 'var(--brand)' : '#b8860b'};">${e.label}${e.note ? '（' + escapeHtml(e.note) + '）' : ''}</span>
+          <span class="rs-time" style="color:var(--muted);">${fmtTimeShort(e.startAt)} → ${e.endAt ? fmtTimeShort(e.endAt) : '進行中'} ${e.duration ? fmtDur(e.duration) : ''}</span>
+        </div>`).join('') + '</div>';
     }
 
-    const detailHtml = `
-      <tr class="detail-row" id="detail-${idx}" style="display:none;">
-        <td colspan="${colCount}">
-          <div class="detail-panel">
-            ${infoHtml}
-            ${eventsHtml}
-          </div>
-        </td>
-      </tr>
-    `;
-    const p12 = o.pause12 || { count: 0, totalSec: 0 };
-    const p13 = o.pause13 || { count: 0, totalSec: 0 };
     return `
-      <tr class="clickable" onclick="toggleDetail(${idx})">
-        <td class="order-no">${escapeHtml(o.orderNo)} <span style="font-size:10px;color:var(--brand);">▶ 明細</span></td>
-        <td class="machine">${escapeHtml(o.machineNo)}</td>
-        <td>${escapeHtml(o.leaderName)}</td>
-        ${stepCell(o.step1At)}
-        ${stepCell(o.step2At)}
-        ${stepCell(o.step3At)}
-        ${stepCell(o.step4At)}
-        ${stepCell(o.step5At)}
-        ${stepCell(o.step6At)}
-        ${stepCell(o.step7At)}
-        ${stepCell(o.step11At)}
-        <td>${p12.count} 次</td>
-        <td>${fmtDur(p12.totalSec)}</td>
-        <td>${p13.count} 次</td>
-        <td>${fmtDur(p13.totalSec)}</td>
-        <td style="font-size:11px;color:#666;">${escapeHtml(fmtTime(o.updatedAt))}</td>
-        ${isAdmin ? `<td><button class="btn-secondary" data-del="${escapeHtml(o.orderNo)}" style="padding:6px 12px;font-size:12px;color:var(--brand);border-color:var(--brand);" onclick="event.stopPropagation()">刪除</button></td>` : ''}
-      </tr>
-      ${detailHtml}
+      <div class="rec-card${isComplete ? ' has-complete' : ''}" onclick="toggleDetail(${idx})">
+        <div class="rc-header">
+          <div class="rc-no">${escapeHtml(o.orderNo)}</div>
+          ${badge}
+        </div>
+        <div class="rc-meta">
+          <span>🏭 <strong>${escapeHtml(o.machineNo || '—')}</strong></span>
+          <span>👤 <strong>${escapeHtml(o.leaderName || '—')}</strong></span>
+          <span>📅 ${o.productionDate ? String(o.productionDate).slice(0,10) : '—'}</span>
+        </div>
+        <div class="rc-steps">${stepsHtml}</div>
+        ${entriesHtml ? '<div style="margin-top:8px;"><div style="font-size:11px;color:var(--muted);font-weight:700;margin-bottom:4px;">工序日誌</div><div class="rc-steps">' + entriesHtml + '</div></div>' : ''}
+        ${(p12.count > 0 || p13.count > 0) ? `<div class="rc-card-pause">
+          ${p12.count > 0 ? `<span>⏸ 暫停 <strong>${p12.count}次</strong> ${fmtDur(p12.totalSec)}</span>` : ''}
+          ${p13.count > 0 ? `<span>⚠ 異常 <strong>${p13.count}次</strong> ${fmtDur(p13.totalSec)}</span>` : ''}
+        </div>` : ''}
+        <div class="rc-expand">▶ 展開工單明細${isAdmin ? ` <button class="btn-danger" data-del="${escapeHtml(o.orderNo)}" style="padding:4px 10px;font-size:11px;min-height:24px;margin-left:8px;" onclick="event.stopPropagation()">刪除</button>` : ''}</div>
+        <div class="rc-detail" id="detail-${idx}">
+          ${infoHtml}
+          ${eventsHtml}
+        </div>
+      </div>
     `;
   }).join('');
 
-  $('ordersBody').querySelectorAll('[data-del]').forEach(b => {
+  $('ordersArea').querySelectorAll('[data-del]').forEach(b => {
     b.onclick = () => deleteOrder(b.getAttribute('data-del'));
   });
 }
 
 function toggleDetail(idx) {
-  const row = document.getElementById('detail-' + idx);
-  if (!row) return;
-  row.style.display = row.style.display === 'none' ? '' : 'none';
+  const el = document.getElementById('detail-' + idx);
+  if (!el) return;
+  el.classList.toggle('show');
 }
 
 async function deleteOrder(orderNo) {
