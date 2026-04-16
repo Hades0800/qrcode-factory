@@ -1294,10 +1294,17 @@ async function cancelStepEntry(entryId) {
 
 async function startPause(p) {
   if (!orderNo) return;
-  let note = prompt(p.noteLabel + '：', '') || '';
+  let note = '';
+  while (!note.trim()) {
+    note = prompt('【必填】' + p.noteLabel + '：', '') || '';
+    if (note === null || note === '') {
+      if (confirm('備註為必填。確定取消暫停？')) return;
+      note = '';
+    }
+  }
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/pause', {
     method: 'POST',
-    body: { type: p.type, note, activeStep: getCurrentStep() },
+    body: { type: p.type, note: note.trim(), activeStep: getCurrentStep() },
   });
   if (!r.ok) { toast(r.error, 'error'); return; }
   order = r.data.order;
