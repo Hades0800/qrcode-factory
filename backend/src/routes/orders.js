@@ -138,10 +138,11 @@ export default async function orderRoutes(fastify) {
         const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
         if (!order) continue;
         if (hasActivity(order)) {
+          // 只清除上傳欄位，保留 productionDate（由實際活動設定）
           await fastify.prisma.order.update({
             where: { orderNo },
             data: {
-              productionDate: null, productSpec: null, moldSpec: null,
+              productSpec: null, moldSpec: null,
               material: null, dispatchQty: null, bladeCount: null,
               machineSPM: null, unitWeight: null, totalWeight: null,
             },
@@ -420,14 +421,8 @@ export default async function orderRoutes(fastify) {
         if (row.machineNo && !validMachine(row.machineNo)) {
           errors.push(orderNo + '：不允許的機台號 ' + row.machineNo); continue;
         }
-        // 驗證日期不要離譜（2000~2100）
-        let prodDate = null;
-        if (row.productionDate) {
-          const d = new Date(row.productionDate);
-          if (!isNaN(d) && d.getFullYear() >= 2000 && d.getFullYear() <= 2100) prodDate = d;
-        }
+        // productionDate 不由上傳設定，由第一次實際生產活動決定
         const data = {
-          productionDate: prodDate,
           productSpec: clipStr(row.productSpec, 200),
           moldSpec: clipStr(row.moldSpec, 100),
           material: clipStr(row.material, 200),
