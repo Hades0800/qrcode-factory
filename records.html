@@ -268,7 +268,7 @@
   }
   .rc-detail.show { display: block; }
 
-  /* 工單資訊卡片（手機優化） */
+  /* 工單資訊卡片 */
   .info-card {
     background: #fff;
     border-radius: 12px;
@@ -286,66 +286,67 @@
     padding-bottom: 8px;
     border-bottom: 1px solid var(--border);
   }
-  .info-text-group {
-    display: grid;
-    gap: 10px;
-    margin-bottom: 14px;
-  }
-  .info-row {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 8px 12px;
-    background: var(--bg);
-    border-radius: 8px;
-  }
-  .info-label {
-    font-size: 11px;
-    color: var(--muted);
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .info-icon { font-size: 14px; }
-  .info-value {
-    font-size: 14px;
-    color: var(--ink);
-    font-weight: 500;
-    word-break: break-all;
-    line-height: 1.4;
-  }
   .info-empty { color: var(--muted); font-weight: 400; }
-  .info-stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-    gap: 8px;
+
+  /* Spec cards - horizontal scroll on mobile, wrap on desktop */
+  .spec-cards-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin-bottom: 12px;
   }
-  .info-stat {
-    background: linear-gradient(135deg, var(--brand-soft), #fff);
-    border: 1px solid var(--border);
+  .spec-cards-wrap::-webkit-scrollbar { display: none; }
+  .spec-cards {
+    display: flex;
+    gap: 10px;
+    min-width: min-content;
+  }
+  .spec-card {
+    flex: 0 0 auto;
+    background: var(--bg);
     border-radius: 10px;
-    padding: 10px 12px;
-    text-align: center;
+    padding: 10px 14px;
+    min-width: 140px;
   }
-  .info-stat-label {
-    font-size: 10px;
+  .spec-card .sc-label {
+    font-size: 11px;
     color: var(--muted);
     font-weight: 600;
     margin-bottom: 4px;
-    text-transform: uppercase;
-    letter-spacing: .5px;
+    white-space: nowrap;
   }
-  .info-stat-value {
-    font-size: 18px;
-    font-weight: 800;
+  .spec-card .sc-value {
+    font-size: 14px;
+    font-weight: 700;
     color: var(--ink);
+    word-break: break-all;
+    line-height: 1.3;
   }
-  .info-stat-unit {
-    font-size: 11px;
-    color: var(--muted);
-    font-weight: 500;
-    margin-left: 2px;
+  .spec-card.wide { min-width: 220px; }
+  .spec-stats {
+    display: flex;
+    gap: 8px;
+    min-width: min-content;
+  }
+  .spec-stat {
+    background: linear-gradient(135deg, var(--brand-soft), #fff);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    text-align: center;
+    min-width: 90px;
+    flex: 0 0 auto;
+  }
+  .spec-stat .ss-label { font-size: 10px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+  .spec-stat .ss-value { font-size: 18px; font-weight: 800; color: var(--ink); }
+  .spec-stat .ss-unit { font-size: 11px; color: var(--muted); font-weight: 500; }
+  @media (min-width: 768px) {
+    .spec-cards-wrap { overflow-x: visible; }
+    .spec-cards { flex-wrap: wrap; }
+    .spec-card { flex: 1 1 auto; min-width: 160px; }
+    .spec-card.wide { flex: 2 1 auto; }
+    .spec-stats { flex-wrap: wrap; }
+    .spec-stat { flex: 1 1 0; min-width: 0; }
   }
 
   tr.clickable { cursor: pointer; }
@@ -705,24 +706,38 @@ function render() {
       }).join('');
 
     // Detail (工單資訊 + 暫停明細)
-    const textFields = [
-      { label: '生產日期', icon: '📅', value: o.productionDate ? String(o.productionDate).slice(0,10) : '' },
-      { label: '生產規格', icon: '🔩', value: o.productSpec || '' },
-      { label: '模具', icon: '⚙️', value: o.moldSpec || '' },
-      { label: '領料', icon: '📦', value: o.material || '' },
-    ];
-    const numberFields = [
-      { label: '派工數', value: o.dispatchQty, unit: '片' },
-      { label: '刀數', value: o.bladeCount, unit: '刀' },
-      { label: '機器SPM', value: o.machineSPM, unit: '' },
-      { label: '一片理論重', value: o.unitWeight, unit: 'kg' },
-      { label: '全部總重量', value: o.totalWeight, unit: 'kg' },
-    ];
     const infoHtml = `
       <div class="info-card">
         <div class="info-section-title">工單資訊</div>
-        <div class="info-text-group">${textFields.map(f => `<div class="info-row"><div class="info-label"><span class="info-icon">${f.icon}</span>${f.label}</div><div class="info-value">${f.value ? escapeHtml(f.value) : '<span class="info-empty">—</span>'}</div></div>`).join('')}</div>
-        <div class="info-stats-grid">${numberFields.map(f => `<div class="info-stat"><div class="info-stat-label">${f.label}</div><div class="info-stat-value">${f.value ? escapeHtml(f.value) + (f.unit ? '<span class="info-stat-unit">' + f.unit + '</span>' : '') : '<span class="info-empty">—</span>'}</div></div>`).join('')}</div>
+        <div class="spec-cards-wrap">
+          <div class="spec-cards">
+            <div class="spec-card">
+              <div class="sc-label">📅 生產日期</div>
+              <div class="sc-value">${o.productionDate ? escapeHtml(String(o.productionDate).slice(0,10)) : '<span class="info-empty">—</span>'}</div>
+            </div>
+            <div class="spec-card wide">
+              <div class="sc-label">🔧 生產規格</div>
+              <div class="sc-value">${o.productSpec ? escapeHtml(o.productSpec) : '<span class="info-empty">—</span>'}</div>
+            </div>
+            <div class="spec-card">
+              <div class="sc-label">⚙ 模具</div>
+              <div class="sc-value">${o.moldSpec ? escapeHtml(o.moldSpec) : '<span class="info-empty">—</span>'}</div>
+            </div>
+            <div class="spec-card">
+              <div class="sc-label">📦 領料</div>
+              <div class="sc-value">${o.material ? escapeHtml(o.material) : '<span class="info-empty">—</span>'}</div>
+            </div>
+          </div>
+        </div>
+        <div class="spec-cards-wrap">
+          <div class="spec-stats">
+            <div class="spec-stat"><div class="ss-label">派工數</div><div class="ss-value">${o.dispatchQty || '—'}${o.dispatchQty ? '<span class="ss-unit">片</span>' : ''}</div></div>
+            <div class="spec-stat"><div class="ss-label">刀數</div><div class="ss-value">${o.bladeCount || '—'}</div></div>
+            <div class="spec-stat"><div class="ss-label">機器SPM</div><div class="ss-value">${o.machineSPM || '—'}</div></div>
+            <div class="spec-stat"><div class="ss-label">一片理論重</div><div class="ss-value">${o.unitWeight || '—'}${o.unitWeight ? '<span class="ss-unit">kg</span>' : ''}</div></div>
+            <div class="spec-stat"><div class="ss-label">全部總重量</div><div class="ss-value">${o.totalWeight || '—'}${o.totalWeight ? '<span class="ss-unit">kg</span>' : ''}</div></div>
+          </div>
+        </div>
       </div>
     `;
     const allEvents = [
