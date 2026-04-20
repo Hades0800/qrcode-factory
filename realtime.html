@@ -721,7 +721,13 @@ async function loadSpecCards(o) {
         <div class="spec-stat"><div class="ss-label">全部總重量</div><div class="ss-value">${s.totalWeight || '—'}${s.totalWeight ? '<span class="ss-unit">kg</span>' : ''}</div></div>
       </div></div>`;
   } else {
-    const cols = specs.length <= 3 ? specs.length : specs.length <= 6 ? 3 : 4;
+    let cols = specs.length;
+    if (specs.length > 3) {
+      for (let c = 3; c >= 2; c--) {
+        if (specs.length % c !== 1) { cols = c; break; }
+      }
+      if (cols > 3) cols = 3;
+    }
     area.innerHTML = `
       <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">${specs.length} 種規格</div>
       <div class="spec-cards-wrap"><div class="spec-cards spec-multi-grid" style="--ms-cols:${cols};">
