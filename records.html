@@ -705,39 +705,11 @@ function render() {
         </li>`;
       }).join('');
 
-    // Detail (工單資訊 + 暫停明細)
+    // Detail (工單資訊 + 暫停明細) — 多規格卡片區域動態載入
     const infoHtml = `
       <div class="info-card">
         <div class="info-section-title">工單資訊</div>
-        <div class="spec-cards-wrap">
-          <div class="spec-cards">
-            <div class="spec-card">
-              <div class="sc-label">📅 生產日期</div>
-              <div class="sc-value">${o.productionDate ? escapeHtml(String(o.productionDate).slice(0,10)) : '<span class="info-empty">—</span>'}</div>
-            </div>
-            <div class="spec-card wide">
-              <div class="sc-label">🔧 生產規格</div>
-              <div class="sc-value">${o.productSpec ? escapeHtml(o.productSpec) : '<span class="info-empty">—</span>'}</div>
-            </div>
-            <div class="spec-card">
-              <div class="sc-label">⚙ 模具</div>
-              <div class="sc-value">${o.moldSpec ? escapeHtml(o.moldSpec) : '<span class="info-empty">—</span>'}</div>
-            </div>
-            <div class="spec-card">
-              <div class="sc-label">📦 領料</div>
-              <div class="sc-value">${o.material ? escapeHtml(o.material) : '<span class="info-empty">—</span>'}</div>
-            </div>
-          </div>
-        </div>
-        <div class="spec-cards-wrap">
-          <div class="spec-stats">
-            <div class="spec-stat"><div class="ss-label">派工數</div><div class="ss-value">${o.dispatchQty || '—'}${o.dispatchQty ? '<span class="ss-unit">片</span>' : ''}</div></div>
-            <div class="spec-stat"><div class="ss-label">刀數</div><div class="ss-value">${o.bladeCount || '—'}</div></div>
-            <div class="spec-stat"><div class="ss-label">機器SPM</div><div class="ss-value">${o.machineSPM || '—'}</div></div>
-            <div class="spec-stat"><div class="ss-label">一片理論重</div><div class="ss-value">${o.unitWeight || '—'}${o.unitWeight ? '<span class="ss-unit">kg</span>' : ''}</div></div>
-            <div class="spec-stat"><div class="ss-label">全部總重量</div><div class="ss-value">${o.totalWeight || '—'}${o.totalWeight ? '<span class="ss-unit">kg</span>' : ''}</div></div>
-          </div>
-        </div>
+        <div id="spec-area-${idx}" style="color:var(--muted);font-size:13px;">載入規格中...</div>
       </div>
     `;
     const allEvents = [
@@ -787,10 +759,72 @@ function render() {
   });
 }
 
-function toggleDetail(idx) {
+async function toggleDetail(idx) {
   const el = document.getElementById('detail-' + idx);
   if (!el) return;
+  const wasHidden = !el.classList.contains('show');
   el.classList.toggle('show');
+  if (!wasHidden) return;
+
+  // 載入多規格資料
+  const specArea = document.getElementById('spec-area-' + idx);
+  if (!specArea || specArea.dataset.loaded) return;
+  specArea.dataset.loaded = '1';
+
+  const o = applyFilters(allOrders)[idx];
+  if (!o) return;
+
+  const r = await api('/api/orders/' + encodeURIComponent(o.orderNo) + '/upload-rows');
+  const rows = (r.ok && r.data.rows) ? r.data.rows : [];
+
+  // 如果沒有上傳列，用 order 本身的資料顯示一張卡片
+  const specs = rows.length > 0 ? rows : [{
+    productSpec: o.productSpec, moldSpec: o.moldSpec, material: o.material,
+    dispatchQty: o.dispatchQty, bladeCount: o.bladeCount, machineSPM: o.machineSPM,
+    unitWeight: o.unitWeight, totalWeight: o.totalWeight,
+  }];
+
+  const dateCard = '<div class="spec-card"><div class="sc-label">📅 生產日期</div><div class="sc-value">' +
+    (o.productionDate ? escapeHtml(String(o.productionDate).slice(0,10)) : '<span class="info-empty">—</span>') + '</div></div>';
+
+  if (specs.length === 1) {
+    const s = specs[0];
+    specArea.innerHTML = `
+      <div class="spec-cards-wrap"><div class="spec-cards">
+        ${dateCard}
+        <div class="spec-card wide"><div class="sc-label">🔧 生產規格</div><div class="sc-value">${s.productSpec ? escapeHtml(s.productSpec) : '<span class="info-empty">—</span>'}</div></div>
+        <div class="spec-card"><div class="sc-label">⚙ 模具</div><div class="sc-value">${s.moldSpec ? escapeHtml(s.moldSpec) : '<span class="info-empty">—</span>'}</div></div>
+        <div class="spec-card"><div class="sc-label">📦 領料</div><div class="sc-value">${s.material ? escapeHtml(s.material) : '<span class="info-empty">—</span>'}</div></div>
+      </div></div>
+      <div class="spec-cards-wrap"><div class="spec-stats">
+        <div class="spec-stat"><div class="ss-label">派工數</div><div class="ss-value">${s.dispatchQty || '—'}${s.dispatchQty ? '<span class="ss-unit">片</span>' : ''}</div></div>
+        <div class="spec-stat"><div class="ss-label">刀數</div><div class="ss-value">${s.bladeCount || '—'}</div></div>
+        <div class="spec-stat"><div class="ss-label">機器SPM</div><div class="ss-value">${s.machineSPM || '—'}</div></div>
+        <div class="spec-stat"><div class="ss-label">一片理論重</div><div class="ss-value">${s.unitWeight || '—'}${s.unitWeight ? '<span class="ss-unit">kg</span>' : ''}</div></div>
+        <div class="spec-stat"><div class="ss-label">全部總重量</div><div class="ss-value">${s.totalWeight || '—'}${s.totalWeight ? '<span class="ss-unit">kg</span>' : ''}</div></div>
+      </div></div>`;
+  } else {
+    // 多規格：每列一張卡片，橫向排列
+    specArea.innerHTML = `
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">${specs.length} 種規格（左右滑動查看）</div>
+      <div class="spec-cards-wrap"><div class="spec-cards">
+        ${specs.map((s, i) => `
+          <div style="flex:0 0 auto;min-width:260px;max-width:320px;background:var(--bg);border-radius:12px;padding:14px;border-left:3px solid var(--brand);">
+            <div style="font-size:11px;color:var(--brand);font-weight:700;margin-bottom:8px;">規格 ${i+1}</div>
+            <div style="font-size:14px;font-weight:700;color:var(--ink);margin-bottom:6px;word-break:break-all;line-height:1.3;">${s.productSpec ? escapeHtml(s.productSpec) : '—'}</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12px;">
+              <span style="color:var(--muted);">模具</span><span style="color:var(--ink);font-weight:600;">${s.moldSpec ? escapeHtml(s.moldSpec) : '—'}</span>
+              <span style="color:var(--muted);">領料</span><span style="color:var(--ink);font-weight:600;">${s.material ? escapeHtml(s.material) : '—'}</span>
+              <span style="color:var(--muted);">派工數</span><span style="color:var(--ink);font-weight:600;">${s.dispatchQty || '—'}</span>
+              <span style="color:var(--muted);">刀數</span><span style="color:var(--ink);font-weight:600;">${s.bladeCount || '—'}</span>
+              <span style="color:var(--muted);">SPM</span><span style="color:var(--ink);font-weight:600;">${s.machineSPM || '—'}</span>
+              <span style="color:var(--muted);">單重</span><span style="color:var(--ink);font-weight:600;">${s.unitWeight || '—'}${s.unitWeight ? ' kg' : ''}</span>
+              <span style="color:var(--muted);">總重</span><span style="color:var(--ink);font-weight:600;">${s.totalWeight || '—'}${s.totalWeight ? ' kg' : ''}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div></div>`;
+  }
 }
 
 async function deleteOrder(orderNo) {

@@ -620,6 +620,19 @@ export default async function orderRoutes(fastify) {
     }
   });
 
+  // 取得工單的上傳原始列（多規格）
+  fastify.get('/:orderNo/upload-rows', async (request) => {
+    const orderNo = String(request.params.orderNo || '').trim().toUpperCase();
+    if (!validOrderNo(orderNo)) return { rows: [] };
+    const rows = await fastify.prisma.uploadRow.findMany({
+      where: { orderNo, status: { in: ['created', 'updated'] } },
+      orderBy: { id: 'asc' },
+    });
+    // 過濾備註列（totalWeight=0 且 unitWeight=0）
+    const filtered = rows.filter(r => !((r.totalWeight === 0 || r.totalWeight === null) && (r.unitWeight === 0 || r.unitWeight === null)));
+    return { rows: filtered };
+  });
+
   // 列出近期工單（所有登入者都能看全部）
   fastify.get('/', async (request) => {
     const limit = Math.min(Number(request.query.limit) || 50, 200);
