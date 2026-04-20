@@ -805,24 +805,34 @@ async function toggleDetail(idx) {
       </div></div>`;
   } else {
     // 多規格：每列一張卡片，橫向排列
+    const buildCard = (s, i) => {
+      const fields = [
+        { label: '生產規格', value: s.productSpec, bold: true },
+        { label: '模具', value: s.moldSpec },
+        { label: '領料', value: s.material },
+        { label: '派工數', value: s.dispatchQty, unit: '片' },
+        { label: '刀數', value: s.bladeCount },
+        { label: 'SPM', value: s.machineSPM },
+        { label: '單重', value: s.unitWeight, unit: 'kg' },
+        { label: '總重', value: s.totalWeight, unit: 'kg' },
+      ];
+      return '<div style="flex:0 0 auto;min-width:260px;max-width:340px;background:var(--bg);border-radius:12px;padding:14px;border-left:3px solid var(--brand);">' +
+        '<div style="font-size:11px;color:var(--brand);font-weight:700;margin-bottom:8px;">規格 ' + (i+1) + '</div>' +
+        fields.filter(f => f.value).map(f =>
+          '<div style="display:flex;gap:8px;padding:3px 0;font-size:13px;' + (f.bold ? 'margin-bottom:4px;' : '') + '">' +
+            '<span style="color:var(--muted);font-weight:500;white-space:nowrap;min-width:55px;">' + f.label + '：</span>' +
+            '<span style="color:var(--ink);font-weight:' + (f.bold ? '700' : '600') + ';word-break:break-all;' + (f.bold ? 'font-size:14px;' : '') + '">' +
+              escapeHtml(String(f.value)) + (f.unit ? ' <span style="color:var(--muted);font-size:11px;">' + f.unit + '</span>' : '') +
+            '</span>' +
+          '</div>'
+        ).join('') +
+        (fields.every(f => !f.value) ? '<div style="color:var(--muted);font-size:13px;">—</div>' : '') +
+      '</div>';
+    };
     specArea.innerHTML = `
       <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">${specs.length} 種規格（左右滑動查看）</div>
       <div class="spec-cards-wrap"><div class="spec-cards">
-        ${specs.map((s, i) => `
-          <div style="flex:0 0 auto;min-width:260px;max-width:320px;background:var(--bg);border-radius:12px;padding:14px;border-left:3px solid var(--brand);">
-            <div style="font-size:11px;color:var(--brand);font-weight:700;margin-bottom:8px;">規格 ${i+1}</div>
-            <div style="font-size:14px;font-weight:700;color:var(--ink);margin-bottom:6px;word-break:break-all;line-height:1.3;">${s.productSpec ? escapeHtml(s.productSpec) : '—'}</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:12px;">
-              <span style="color:var(--muted);">模具</span><span style="color:var(--ink);font-weight:600;">${s.moldSpec ? escapeHtml(s.moldSpec) : '—'}</span>
-              <span style="color:var(--muted);">領料</span><span style="color:var(--ink);font-weight:600;">${s.material ? escapeHtml(s.material) : '—'}</span>
-              <span style="color:var(--muted);">派工數</span><span style="color:var(--ink);font-weight:600;">${s.dispatchQty || '—'}</span>
-              <span style="color:var(--muted);">刀數</span><span style="color:var(--ink);font-weight:600;">${s.bladeCount || '—'}</span>
-              <span style="color:var(--muted);">SPM</span><span style="color:var(--ink);font-weight:600;">${s.machineSPM || '—'}</span>
-              <span style="color:var(--muted);">單重</span><span style="color:var(--ink);font-weight:600;">${s.unitWeight || '—'}${s.unitWeight ? ' kg' : ''}</span>
-              <span style="color:var(--muted);">總重</span><span style="color:var(--ink);font-weight:600;">${s.totalWeight || '—'}${s.totalWeight ? ' kg' : ''}</span>
-            </div>
-          </div>
-        `).join('')}
+        ${specs.map((s, i) => buildCard(s, i)).join('')}
       </div></div>`;
   }
 }
