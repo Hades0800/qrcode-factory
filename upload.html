@@ -185,6 +185,7 @@
 
   <div class="page-tabs">
     <button class="page-tab active" data-tab="upload">📤 上傳</button>
+    <button class="page-tab" data-tab="overview">📊 製造概覽</button>
     <button class="page-tab" data-tab="history">📋 上傳紀錄</button>
   </div>
 
@@ -270,12 +271,30 @@
 
   </div><!-- /tab-upload -->
 
+  <!-- 製造概覽 -->
+  <div id="tab-overview" style="display:none;">
+    <div class="card">
+      <h2 style="display:flex;justify-content:space-between;align-items:center;">
+        <span>製造概覽</span>
+        <div style="display:flex;gap:8px;">
+          <select id="overviewDateFilter" style="padding:6px 10px;font-size:12px;border:1.5px solid var(--border);border-radius:6px;background:#fff;color:var(--ink);font-weight:600;"></select>
+          <button id="refreshOverviewBtn" style="padding:6px 12px;font-size:12px;background:#fff;color:var(--ink);border:1.5px solid var(--border);border-radius:6px;cursor:pointer;">🔄</button>
+        </div>
+      </h2>
+      <div id="overviewStats" style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;"></div>
+      <div id="overviewContent" style="color:var(--muted);padding:30px;text-align:center;">載入中...</div>
+    </div>
+  </div>
+
   <!-- 上傳紀錄區 -->
   <div id="tab-history" style="display:none;">
     <div class="card">
       <h2 style="display:flex;justify-content:space-between;align-items:center;">
         <span>上傳紀錄（按日期）</span>
-        <button id="refreshBatchBtn" style="padding:6px 12px;font-size:12px;background:#fff;color:var(--ink);border:1.5px solid var(--border);border-radius:6px;cursor:pointer;">🔄 重新整理</button>
+        <div style="display:flex;gap:8px;">
+          <button id="bulkDeleteBtn" style="display:none;padding:6px 14px;font-size:12px;background:#fff;color:var(--brand);border:1.5px solid var(--brand);border-radius:6px;cursor:pointer;font-weight:600;">🗑 整批刪除 (<span id="bulkCount">0</span>)</button>
+          <button id="refreshBatchBtn" style="padding:6px 12px;font-size:12px;background:#fff;color:var(--ink);border:1.5px solid var(--border);border-radius:6px;cursor:pointer;">🔄 重新整理</button>
+        </div>
       </h2>
       <div id="historyContent" style="color:var(--muted);padding:30px;text-align:center;">載入中...</div>
     </div>
@@ -564,10 +583,127 @@ document.querySelectorAll('.page-tab').forEach(btn => {
     const tab = btn.dataset.tab;
     document.querySelectorAll('.page-tab').forEach(b => b.classList.toggle('active', b === btn));
     $('tab-upload').style.display = tab === 'upload' ? '' : 'none';
+    $('tab-overview').style.display = tab === 'overview' ? '' : 'none';
     $('tab-history').style.display = tab === 'history' ? '' : 'none';
+    if (tab === 'overview') loadOverview();
     if (tab === 'history') loadBatches();
   };
 });
+
+// ===== 製造概覽 =====
+let overviewOrders = [];
+
+async function loadOverview() {
+  const content = $('overviewContent');
+  const stats = $('overviewStats');
+  content.innerHTML = '<div style="color:var(--muted);padding:30px;text-align:center;">載入中...</div>';
+  stats.innerHTML = '';
+  const r = await api('/api/orders?limit=500');
+  if (!r.ok) { content.innerHTML = '<div style="color:var(--brand);padding:30px;text-align:center;">' + (r.error || '載入失敗') + '</div>'; return; }
+  overviewOrders = (r.data.orders || []);
+  if (overviewOrders.length === 0) {
+    content.innerHTML = '<div style="color:var(--muted);padding:30px;text-align:center;">目前沒有工單</div>';
+    return;
+  }
+
+  // 建立日期選單
+  const dates = [...new Set(overviewOrders.map(o => o.productionDate ? String(o.productionDate).slice(0, 10) : '未設定'))].sort((a, b) => b.localeCompare(a));
+  const sel = $('overviewDateFilter');
+  const prevVal = sel.value;
+  sel.innerHTML = '<option value="">全部日期</option>' + dates.map(d => '<option value="' + d + '">' + d + '</option>').join('');
+  if (prevVal && dates.includes(prevVal)) sel.value = prevVal;
+
+  renderOverview();
+}
+
+function renderOverview() {
+  const filterDate = $('overviewDateFilter').value;
+  const orders = filterDate
+    ? overviewOrders.filter(o => (o.productionDate ? String(o.productionDate).slice(0, 10) : '未設定') === filterDate)
+    : overviewOrders;
+
+  const hasActivity = o => !!(o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At || o.step11At || (o.stepEntries && o.stepEntries.length > 0));
+  const completed = orders.filter(o => o.step11At).length;
+  const active = orders.filter(o => !o.step11At && hasActivity(o)).length;
+  const waiting = orders.length - completed - active;
+
+  $('overviewStats').innerHTML = `
+    <div class="stat-pill">共 <strong>${orders.length}</strong> 筆</div>
+    <div class="stat-pill" style="color:var(--success);">已完成 <strong>${completed}</strong></div>
+    <div class="stat-pill" style="color:#1f6feb;">生產中 <strong>${active}</strong></div>
+    <div class="stat-pill" style="color:#f0ad4e;">待生產 <strong>${waiting}</strong></div>
+  `;
+
+  if (orders.length === 0) {
+    $('overviewContent').innerHTML = '<div style="color:var(--muted);padding:30px;text-align:center;">此日期無工單</div>';
+    return;
+  }
+
+  // 計算每筆工單的工序進度
+  const TOTAL_STEPS = 7; // step 01-07
+  $('overviewContent').innerHTML = `
+    <div class="preview-wrap">
+      <table class="preview-table" style="font-size:12px;">
+        <thead>
+          <tr>
+            <th>#</th><th>製造單號</th><th>生產日期</th><th>機台</th><th>生產規格</th><th>模具</th><th>派工數</th><th>工序進度</th><th>匹配狀態</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${orders.map((o, i) => {
+            // 工序進度
+            const entries = o.stepEntries || [];
+            const doneSteps = new Set(entries.filter(e => ['1','2','3','4','5','6','7'].includes(e.stepNo)).map(e => e.stepNo));
+            const progressPct = Math.round(doneSteps.size / TOTAL_STEPS * 100);
+
+            // 匹配狀態
+            let matchStatus, matchStyle;
+            const started = hasActivity(o);
+            if (o.step11At) {
+              matchStatus = '已完成';
+              matchStyle = 'color:var(--success);font-weight:700;';
+            } else if (started) {
+              // 檢查是否暫停
+              const isPaused = (o.pause12 && o.pause12.active) || (o.pause13 && o.pause13.active);
+              if (isPaused) {
+                matchStatus = '暫停中';
+                matchStyle = 'color:var(--brand);font-weight:700;';
+              } else {
+                matchStatus = '生產中';
+                matchStyle = 'color:#1f6feb;font-weight:700;';
+              }
+            } else if (o.machineNo) {
+              matchStatus = '已派機';
+              matchStyle = 'color:#8b5cf6;font-weight:600;';
+            } else {
+              matchStatus = '待生產';
+              matchStyle = 'color:#f0ad4e;font-weight:600;';
+            }
+
+            // 進度條
+            const barColor = o.step11At ? 'var(--success)' : (started ? '#1f6feb' : 'var(--border)');
+            const progressBar = `<div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;min-width:60px;"><div style="height:100%;width:${progressPct}%;background:${barColor};border-radius:3px;"></div></div><span style="font-size:11px;color:var(--muted);white-space:nowrap;">${doneSteps.size}/${TOTAL_STEPS}</span></div>`;
+
+            return `<tr>
+              <td>${i + 1}</td>
+              <td><strong>${escapeHtml(o.orderNo)}</strong></td>
+              <td>${escapeHtml(o.productionDate ? String(o.productionDate).slice(0, 10) : '')}</td>
+              <td>${escapeHtml(o.machineNo || '—')}</td>
+              <td style="max-width:200px;white-space:normal;">${escapeHtml(o.productSpec || '')}</td>
+              <td>${escapeHtml(o.moldSpec || '')}</td>
+              <td>${o.dispatchQty || ''}</td>
+              <td>${progressBar}</td>
+              <td style="${matchStyle}">${matchStatus}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+$('overviewDateFilter').onchange = renderOverview;
+$('refreshOverviewBtn').onclick = loadOverview;
 
 // ===== 上傳紀錄（按日期 group by） =====
 let historyOrders = [];
@@ -617,7 +753,6 @@ async function loadBatches() {
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:10px;">
-            ${canManage ? `<button style="padding:6px 14px;font-size:12px;background:#fff;color:var(--brand);border:1.5px solid var(--brand);border-radius:8px;cursor:pointer;white-space:nowrap;font-weight:600;" onclick="event.stopPropagation();deleteDayOrders('${day}')">刪除整日</button>` : ''}
             <span class="day-arrow" id="arrow-${day}" style="color:var(--brand);font-size:14px;transition:transform .2s;">▶</span>
           </div>
         </div>
@@ -626,6 +761,7 @@ async function loadBatches() {
             <table class="preview-table" style="font-size:12px;">
               <thead>
                 <tr>
+                  ${canManage ? '<th><input type="checkbox" class="day-select-all" data-day="' + day + '" onclick="toggleDaySelectAll(this, \'' + day + '\')"></th>' : ''}
                   <th>#</th><th>製造單號</th><th>機台</th><th>生產規格</th><th>模具</th><th>派工數</th><th>總重量</th><th>狀態</th>${canManage ? '<th>操作</th>' : ''}
                 </tr>
               </thead>
@@ -655,6 +791,11 @@ async function loadBatches() {
                     }
                   }
 
+                  let checkboxTd = '';
+                  if (canManage) {
+                    checkboxTd = `<td><input type="checkbox" class="order-checkbox" data-order="${escapeHtml(o.orderNo)}" onchange="updateBulkCount()"></td>`;
+                  }
+
                   let actionBtn = '';
                   if (canManage) {
                     if (!started) {
@@ -666,6 +807,7 @@ async function loadBatches() {
                     }
                   }
                   return `<tr>
+                    ${checkboxTd}
                     <td>${i + 1}</td>
                     <td><strong>${escapeHtml(o.orderNo)}</strong>${mismatchTag}</td>
                     <td>${escapeHtml(o.machineNo || '')}</td>
@@ -699,16 +841,31 @@ function toggleDayGroup(day) {
   }
 }
 
-async function deleteDayOrders(day) {
-  const orders = historyOrders.filter(o => {
-    const key = o.productionDate ? String(o.productionDate).slice(0, 10) : '未設定日期';
-    return key === day;
-  });
-  const hasActivity = o => !!(o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At || o.step11At || (o.stepEntries && o.stepEntries.length > 0));
-  const started = orders.filter(hasActivity).length;
-  const canDelete = orders.length - started;
+function toggleDaySelectAll(el, day) {
+  const detail = document.getElementById('day-detail-' + day);
+  if (!detail) return;
+  detail.querySelectorAll('.order-checkbox').forEach(cb => { cb.checked = el.checked; });
+  updateBulkCount();
+}
 
-  let msg = `確定處理「${day}」的所有工單？\n\n共 ${orders.length} 筆`;
+function updateBulkCount() {
+  const checked = document.querySelectorAll('.order-checkbox:checked');
+  const btn = $('bulkDeleteBtn');
+  $('bulkCount').textContent = checked.length;
+  btn.style.display = checked.length > 0 ? '' : 'none';
+}
+
+$('bulkDeleteBtn').onclick = async () => {
+  const checked = document.querySelectorAll('.order-checkbox:checked');
+  const orderNos = Array.from(checked).map(cb => cb.dataset.order);
+  if (orderNos.length === 0) return;
+
+  const hasActivity = o => !!(o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At || o.step11At || (o.stepEntries && o.stepEntries.length > 0));
+  const selected = historyOrders.filter(o => orderNos.includes(o.orderNo));
+  const started = selected.filter(hasActivity).length;
+  const canDelete = selected.length - started;
+
+  let msg = `確定整批刪除 ${orderNos.length} 筆工單？`;
   if (started > 0) {
     msg += `\n\n• ${started} 筆已開始生產 → 清除上傳資訊（保留生產紀錄）`;
   }
@@ -717,13 +874,12 @@ async function deleteDayOrders(day) {
   }
   if (!confirm(msg)) return;
 
-  const orderNos = orders.map(o => o.orderNo);
   const r = await api('/api/orders/bulk-cancel-upload', { method: 'POST', body: { orderNos } });
   if (!r.ok) { toast(r.error || '操作失敗', 'error'); return; }
   const d = r.data;
   toast(`完成：刪除 ${d.deleted} 筆、清除上傳資訊 ${d.cleared} 筆`, 'success');
   loadBatches();
-}
+};
 
 async function deleteHistoryOrder(orderNo, isForce) {
   const msg = isForce
