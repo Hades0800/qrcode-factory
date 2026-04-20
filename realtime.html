@@ -575,7 +575,13 @@ function renderContent() {
       if (!o.step11At && ((o.pause12 && o.pause12.active) || (o.pause13 && o.pause13.active))) return true;
       return false;
     })
-    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    .sort((a, b) => {
+      // 生產中（有活動且未完成）排最前
+      const aActive = !a.step11At && hasAnyActivity(a) ? 1 : 0;
+      const bActive = !b.step11At && hasAnyActivity(b) ? 1 : 0;
+      if (aActive !== bActive) return bActive - aActive;
+      return new Date(b.updatedAt) - new Date(a.updatedAt);
+    });
 
   const totalOrders = machineOrders.length;
   const completedOrders = machineOrders.filter(o => o.step11At).length;
@@ -603,8 +609,8 @@ function renderContent() {
   const fmtNum = n => n > 0 ? n.toLocaleString('zh-TW', { maximumFractionDigits: 1 }) : '—';
   const fmtKg = kg => kg > 0 ? kg.toLocaleString('zh-TW', { maximumFractionDigits: 1 }) : '—';
 
-  // Find active order (has steps but no step11)
-  const activeOrder = machineOrders.find(o => !o.step11At && countSteps(o) > 0);
+  // Find active order (has any activity but no step11)
+  const activeOrder = machineOrders.find(o => !o.step11At && hasAnyActivity(o));
 
   let html = '';
 
@@ -661,7 +667,7 @@ function renderContent() {
   } else {
     machineOrders.forEach(o => {
       const isActive = activeOrder && o.orderNo === activeOrder.orderNo;
-      const steps = countSteps(o);
+      const started = hasAnyActivity(o);
       const timeline = buildTimeline(o, me && me.isAdmin);
       const isCarryOver = o.productionDate && !isToday(o.productionDate);
       const carryOverTag = isCarryOver ? '<span style="background:#f0ad4e;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;margin-left:8px;font-weight:700;">隔日生產</span>' : '';
@@ -669,7 +675,7 @@ function renderContent() {
         <div class="order-card${isActive ? ' active' : ''}">
           <div class="oc-header">
             <div class="oc-no">${escapeHtml(o.orderNo)}${carryOverTag}</div>
-            <div class="oc-badge">${o.step11At ? '已完成' : (steps > 0 ? '生產中' : '等待中')}</div>
+            <div class="oc-badge">${o.step11At ? '已完成' : (started ? '生產中' : '等待中')}</div>
           </div>
           <div id="rt-spec-${escapeHtml(o.orderNo)}" class="rt-spec-area"></div>
           <div class="order-info" style="margin-bottom:12px;">
@@ -766,7 +772,13 @@ async function deleteEntry(entryId, orderNo) {
 }
 
 function countSteps(o) {
-  return ['step1At','step2At','step3At','step4At','step5At','step6At','step7At'].filter(k => o[k]).length;
+  // 新格式 stepEntries + 舊格式 stepXAt
+  const oldCount = ['step1At','step2At','step3At','step4At','step5At','step6At','step7At'].filter(k => o[k]).length;
+  const newCount = (o.stepEntries || []).filter(e => ['1','2','3','4','5','6','7'].includes(e.stepNo)).length;
+  return oldCount + newCount;
+}
+function hasAnyActivity(o) {
+  return countSteps(o) > 0 || (o.stepEntries || []).length > 0;
 }
 
 function buildTimeline(o, isAdmin) {
