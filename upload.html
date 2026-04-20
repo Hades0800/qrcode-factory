@@ -521,12 +521,13 @@ async function loadTodayOrders() {
   const active = rows.filter(hasActivity).length;
   $('todayStats').textContent = `今日上傳 ${rows.length} 筆（${active} 筆已開始生產，${rows.length - active} 筆可取消）`;
   const isAdmin = me && me.isAdmin;
+  const canManageToday = isAdmin || (me && me.isPlanner);
   $('todayBody').innerHTML = rows.map((o, i) => {
     const started = hasActivity(o);
     let actionBtn = '—';
-    if (!started) {
+    if (!started && canManageToday) {
       actionBtn = `<button style="padding:6px 12px;font-size:12px;background:#fff;color:var(--brand);border:1.5px solid var(--brand);border-radius:6px;cursor:pointer;" onclick="deleteOrder('${escapeHtml(o.orderNo)}', false)">取消</button>`;
-    } else if (isAdmin) {
+    } else if (started && isAdmin) {
       actionBtn = `<button style="padding:6px 12px;font-size:12px;background:var(--brand);color:#fff;border:none;border-radius:6px;cursor:pointer;" onclick="deleteOrder('${escapeHtml(o.orderNo)}', true)">強制取消</button>`;
     }
     return `
@@ -593,6 +594,8 @@ async function loadBatches() {
   const sortedDays = Object.keys(groups).sort((a, b) => b.localeCompare(a));
 
   const isAdmin = me && me.isAdmin;
+  const isPlanner = me && me.isPlanner;
+  const canManage = isAdmin || isPlanner;
   const hasActivity = o => !!(o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At || o.step11At || (o.stepEntries && o.stepEntries.length > 0));
 
   content.innerHTML = sortedDays.map(day => {
@@ -619,7 +622,7 @@ async function loadBatches() {
             <table class="preview-table" style="font-size:12px;">
               <thead>
                 <tr>
-                  <th>#</th><th>製造單號</th><th>機台</th><th>生產規格</th><th>模具</th><th>派工數</th><th>總重量</th><th>狀態</th>${isAdmin ? '<th>操作</th>' : ''}
+                  <th>#</th><th>製造單號</th><th>機台</th><th>生產規格</th><th>模具</th><th>派工數</th><th>總重量</th><th>狀態</th>${canManage ? '<th>操作</th>' : ''}
                 </tr>
               </thead>
               <tbody>
@@ -630,11 +633,13 @@ async function loadBatches() {
                   else if (started) status = '<span style="color:#1f6feb;">生產中</span>';
                   else status = '<span style="color:#f0ad4e;">待生產</span>';
                   let actionBtn = '';
-                  if (isAdmin) {
+                  if (canManage) {
                     if (!started) {
                       actionBtn = `<td><button style="padding:4px 10px;font-size:11px;background:#fff;color:var(--brand);border:1.5px solid var(--brand);border-radius:6px;cursor:pointer;" onclick="deleteHistoryOrder('${escapeHtml(o.orderNo)}', false)">刪除</button></td>`;
-                    } else {
+                    } else if (isAdmin) {
                       actionBtn = `<td><button style="padding:4px 10px;font-size:11px;background:var(--brand);color:#fff;border:none;border-radius:6px;cursor:pointer;" onclick="deleteHistoryOrder('${escapeHtml(o.orderNo)}', true)">強制刪除</button></td>`;
+                    } else {
+                      actionBtn = `<td><span style="font-size:11px;color:var(--muted);">已生產</span></td>`;
                     }
                   }
                   return `<tr>
