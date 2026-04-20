@@ -431,6 +431,13 @@ function parseRows(json) {
     if (obj._valid) obj.orderNo = obj.orderNo.toUpperCase();
     // 機台號自動配對
     if (obj.machineNo) obj.machineNo = normalizeMachine(obj.machineNo);
+    // 數值欄位：0 視為空值（拿掉）
+    ['dispatchQty','bladeCount','machineSPM','unitWeight','totalWeight'].forEach(k => {
+      if (obj[k] !== undefined && obj[k] !== null && obj[k] !== '') {
+        const n = Number(obj[k]);
+        obj[k] = (isNaN(n) || n === 0) ? null : n;
+      }
+    });
     return obj;
   });
 
