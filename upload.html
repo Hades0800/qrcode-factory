@@ -711,11 +711,11 @@ async function loadBatches() {
       <div style="margin-bottom:12px;padding:16px 20px;background:${isCancelled ? '#f9f9f9' : 'var(--card)'};border:1px solid ${isCancelled ? '#e5e5ea' : 'var(--border)'};border-radius:12px;transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.06)'" onmouseout="this.style.boxShadow='none'">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
           <div>
-            <div style="font-size:15px;font-weight:700;color:${isCancelled ? 'var(--muted)' : 'var(--ink)'};">
+            <div style="font-size:15px;font-weight:700;color:${isCancelled ? 'var(--muted)' : 'var(--ink)'};text-align:left;">
               ${escapeHtml(b.filename || '未命名')}
               ${isCancelled ? '<span style="background:var(--brand);color:#fff;font-size:11px;padding:2px 8px;border-radius:6px;margin-left:8px;font-weight:700;">已刪除</span>' : ''}
             </div>
-            <div style="font-size:12px;color:var(--muted);margin-top:4px;">
+            <div style="font-size:12px;color:var(--muted);margin-top:4px;text-align:left;">
               上傳時間：${uploadTime}　|　上傳者：${escapeHtml(b.uploadedByName || '—')}　|　${b.rowCount} 筆工單
               ${prodDate ? '　|　生產日期：' + prodDate : ''}
             </div>
