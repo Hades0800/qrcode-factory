@@ -599,12 +599,31 @@ export default async function orderRoutes(fastify) {
       return reply.code(403).send({ error: '工單已開始生產，無法刪除（請聯絡管理員）' });
     }
 
-    // 管理員：完全刪除（含生產紀錄）
-    // 生管：只能刪沒開始的（前面已擋）
-    await fastify.prisma.order.delete({ where: { orderNo: order.orderNo } });
-    await audit(fastify.prisma, request, 'delete_order', order.orderNo,
-      isAdmin ? 'admin_delete' : 'planner_delete_unscanned');
-    return { ok: true, deleted: true };
+    if (hasProductionData) {
+      // 有生產紀錄：清除生產實態，保留上傳資料
+      await fastify.prisma.stepEntry.deleteMany({ where: { orderId: order.id } });
+      await fastify.prisma.pauseEvent.deleteMany({ where: { orderId: order.id } });
+      await fastify.prisma.order.update({
+        where: { orderNo: order.orderNo },
+        data: {
+          step1At: null, step2At: null, step3At: null, step4At: null,
+          step5At: null, step6At: null, step7At: null,
+          step11At: null, step12At: null, step13At: null,
+          step21At: null, step22At: null, step23At: null,
+          step12Note: null, step13Note: null,
+          step4Note: null, step7Note: null,
+          machineNo: null, leaderId: null,
+        },
+      });
+      await audit(fastify.prisma, request, 'clear_production', order.orderNo, 'admin_clear_production');
+      return { ok: true, cleared: true };
+    } else {
+      // 沒有生產紀錄：完全刪除
+      await fastify.prisma.order.delete({ where: { orderNo: order.orderNo } });
+      await audit(fastify.prisma, request, 'delete_order', order.orderNo,
+        isAdmin ? 'admin_delete' : 'planner_delete_unscanned');
+      return { ok: true, deleted: true };
+    }
   });
 
   // 取得工單的上傳原始列（多規格）
