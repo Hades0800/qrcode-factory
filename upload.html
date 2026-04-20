@@ -410,18 +410,7 @@ function parseRows(json) {
     return obj;
   });
 
-  // 同工單號只保留第一行（註記行多半 totalWeight=0、是附註）
-  const seen = new Set();
-  const deduped = [];
-  let dupSkipped = 0;
-  allRows.forEach(r => {
-    if (!r._valid) { deduped.push(r); return; }
-    if (seen.has(r.orderNo)) { dupSkipped++; return; }
-    seen.add(r.orderNo);
-    deduped.push(r);
-  });
-  parsedRows = deduped;
-  if (dupSkipped > 0) toast(`已合併 ${dupSkipped} 筆同工單號的註記行`, 'success');
+  parsedRows = allRows;
 
   renderPreview();
 }

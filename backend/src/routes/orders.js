@@ -440,8 +440,18 @@ export default async function orderRoutes(fastify) {
         };
         const existing = await fastify.prisma.order.findUnique({ where: { orderNo } });
         if (existing) {
-          await fastify.prisma.order.update({ where: { orderNo }, data });
-          updated++;
+          // 同工單號：只有 productSpec 相同（或其中一方為空）才更新，取最完整的資料
+          const specMatch = !existing.productSpec || !data.productSpec || existing.productSpec === data.productSpec;
+          if (specMatch) {
+            // 合併：新資料有值才覆蓋，保留既有資料
+            const merged = {};
+            for (const key of Object.keys(data)) {
+              merged[key] = (data[key] != null && data[key] !== '') ? data[key] : existing[key];
+            }
+            await fastify.prisma.order.update({ where: { orderNo }, data: merged });
+            updated++;
+          }
+          // productSpec 不同：跳過不覆蓋
         } else {
           await fastify.prisma.order.create({ data: { orderNo, ...data } });
           created++;
