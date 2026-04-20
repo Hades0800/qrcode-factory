@@ -604,7 +604,10 @@ async function loadBatches() {
               ${waiting > 0 ? '<span style="color:#f0ad4e;">待生產 ' + waiting + '</span>' : ''}
             </span>
           </div>
-          <span class="day-arrow" id="arrow-${day}" style="color:var(--brand);font-size:12px;transition:transform .2s;">▶</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            ${canManage ? `<button style="padding:4px 12px;font-size:11px;background:#fff;color:var(--brand);border:1.5px solid var(--brand);border-radius:6px;cursor:pointer;white-space:nowrap;" onclick="event.stopPropagation();deleteDayOrders('${day}')">刪除整日</button>` : ''}
+            <span class="day-arrow" id="arrow-${day}" style="color:var(--brand);font-size:12px;transition:transform .2s;">▶</span>
+          </div>
         </div>
         <div class="day-detail" id="day-detail-${day}" style="display:none;margin-top:4px;">
           <div class="preview-wrap" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;">
@@ -663,6 +666,35 @@ function toggleDayGroup(day) {
     detail.style.display = 'none';
     if (arrow) arrow.style.transform = '';
   }
+}
+
+async function deleteDayOrders(day) {
+  const orders = historyOrders.filter(o => {
+    const key = o.productionDate ? String(o.productionDate).slice(0, 10) : '未設定日期';
+    return key === day;
+  });
+  const hasActivity = o => !!(o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At || o.step11At || (o.stepEntries && o.stepEntries.length > 0));
+  const started = orders.filter(hasActivity).length;
+  const canDelete = orders.length - started;
+  const isAdmin = me && me.isAdmin;
+
+  let msg = `確定刪除「${day}」的所有工單？\n\n共 ${orders.length} 筆`;
+  if (started > 0 && !isAdmin) {
+    msg += `\n\n⚠️ 其中 ${started} 筆已開始生產，僅刪除 ${canDelete} 筆未開始的工單`;
+  } else if (started > 0 && isAdmin) {
+    msg += `\n\n⚠️ 其中 ${started} 筆已開始生產，將全部強制刪除！`;
+  }
+  if (!confirm(msg)) return;
+
+  let deleted = 0, failed = 0;
+  for (const o of orders) {
+    if (!isAdmin && hasActivity(o)) { continue; }
+    const r = await api('/api/orders/' + encodeURIComponent(o.orderNo), { method: 'DELETE' });
+    if (r.ok) deleted++;
+    else failed++;
+  }
+  toast(`已刪除 ${deleted} 筆` + (failed > 0 ? `，${failed} 筆失敗` : ''), deleted > 0 ? 'success' : 'error');
+  loadBatches();
 }
 
 async function deleteHistoryOrder(orderNo, isForce) {
