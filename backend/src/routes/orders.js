@@ -440,13 +440,6 @@ export default async function orderRoutes(fastify) {
         };
         const existing = await fastify.prisma.order.findUnique({ where: { orderNo } });
         if (existing) {
-          // productSpec 不同時用逗號合併
-          if (data.productSpec && existing.productSpec && data.productSpec !== existing.productSpec) {
-            const specs = existing.productSpec.split(', ');
-            if (!specs.includes(data.productSpec)) {
-              data.productSpec = clipStr(existing.productSpec + ', ' + data.productSpec, 500);
-            }
-          }
           await fastify.prisma.order.update({ where: { orderNo }, data });
           updated++;
         } else {
