@@ -54,7 +54,7 @@
   .dropdown-menu .menu-sep { height: 1px; background: var(--border); margin: 4px 8px; }
   .dropdown-menu a.menu-logout { color: var(--muted); }
 
-  .container { padding: 16px; max-width: 900px; margin: 0 auto; }
+  .container { padding: 16px; max-width: 1200px; margin: 0 auto; }
 
   /* Tabs */
   .page-tabs {
@@ -115,15 +115,27 @@
 
   /* Preview table */
   .preview-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 14px; }
-  .preview-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 800px; }
+  .preview-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 800px; }
   .preview-table th {
-    background: var(--bg); font-size: 10px; color: var(--muted); font-weight: 700;
-    text-transform: uppercase; letter-spacing: .5px; padding: 8px 6px;
+    background: var(--bg); font-size: 11px; color: var(--muted); font-weight: 700;
+    text-transform: uppercase; letter-spacing: .5px; padding: 10px 10px;
     text-align: left; position: sticky; top: 0; white-space: nowrap;
   }
-  .preview-table td { padding: 8px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .preview-table td { padding: 10px 10px; border-bottom: 1px solid var(--border); }
   .preview-table tr:hover { background: #fafafc; }
   .preview-table .err { color: var(--brand); font-weight: 600; }
+
+  /* Desktop enhancements */
+  @media (min-width: 768px) {
+    .container { padding: 24px 32px; }
+    .card { padding: 24px 28px; border-radius: 16px; margin-bottom: 20px; }
+    .page-tabs { margin-bottom: 20px; border-radius: 14px; padding: 5px; }
+    .page-tab { padding: 14px; font-size: 15px; }
+    .drop-zone { padding: 50px 30px; }
+    .preview-table { font-size: 14px; }
+    .preview-table th { padding: 12px 12px; font-size: 12px; }
+    .preview-table td { padding: 12px 12px; }
+  }
 
   .result { padding: 16px; border-radius: 10px; margin-top: 14px; font-size: 14px; font-weight: 600; }
   .result.ok { background: var(--success-soft); color: var(--success); }
@@ -593,24 +605,24 @@ async function loadBatches() {
     const active = orders.filter(o => !o.step11At && hasActivity(o)).length;
     const waiting = orders.length - completed - active;
     return `
-      <div class="day-group" style="margin-bottom:12px;">
-        <div class="day-header" style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:10px;cursor:pointer;" onclick="toggleDayGroup('${day}')">
-          <div>
-            <strong style="font-size:16px;color:var(--ink);">${escapeHtml(day)}</strong>
-            <span style="font-size:13px;color:var(--muted);margin-left:12px;">${orders.length} 筆工單</span>
-            <span style="font-size:12px;margin-left:8px;">
-              ${completed > 0 ? '<span style="color:var(--success);">已完成 ' + completed + '</span> ' : ''}
-              ${active > 0 ? '<span style="color:#1f6feb;">生產中 ' + active + '</span> ' : ''}
-              ${waiting > 0 ? '<span style="color:#f0ad4e;">待生產 ' + waiting + '</span>' : ''}
-            </span>
+      <div class="day-group" style="margin-bottom:14px;">
+        <div class="day-header" style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:var(--card);border:1px solid var(--border);border-radius:12px;cursor:pointer;transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.06)'" onmouseout="this.style.boxShadow='none'" onclick="toggleDayGroup('${day}')">
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+            <strong style="font-size:18px;color:var(--ink);">${escapeHtml(day)}</strong>
+            <span style="font-size:14px;color:var(--muted);">${orders.length} 筆工單</span>
+            <div style="display:flex;gap:10px;font-size:13px;">
+              ${completed > 0 ? '<span style="color:var(--success);font-weight:600;">已完成 ' + completed + '</span>' : ''}
+              ${active > 0 ? '<span style="color:#1f6feb;font-weight:600;">生產中 ' + active + '</span>' : ''}
+              ${waiting > 0 ? '<span style="color:#f0ad4e;font-weight:600;">待生產 ' + waiting + '</span>' : ''}
+            </div>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            ${canManage ? `<button style="padding:4px 12px;font-size:11px;background:#fff;color:var(--brand);border:1.5px solid var(--brand);border-radius:6px;cursor:pointer;white-space:nowrap;" onclick="event.stopPropagation();deleteDayOrders('${day}')">刪除整日</button>` : ''}
-            <span class="day-arrow" id="arrow-${day}" style="color:var(--brand);font-size:12px;transition:transform .2s;">▶</span>
+          <div style="display:flex;align-items:center;gap:10px;">
+            ${canManage ? `<button style="padding:6px 14px;font-size:12px;background:#fff;color:var(--brand);border:1.5px solid var(--brand);border-radius:8px;cursor:pointer;white-space:nowrap;font-weight:600;" onclick="event.stopPropagation();deleteDayOrders('${day}')">刪除整日</button>` : ''}
+            <span class="day-arrow" id="arrow-${day}" style="color:var(--brand);font-size:14px;transition:transform .2s;">▶</span>
           </div>
         </div>
-        <div class="day-detail" id="day-detail-${day}" style="display:none;margin-top:4px;">
-          <div class="preview-wrap" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+        <div class="day-detail" id="day-detail-${day}" style="display:none;margin-top:6px;">
+          <div class="preview-wrap" style="border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff;">
             <table class="preview-table" style="font-size:12px;">
               <thead>
                 <tr>
