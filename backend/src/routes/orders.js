@@ -624,9 +624,13 @@ export default async function orderRoutes(fastify) {
   fastify.get('/:orderNo/upload-rows', async (request) => {
     const orderNo = String(request.params.orderNo || '').trim().toUpperCase();
     if (!validOrderNo(orderNo)) return { rows: [] };
-    // 找該工單最新的 batch
+    // 找該工單最新且未取消的 batch
     const latestRow = await fastify.prisma.uploadRow.findFirst({
-      where: { orderNo, status: { in: ['created', 'updated'] } },
+      where: {
+        orderNo,
+        status: { in: ['created', 'updated'] },
+        batch: { cancelledAt: null },
+      },
       orderBy: { batchId: 'desc' },
       select: { batchId: true },
     });
