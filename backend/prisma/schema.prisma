@@ -121,17 +121,41 @@ model PauseEvent {
 // ───────────────────────────────
 
 model UploadBatch {
-  id             Int       @id @default(autoincrement())
+  id             Int         @id @default(autoincrement())
   filename       String
   uploadedBy     Int?
   uploadedByName String?
   rowCount       Int
   productionDate DateTime?
   orderNos       String[]
-  uploadedAt     DateTime  @default(now())
+  uploadedAt     DateTime    @default(now())
   cancelledAt    DateTime?
+  rows           UploadRow[]
 
   @@index([uploadedAt])
+}
+
+// 原始上傳資料（每一列 Excel 原封不動保存）
+model UploadRow {
+  id            Int         @id @default(autoincrement())
+  batchId       Int
+  batch         UploadBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  orderNo       String
+  productSpec   String?
+  moldSpec      String?
+  material      String?
+  machineNo     String?
+  dispatchQty   Int?
+  bladeCount    Int?
+  machineSPM    Int?
+  unitWeight    Float?
+  totalWeight   Float?
+  // 處理結果
+  status        String      @default("created") // created, updated, skipped, error
+  errorMsg      String?
+
+  @@index([batchId])
+  @@index([orderNo])
 }
 
 // ───────────────────────────────

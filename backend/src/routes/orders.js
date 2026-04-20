@@ -411,73 +411,114 @@ export default async function orderRoutes(fastify) {
     // 清理檔名（去掉路徑、控制字元）
     const cleanFilename = filename ? String(filename).replace(/[\\/\x00-\x1f]/g, '').slice(0, 200) : '未命名';
 
-    let created = 0, updated = 0, errors = [];
-    const processedOrderNos = [];
     // 上傳系統的日期（存在批次紀錄上，不寫入工單）
     let batchProductionDate = null;
     if (uploadDate) {
       const d = new Date(uploadDate);
       if (!isNaN(d) && d.getFullYear() >= 2000 && d.getFullYear() <= 2100) batchProductionDate = d;
     }
+
+    // 先建立批次紀錄
+    const batch = await fastify.prisma.uploadBatch.create({
+      data: {
+        filename: cleanFilename,
+        uploadedBy: request.user.id,
+        uploadedByName: request.user.displayName || null,
+        rowCount: 0,
+        productionDate: batchProductionDate,
+        orderNos: [],
+      },
+    });
+
+    let created = 0, updated = 0, skipped = 0, errors = [];
+    const processedOrderNos = [];
+    const rawRows = []; // 收集原始資料
+
     for (const row of rows) {
+      const orderNo = String(row.orderNo || '').toUpperCase();
+      const rawRow = {
+        batchId: batch.id,
+        orderNo: orderNo || String(row.orderNo || ''),
+        productSpec: clipStr(row.productSpec, 200),
+        moldSpec: clipStr(row.moldSpec, 100),
+        material: clipStr(row.material, 200),
+        machineNo: row.machineNo ? clipStr(row.machineNo, 60) : null,
+        dispatchQty: row.dispatchQty ? Math.max(0, Math.min(1e6, Number(row.dispatchQty) || 0)) : null,
+        bladeCount: row.bladeCount ? Math.max(0, Math.min(1e6, Number(row.bladeCount) || 0)) : null,
+        machineSPM: row.machineSPM ? Math.max(0, Math.min(1e5, Number(row.machineSPM) || 0)) : null,
+        unitWeight: row.unitWeight ? Math.max(0, Math.min(1e6, Number(row.unitWeight) || 0)) : null,
+        totalWeight: row.totalWeight ? Math.max(0, Math.min(1e9, Number(row.totalWeight) || 0)) : null,
+        status: 'error',
+        errorMsg: null,
+      };
+
       try {
-        const orderNo = String(row.orderNo || '').toUpperCase();
-        if (!validOrderNo(orderNo)) { errors.push((row.orderNo || '(空)') + '：工單號格式錯誤'); continue; }
-        if (row.machineNo && !validMachine(row.machineNo)) {
-          errors.push(orderNo + '：不允許的機台號 ' + row.machineNo); continue;
+        if (!validOrderNo(orderNo)) {
+          rawRow.errorMsg = '工單號格式錯誤';
+          rawRows.push(rawRow);
+          errors.push((row.orderNo || '(空)') + '：工單號格式錯誤');
+          continue;
         }
-        // productionDate 不由上傳設定，由第一次實際生產活動決定
+        if (row.machineNo && !validMachine(row.machineNo)) {
+          rawRow.errorMsg = '不允許的機台號 ' + row.machineNo;
+          rawRows.push(rawRow);
+          errors.push(orderNo + '：不允許的機台號 ' + row.machineNo);
+          continue;
+        }
+
         const data = {
-          productSpec: clipStr(row.productSpec, 200),
-          moldSpec: clipStr(row.moldSpec, 100),
-          material: clipStr(row.material, 200),
-          dispatchQty: row.dispatchQty ? Math.max(0, Math.min(1e6, Number(row.dispatchQty) || 0)) : null,
-          bladeCount: row.bladeCount ? Math.max(0, Math.min(1e6, Number(row.bladeCount) || 0)) : null,
-          machineSPM: row.machineSPM ? Math.max(0, Math.min(1e5, Number(row.machineSPM) || 0)) : null,
-          unitWeight: row.unitWeight ? Math.max(0, Math.min(1e6, Number(row.unitWeight) || 0)) : null,
-          totalWeight: row.totalWeight ? Math.max(0, Math.min(1e9, Number(row.totalWeight) || 0)) : null,
-          machineNo: row.machineNo ? clipStr(row.machineNo, 60) : null,
+          productSpec: rawRow.productSpec,
+          moldSpec: rawRow.moldSpec,
+          material: rawRow.material,
+          dispatchQty: rawRow.dispatchQty,
+          bladeCount: rawRow.bladeCount,
+          machineSPM: rawRow.machineSPM,
+          unitWeight: rawRow.unitWeight,
+          totalWeight: rawRow.totalWeight,
+          machineNo: rawRow.machineNo,
         };
+
         const existing = await fastify.prisma.order.findUnique({ where: { orderNo } });
         if (existing) {
-          // 同工單號：只有 productSpec 相同（或其中一方為空）才更新，取最完整的資料
           const specMatch = !existing.productSpec || !data.productSpec || existing.productSpec === data.productSpec;
           if (specMatch) {
-            // 合併：新資料有值才覆蓋，保留既有資料
             const merged = {};
             for (const key of Object.keys(data)) {
               merged[key] = (data[key] != null && data[key] !== '') ? data[key] : existing[key];
             }
             await fastify.prisma.order.update({ where: { orderNo }, data: merged });
+            rawRow.status = 'updated';
             updated++;
+          } else {
+            rawRow.status = 'skipped';
+            rawRow.errorMsg = '規格不同，跳過';
+            skipped++;
           }
-          // productSpec 不同：跳過不覆蓋
         } else {
           await fastify.prisma.order.create({ data: { orderNo, ...data } });
+          rawRow.status = 'created';
           created++;
         }
         processedOrderNos.push(orderNo);
       } catch (e) {
+        rawRow.errorMsg = e.message;
         errors.push((row.orderNo || '?') + ': ' + e.message);
       }
+      rawRows.push(rawRow);
     }
 
-    // 記錄上傳批次
-    let batchId = null;
-    if (processedOrderNos.length > 0) {
-      const batch = await fastify.prisma.uploadBatch.create({
-        data: {
-          filename: cleanFilename,
-          uploadedBy: request.user.id,
-          uploadedByName: request.user.displayName || null,
-          rowCount: processedOrderNos.length,
-          productionDate: batchProductionDate,
-          orderNos: processedOrderNos,
-        },
-      });
-      batchId = batch.id;
+    // 批量寫入原始資料
+    if (rawRows.length > 0) {
+      await fastify.prisma.uploadRow.createMany({ data: rawRows });
     }
-    return { ok: true, created, updated, errors, total: rows.length, batchId };
+
+    // 更新批次紀錄
+    await fastify.prisma.uploadBatch.update({
+      where: { id: batch.id },
+      data: { rowCount: processedOrderNos.length, orderNos: processedOrderNos },
+    });
+
+    return { ok: true, created, updated, skipped, errors, total: rows.length, batchId: batch.id };
   });
 
   // 批次取消上傳（保留掃描紀錄）
