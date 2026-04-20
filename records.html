@@ -353,7 +353,8 @@
       gap: 12px;
     }
     .spec-multi-grid > div { min-width: 0; max-width: none; }
-    .spec-multi-grid > div:last-child:nth-child(3n+1) { grid-column: span 3; }
+    .spec-multi-grid > div:last-child:nth-child(4n+1) { grid-column: span 4; }
+    .spec-multi-grid[style*="--ms-cols:3"] > div:last-child:nth-child(3n+1) { grid-column: span 3; }
     .spec-multi-grid[style*="--ms-cols:2"] > div:last-child:nth-child(2n+1) { grid-column: span 2; }
   }
 
@@ -838,7 +839,7 @@ async function toggleDetail(idx) {
       '</div>';
     };
     // 電腦版用 grid 均分，手機版用 flex 橫向滑動
-    const cols = Math.min(specs.length, 3);
+    const cols = Math.min(specs.length, 4);
     specArea.innerHTML = `
       <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">${specs.length} 種規格（左右滑動查看）</div>
       <div class="spec-cards-wrap">
