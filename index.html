@@ -1202,10 +1202,16 @@ function renderSteps() {
   const actDiv = document.createElement('div');
   actDiv.className = 'action-buttons';
 
-  // 暫停/異常按鈕（開關模式）+ 補登
+  // 暫停/異常按鈕（開關模式，一次只能操作一個）+ 補登
+  const anyPauseActive = PAUSE_TYPES.some(p => {
+    const info = order['pause' + p.type];
+    return info && info.active;
+  });
+
   PAUSE_TYPES.forEach(p => {
     const info = order['pause' + p.type]; // pause12 or pause13
     const isActive = info && info.active;
+    const isOtherActive = anyPauseActive && !isActive;
     const totalSec = info ? info.totalSec : 0;
     const count = info ? info.count : 0;
     const btn = document.createElement('button');
@@ -1222,16 +1228,20 @@ function renderSteps() {
       btn.onclick = () => resumePause(p.type);
     } else {
       btn.className = 'action-btn ' + p.style;
+      if (isOtherActive) {
+        btn.style.opacity = '0.4';
+        btn.style.pointerEvents = 'none';
+      }
       let subtitle = p.hint;
       if (count > 0) subtitle = `累計 ${count} 次，共 ${fmtDuration(totalSec)}`;
       btn.innerHTML = `
         <div class="act-icon">${p.icon}</div>
         <div class="act-body">
           <div class="act-title">${escapeHtml(p.title)}</div>
-          <div class="act-hint">${subtitle}</div>
+          <div class="act-hint">${isOtherActive ? '請先恢復生產' : subtitle}</div>
         </div>
       `;
-      btn.onclick = () => startPause(p);
+      if (!isOtherActive) btn.onclick = () => startPause(p);
     }
     actDiv.appendChild(btn);
 
