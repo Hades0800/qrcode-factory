@@ -1107,7 +1107,7 @@ function renderSteps() {
       const canCancel = elapsed < 5 * 60 * 1000;
       const manualTag = e.isManual ? '<span class="manual-tag">補登</span>' : '';
       body += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${e.isManual ? '#fffbe6' : (canCancel ? 'var(--success-soft)' : '#f5f5f7')};border-radius:8px;">`;
-      body += `<span style="font-size:12px;color:var(--success);font-weight:600;flex:1;">✓ ${escapeHtml(titleText)}${entries.length > 1 ? (i+1) : ''} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
+      body += `<span style="font-size:12px;color:var(--success);font-weight:600;flex:1;">✓ ${escapeHtml(titleText)} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
       if (canCancel && !isPaused) {
         body += `<button class="btn-danger" data-cancel-entry="${e.id}" style="padding:4px 10px;font-size:11px;min-height:28px;">取消</button>`;
       }
@@ -1165,7 +1165,7 @@ function renderSteps() {
       const canCancel = elapsed < 5 * 60 * 1000;
       const manualTag = e.isManual ? '<span class="manual-tag">補登</span>' : '';
       body += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${e.isManual ? '#fffbe6' : (canCancel ? 'var(--success-soft)' : '#f5f5f7')};border-radius:8px;">`;
-      body += `<span style="font-size:12px;color:var(--success);font-weight:600;flex:1;">✓ ${escapeHtml(titleText)}${entries.length > 1 ? (i+1) : ''} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
+      body += `<span style="font-size:12px;color:var(--success);font-weight:600;flex:1;">✓ ${escapeHtml(titleText)} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
       if (canCancel && !isPaused) {
         body += `<button class="btn-danger" data-cancel-entry="${e.id}" style="padding:4px 10px;font-size:11px;min-height:28px;">取消</button>`;
       }
