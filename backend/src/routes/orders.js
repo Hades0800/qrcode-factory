@@ -624,21 +624,20 @@ export default async function orderRoutes(fastify) {
   fastify.get('/:orderNo/upload-rows', async (request) => {
     const orderNo = String(request.params.orderNo || '').trim().toUpperCase();
     if (!validOrderNo(orderNo)) return { rows: [] };
-    const rows = await fastify.prisma.uploadRow.findMany({
+    // 找該工單最新的 batch
+    const latestRow = await fastify.prisma.uploadRow.findFirst({
       where: { orderNo, status: { in: ['created', 'updated'] } },
+      orderBy: { batchId: 'desc' },
+      select: { batchId: true },
+    });
+    if (!latestRow) return { rows: [] };
+    const rows = await fastify.prisma.uploadRow.findMany({
+      where: { orderNo, batchId: latestRow.batchId },
       orderBy: { id: 'asc' },
     });
     // 過濾備註列（totalWeight=0 且 unitWeight=0）
     const filtered = rows.filter(r => !((r.totalWeight === 0 || r.totalWeight === null) && (r.unitWeight === 0 || r.unitWeight === null)));
-    // 去重：同一 productSpec 只保留最新（id 最大）的一筆
-    const seen = new Map();
-    for (const r of filtered) {
-      const key = (r.productSpec || '') + '|' + (r.moldSpec || '') + '|' + (r.dispatchQty || '') + '|' + (r.totalWeight || '');
-      if (!seen.has(key) || r.id > seen.get(key).id) {
-        seen.set(key, r);
-      }
-    }
-    return { rows: Array.from(seen.values()) };
+    return { rows: filtered };
   });
 
   // 列出近期工單（所有登入者都能看全部）
