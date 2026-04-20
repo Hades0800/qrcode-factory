@@ -347,6 +347,12 @@
     .spec-card.wide { flex: 2 1 auto; }
     .spec-stats { flex-wrap: wrap; }
     .spec-stat { flex: 1 1 0; min-width: 0; }
+    .spec-multi-grid {
+      display: grid;
+      grid-template-columns: repeat(var(--ms-cols, 3), 1fr);
+      gap: 12px;
+    }
+    .spec-multi-grid > div { min-width: 0; max-width: none; }
   }
 
   tr.clickable { cursor: pointer; }
@@ -829,11 +835,15 @@ async function toggleDetail(idx) {
         (fields.every(f => !f.value) ? '<div style="color:var(--muted);font-size:13px;">—</div>' : '') +
       '</div>';
     };
+    // 電腦版用 grid 均分，手機版用 flex 橫向滑動
+    const cols = specs.length <= 2 ? specs.length : specs.length <= 4 ? 2 : 3;
     specArea.innerHTML = `
       <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">${specs.length} 種規格（左右滑動查看）</div>
-      <div class="spec-cards-wrap"><div class="spec-cards">
-        ${specs.map((s, i) => buildCard(s, i)).join('')}
-      </div></div>`;
+      <div class="spec-cards-wrap">
+        <div class="spec-cards spec-multi-grid" style="--ms-cols:${cols};">
+          ${specs.map((s, i) => buildCard(s, i)).join('')}
+        </div>
+      </div>`;
   }
 }
 

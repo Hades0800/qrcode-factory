@@ -273,6 +273,12 @@
     .spec-card.wide { flex: 2 1 auto; }
     .spec-stats { flex-wrap: wrap; }
     .spec-stat { flex: 1 1 0; min-width: 0; }
+    .spec-multi-grid {
+      display: grid;
+      grid-template-columns: repeat(var(--ms-cols, 3), 1fr);
+      gap: 12px;
+    }
+    .spec-multi-grid > div { min-width: 0; max-width: none; }
   }
 
   /* Timeline */
@@ -715,9 +721,10 @@ async function loadSpecCards(o) {
         <div class="spec-stat"><div class="ss-label">全部總重量</div><div class="ss-value">${s.totalWeight || '—'}${s.totalWeight ? '<span class="ss-unit">kg</span>' : ''}</div></div>
       </div></div>`;
   } else {
+    const cols = specs.length <= 2 ? specs.length : specs.length <= 4 ? 2 : 3;
     area.innerHTML = `
       <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">${specs.length} 種規格</div>
-      <div class="spec-cards-wrap"><div class="spec-cards">
+      <div class="spec-cards-wrap"><div class="spec-cards spec-multi-grid" style="--ms-cols:${cols};">
         ${specs.map((s, i) => {
           const fields = [
             { label: '生產規格', value: s.productSpec, bold: true },
