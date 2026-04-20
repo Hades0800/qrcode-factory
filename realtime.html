@@ -279,6 +279,8 @@
       gap: 12px;
     }
     .spec-multi-grid > div { min-width: 0; max-width: none; }
+    .spec-multi-grid > div:last-child:nth-child(3n+1) { grid-column: span 3; }
+    .spec-multi-grid[style*="--ms-cols:2"] > div:last-child:nth-child(2n+1) { grid-column: span 2; }
   }
 
   /* Timeline */
@@ -721,13 +723,7 @@ async function loadSpecCards(o) {
         <div class="spec-stat"><div class="ss-label">全部總重量</div><div class="ss-value">${s.totalWeight || '—'}${s.totalWeight ? '<span class="ss-unit">kg</span>' : ''}</div></div>
       </div></div>`;
   } else {
-    let cols = specs.length;
-    if (specs.length > 3) {
-      for (let c = 3; c >= 2; c--) {
-        if (specs.length % c !== 1) { cols = c; break; }
-      }
-      if (cols > 3) cols = 3;
-    }
+    const cols = Math.min(specs.length, 3);
     area.innerHTML = `
       <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">${specs.length} 種規格</div>
       <div class="spec-cards-wrap"><div class="spec-cards spec-multi-grid" style="--ms-cols:${cols};">
