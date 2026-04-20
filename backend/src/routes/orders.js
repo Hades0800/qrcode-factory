@@ -23,9 +23,15 @@ function getTaiwanToday() {
   return new Date(Date.UTC(y, m, d));
 }
 
-// 設定 productionDate（僅在尚未設定時才寫入，作為開始日期）
+// 設定 productionDate 為實際生產開始日期
+// 第一次活動時覆蓋上傳日期，之後不再變動
 async function updateProductionDateToday(fastify, order) {
-  if (order.productionDate) return; // 已有開始日期，不覆蓋
+  // 檢查是否已有實際生產活動（不含本次）
+  const entryCount = await fastify.prisma.stepEntry.count({ where: { orderId: order.id } });
+  const pauseCount = await fastify.prisma.pauseEvent.count({ where: { orderId: order.id } });
+  const hasOldSteps = !!(order.step1At || order.step2At || order.step3At || order.step4At || order.step5At || order.step6At || order.step7At || order.step11At || order.step21At || order.step22At || order.step23At);
+  if (entryCount > 0 || pauseCount > 0 || hasOldSteps) return; // 已有活動紀錄，保留開始日期
+  // 第一次活動：設為今天（台灣時間）
   const today = getTaiwanToday();
   await fastify.prisma.order.update({
     where: { orderNo: order.orderNo },
@@ -467,6 +473,7 @@ export default async function orderRoutes(fastify) {
         }
 
         const data = {
+          productionDate: batchProductionDate,
           productSpec: rawRow.productSpec,
           moldSpec: rawRow.moldSpec,
           material: rawRow.material,
