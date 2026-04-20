@@ -599,25 +599,12 @@ export default async function orderRoutes(fastify) {
       return reply.code(403).send({ error: '工單已開始生產，無法刪除（請聯絡管理員）' });
     }
 
-    if (hasProductionData) {
-      // 有生產紀錄：只清除上傳欄位，保留工單和生產紀錄
-      await fastify.prisma.order.update({
-        where: { orderNo: order.orderNo },
-        data: {
-          productSpec: null, moldSpec: null,
-          material: null, dispatchQty: null, bladeCount: null,
-          machineSPM: null, unitWeight: null, totalWeight: null,
-        },
-      });
-      await audit(fastify.prisma, request, 'clear_order_upload', order.orderNo, 'cleared_upload_fields');
-      return { ok: true, cleared: true };
-    } else {
-      // 沒有生產紀錄：完全刪除
-      await fastify.prisma.order.delete({ where: { orderNo: order.orderNo } });
-      await audit(fastify.prisma, request, 'delete_order', order.orderNo,
-        isAdmin ? 'admin_delete' : 'planner_delete_unscanned');
-      return { ok: true, deleted: true };
-    }
+    // 管理員：完全刪除（含生產紀錄）
+    // 生管：只能刪沒開始的（前面已擋）
+    await fastify.prisma.order.delete({ where: { orderNo: order.orderNo } });
+    await audit(fastify.prisma, request, 'delete_order', order.orderNo,
+      isAdmin ? 'admin_delete' : 'planner_delete_unscanned');
+    return { ok: true, deleted: true };
   });
 
   // 取得工單的上傳原始列（多規格）
