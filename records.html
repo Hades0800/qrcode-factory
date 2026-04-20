@@ -645,7 +645,7 @@ function render() {
     (o.stepEntries || []).forEach(e => {
       const name = entryLabels[e.stepNo] || ('工序'+e.stepNo);
       const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
-      allItems.push({ time: new Date(e.recordedAt), label: name + (e.seq > 1 ? e.seq : '') + manual, style: 'done' });
+      allItems.push({ time: new Date(e.recordedAt), label: name + manual, style: 'done' });
     });
     // 暫停事件
     ((o.pause12 && o.pause12.history) || []).forEach((e, i) => {
