@@ -707,24 +707,21 @@ async function deleteDayOrders(day) {
   const hasActivity = o => !!(o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At || o.step11At || (o.stepEntries && o.stepEntries.length > 0));
   const started = orders.filter(hasActivity).length;
   const canDelete = orders.length - started;
-  const isAdmin = me && me.isAdmin;
 
-  let msg = `確定刪除「${day}」的所有工單？\n\n共 ${orders.length} 筆`;
-  if (started > 0 && !isAdmin) {
-    msg += `\n\n⚠️ 其中 ${started} 筆已開始生產，僅刪除 ${canDelete} 筆未開始的工單`;
-  } else if (started > 0 && isAdmin) {
-    msg += `\n\n⚠️ 其中 ${started} 筆已開始生產，將全部強制刪除！`;
+  let msg = `確定處理「${day}」的所有工單？\n\n共 ${orders.length} 筆`;
+  if (started > 0) {
+    msg += `\n\n• ${started} 筆已開始生產 → 清除上傳資訊（保留生產紀錄）`;
+  }
+  if (canDelete > 0) {
+    msg += `\n• ${canDelete} 筆未開始 → 完全刪除`;
   }
   if (!confirm(msg)) return;
 
-  let deleted = 0, failed = 0;
-  for (const o of orders) {
-    if (!isAdmin && hasActivity(o)) { continue; }
-    const r = await api('/api/orders/' + encodeURIComponent(o.orderNo), { method: 'DELETE' });
-    if (r.ok) deleted++;
-    else failed++;
-  }
-  toast(`已刪除 ${deleted} 筆` + (failed > 0 ? `，${failed} 筆失敗` : ''), deleted > 0 ? 'success' : 'error');
+  const orderNos = orders.map(o => o.orderNo);
+  const r = await api('/api/orders/bulk-cancel-upload', { method: 'POST', body: { orderNos } });
+  if (!r.ok) { toast(r.error || '操作失敗', 'error'); return; }
+  const d = r.data;
+  toast(`完成：刪除 ${d.deleted} 筆、清除上傳資訊 ${d.cleared} 筆`, 'success');
   loadBatches();
 }
 
