@@ -739,24 +739,27 @@ async function loadSpecCards(o) {
           const fields = [
             { label: '生產規格', value: s.productSpec, bold: true },
             { label: '模具', value: s.moldSpec },
-            { label: '領料', value: s.material },
+            { label: '領料', value: s.material, alwaysShow: true },
             { label: '派工數', value: s.dispatchQty, unit: '片' },
             { label: '刀數', value: s.bladeCount },
             { label: 'SPM', value: s.machineSPM },
             { label: '單重', value: s.unitWeight, unit: 'kg' },
             { label: '總重', value: s.totalWeight, unit: 'kg' },
           ];
+          const visible = fields.filter(f => f.value || f.alwaysShow);
           return '<div style="flex:0 0 auto;min-width:240px;max-width:320px;background:var(--bg);border-radius:12px;padding:14px;border-left:3px solid var(--brand);">' +
             '<div style="font-size:11px;color:var(--brand);font-weight:700;margin-bottom:8px;">規格 ' + (i+1) + '</div>' +
-            fields.filter(f => f.value).map(f =>
-              '<div style="display:flex;gap:8px;padding:3px 0;font-size:13px;' + (f.bold ? 'margin-bottom:4px;' : '') + '">' +
+            visible.map(f => {
+              const hasVal = f.value !== null && f.value !== undefined && f.value !== '';
+              const valueText = hasVal ? escapeHtml(String(f.value)) : '—';
+              const unitText = hasVal && f.unit ? ' <span style="color:var(--muted);font-size:11px;">' + f.unit + '</span>' : '';
+              return '<div style="display:flex;gap:8px;padding:3px 0;font-size:13px;' + (f.bold ? 'margin-bottom:4px;' : '') + '">' +
                 '<span style="color:var(--muted);font-weight:500;white-space:nowrap;min-width:50px;">' + f.label + '：</span>' +
-                '<span style="color:var(--ink);font-weight:' + (f.bold ? '700' : '600') + ';word-break:break-all;' + (f.bold ? 'font-size:14px;' : '') + '">' +
-                  escapeHtml(String(f.value)) + (f.unit ? ' <span style="color:var(--muted);font-size:11px;">' + f.unit + '</span>' : '') +
+                '<span style="color:' + (hasVal ? 'var(--ink)' : 'var(--muted)') + ';font-weight:' + (f.bold ? '700' : '600') + ';word-break:break-all;' + (f.bold ? 'font-size:14px;' : '') + '">' +
+                  valueText + unitText +
                 '</span>' +
-              '</div>'
-            ).join('') +
-            (fields.every(f => !f.value) ? '<div style="color:var(--muted);font-size:13px;">—</div>' : '') +
+              '</div>';
+            }).join('') +
           '</div>';
         }).join('')}
       </div></div>`;
