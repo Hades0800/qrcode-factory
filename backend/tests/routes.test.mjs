@@ -129,6 +129,14 @@ function makeMockPrisma() {
     auditLog: {
       create: async ({ data }) => { state.auditLogs.push(data); return data; },
     },
+    uploadBatch: {
+      _nextId: 1,
+      create: async function({ data }) { return { id: this._nextId++, ...data }; },
+      update: async ({ where, data }) => ({ id: where.id, ...data }),
+    },
+    uploadRow: {
+      createMany: async ({ data }) => ({ count: data.length }),
+    },
   };
 
   return { prisma, state };
@@ -381,6 +389,65 @@ await test('bulk-cancel-upload：真正沒紀錄的工單會被刪掉（維持�
   assert.equal(JSON.parse(res.body).deleted, 1);
   assert.ok(state.orders.get('B0000000003').deletedAt, '真空工單應被軟刪');
   await fastify.close();
+});
+
+await test('bulk-upload：已有活動的工單，上傳不覆蓋 machineNo（regression）', async () => {
+  // 情境：班長已在 No3-60 記錄工單 C1，生管重新上傳同一工單但 Excel 寫 No5-40
+  // 期望：machineNo 保持 No3-60（現場為準），其他欄位仍會更新
+  const { fastify, state } = await buildApp(PLANNER);
+  const order = await fastify.prisma.order.create({
+    data: { orderNo: 'C0000000001', machineNo: 'No3-60', productSpec: 'SPEC-A', dispatchQty: 100 },
+  });
+  await fastify.prisma.stepEntry.create({ data: { orderId: order.id, stepNo: '1', seq: 1, recordedAt: new Date() } });
+  const res = await fastify.inject({
+    method: 'POST', url: '/api/orders/bulk-upload',
+    headers: { 'content-type': 'application/json' },
+    payload: JSON.stringify({
+      orders: [{ orderNo: 'C0000000001', machineNo: 'No5-40', productSpec: 'SPEC-A', dispatchQty: 200 }],
+      filename: 'test.xlsx',
+    }),
+  });
+  assert.equal(res.statusCode, 200);
+  const stored = state.orders.get('C0000000001');
+  assert.equal(stored.machineNo, 'No3-60', 'machineNo 應保持現場設定，不被 Excel 覆寫');
+  assert.equal(stored.dispatchQty, 200, '其他欄位應正常更新');
+});
+
+await test('bulk-upload：無活動的工單，上傳可以改 machineNo（維持原行為）', async () => {
+  const { fastify, state } = await buildApp(PLANNER);
+  await fastify.prisma.order.create({
+    data: { orderNo: 'C0000000002', machineNo: 'No3-60', productSpec: 'SPEC-B' },
+  });
+  const res = await fastify.inject({
+    method: 'POST', url: '/api/orders/bulk-upload',
+    headers: { 'content-type': 'application/json' },
+    payload: JSON.stringify({
+      orders: [{ orderNo: 'C0000000002', machineNo: 'No5-40', productSpec: 'SPEC-B' }],
+      filename: 'test.xlsx',
+    }),
+  });
+  assert.equal(res.statusCode, 200);
+  const stored = state.orders.get('C0000000002');
+  assert.equal(stored.machineNo, 'No5-40', '沒活動的工單 machineNo 仍可被 Excel 更新');
+});
+
+await test('bulk-upload：有活動但原本沒 machineNo 時，上傳的 machineNo 會填進去', async () => {
+  const { fastify, state } = await buildApp(PLANNER);
+  const order = await fastify.prisma.order.create({
+    data: { orderNo: 'C0000000003', machineNo: null, productSpec: 'SPEC-C' },
+  });
+  await fastify.prisma.stepEntry.create({ data: { orderId: order.id, stepNo: '1', seq: 1, recordedAt: new Date() } });
+  const res = await fastify.inject({
+    method: 'POST', url: '/api/orders/bulk-upload',
+    headers: { 'content-type': 'application/json' },
+    payload: JSON.stringify({
+      orders: [{ orderNo: 'C0000000003', machineNo: 'No2-250', productSpec: 'SPEC-C' }],
+      filename: 'test.xlsx',
+    }),
+  });
+  assert.equal(res.statusCode, 200);
+  const stored = state.orders.get('C0000000003');
+  assert.equal(stored.machineNo, 'No2-250', '原本空的 machineNo 可被填入');
 });
 
 await test('刪除後再 DELETE → 404（軟刪除的工單不該被找到）', async () => {

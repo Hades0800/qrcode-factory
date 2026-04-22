@@ -503,9 +503,15 @@ export default async function orderRoutes(fastify) {
         if (existing) {
           const specMatch = !existing.productSpec || !data.productSpec || existing.productSpec === data.productSpec;
           if (specMatch) {
+            // 若工單已有生產活動，machineNo 以現場記錄為準，上傳不得覆蓋
+            const lockMachine = existing.machineNo && await hasAnyActivity(fastify.prisma, existing);
             const merged = {};
             for (const key of Object.keys(data)) {
-              merged[key] = (data[key] != null && data[key] !== '') ? data[key] : existing[key];
+              if (key === 'machineNo' && lockMachine) {
+                merged[key] = existing.machineNo;
+              } else {
+                merged[key] = (data[key] != null && data[key] !== '') ? data[key] : existing[key];
+              }
             }
             await fastify.prisma.order.update({ where: { orderNo }, data: merged });
             rawRow.status = 'updated';
