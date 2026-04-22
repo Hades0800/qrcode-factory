@@ -337,6 +337,7 @@ const FIELD_MAP = {
   '模具': 'moldSpec', '模具規格': 'moldSpec',
   // 領料
   '領料': 'material', '領用材料': 'material', '材料': 'material',
+  '領用': 'material', '材質': 'material', '原料': 'material', '物料': 'material',
   // 機台
   '機台': 'machineNo', '機台號': 'machineNo', '機台編號': 'machineNo',
   // 生產日期
@@ -396,16 +397,25 @@ function handleFile(file) {
 
 function parseRows(json) {
   if (!json.length) { toast('Excel 沒有資料', 'error'); return; }
-  // 自動對應欄位
+  // 自動對應欄位（header 比對時去掉空白、括號、連字符等雜訊，放寬容差）
+  const normHeader = s => String(s || '').trim().replace(/[\s　()（）\-_－\/／:：]/g, '').toLowerCase();
+  const normalizedFieldMap = {};
+  Object.entries(FIELD_MAP).forEach(([k, v]) => { normalizedFieldMap[normHeader(k)] = v; });
   const headers = Object.keys(json[0]);
   const mapping = {};
+  const unmatched = [];
   headers.forEach(h => {
-    const key = h.trim();
-    if (FIELD_MAP[key]) mapping[key] = FIELD_MAP[key];
+    const key = normHeader(h);
+    if (normalizedFieldMap[key]) mapping[h] = normalizedFieldMap[key];
+    else if (h.trim()) unmatched.push(h);
   });
   if (!Object.values(mapping).includes('orderNo')) {
     toast('找不到「製造單號」欄位，請確認 Excel 第一列有此欄位名', 'error');
     return;
+  }
+  if (unmatched.length > 0) {
+    console.warn('[上傳] 這些 Excel 欄位沒對應到系統欄位，資料會被忽略：', unmatched);
+    toast('未認得 Excel 欄位：' + unmatched.join('、') + '（資料會被忽略）', 'error');
   }
 
   // 用使用者選的日期（預設今日）
