@@ -31,11 +31,12 @@ model Leader {
 // ───────────────────────────────
 
 model Order {
-  id        Int      @id @default(autoincrement())
-  orderNo   String   @unique
-  machineNo String?
-  leaderId  Int?
-  leader    Leader?  @relation(fields: [leaderId], references: [id])
+  id                Int      @id @default(autoincrement())
+  orderNo           String   @unique
+  machineNo         String?
+  plannedMachineNo  String?  // 上傳時 Excel 排定的機台（現場實際紀錄機台以 machineNo 為準，兩者不同時代表現場跳機台）
+  leaderId          Int?
+  leader            Leader?  @relation(fields: [leaderId], references: [id])
 
   // 匯入欄位（生管 Excel 上傳）
   productionDate DateTime?

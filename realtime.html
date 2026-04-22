@@ -678,6 +678,10 @@ function renderContent() {
             <div class="oc-badge">${o.step11At ? '已完成' : (started ? '生產中' : '等待中')}</div>
           </div>
           <div id="rt-spec-${escapeHtml(o.orderNo)}" class="rt-spec-area"></div>
+          ${o.plannedMachineNo && o.plannedMachineNo !== o.machineNo ? `
+          <div style="margin-bottom:8px;padding:6px 10px;background:#fff3cd;border-left:3px solid #f0ad4e;border-radius:4px;font-size:12px;color:#8a6d3b;">
+            <strong>原計劃生產機台：</strong>${escapeHtml(o.plannedMachineNo)}
+          </div>` : ''}
           <div class="order-info" style="margin-bottom:12px;">
             <span class="oi-label">小組長</span><span class="oi-value">${escapeHtml(o.leaderName)}</span>
           </div>

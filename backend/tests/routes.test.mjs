@@ -393,7 +393,7 @@ await test('bulk-cancel-upload：真正沒紀錄的工單會被刪掉（維持�
 
 await test('bulk-upload：已有活動的工單，上傳不覆蓋 machineNo（regression）', async () => {
   // 情境：班長已在 No3-60 記錄工單 C1，生管重新上傳同一工單但 Excel 寫 No5-40
-  // 期望：machineNo 保持 No3-60（現場為準），其他欄位仍會更新
+  // 期望：machineNo 保持 No3-60（現場為準），plannedMachineNo 記錄 No5-40（原計劃）
   const { fastify, state } = await buildApp(PLANNER);
   const order = await fastify.prisma.order.create({
     data: { orderNo: 'C0000000001', machineNo: 'No3-60', productSpec: 'SPEC-A', dispatchQty: 100 },
@@ -410,7 +410,24 @@ await test('bulk-upload：已有活動的工單，上傳不覆蓋 machineNo（re
   assert.equal(res.statusCode, 200);
   const stored = state.orders.get('C0000000001');
   assert.equal(stored.machineNo, 'No3-60', 'machineNo 應保持現場設定，不被 Excel 覆寫');
+  assert.equal(stored.plannedMachineNo, 'No5-40', 'plannedMachineNo 應記錄 Excel 上的排定機台');
   assert.equal(stored.dispatchQty, 200, '其他欄位應正常更新');
+});
+
+await test('bulk-upload：新工單上傳，machineNo 與 plannedMachineNo 同步寫入', async () => {
+  const { fastify, state } = await buildApp(PLANNER);
+  const res = await fastify.inject({
+    method: 'POST', url: '/api/orders/bulk-upload',
+    headers: { 'content-type': 'application/json' },
+    payload: JSON.stringify({
+      orders: [{ orderNo: 'C0000000004', machineNo: 'No1-350', productSpec: 'SPEC-D' }],
+      filename: 'test.xlsx',
+    }),
+  });
+  assert.equal(res.statusCode, 200);
+  const stored = state.orders.get('C0000000004');
+  assert.equal(stored.machineNo, 'No1-350');
+  assert.equal(stored.plannedMachineNo, 'No1-350', '新工單 plannedMachineNo = machineNo');
 });
 
 await test('bulk-upload：無活動的工單，上傳可以改 machineNo（維持原行為）', async () => {

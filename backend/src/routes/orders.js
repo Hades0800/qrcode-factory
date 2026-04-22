@@ -100,6 +100,7 @@ function serializeOrder(o) {
   return {
     orderNo: o.orderNo,
     machineNo: o.machineNo || '',
+    plannedMachineNo: o.plannedMachineNo || '',
     leaderId: o.leaderId,
     leaderName: o.leader?.displayName || '',
     step21At: o.step21At, step22At: o.step22At, step23At: o.step23At,
@@ -497,6 +498,7 @@ export default async function orderRoutes(fastify) {
           unitWeight: rawRow.unitWeight,
           totalWeight: rawRow.totalWeight,
           machineNo: rawRow.machineNo,
+          plannedMachineNo: rawRow.machineNo, // Excel 排定的機台永遠保留
         };
 
         const existing = await fastify.prisma.order.findUnique({ where: { orderNo } });
