@@ -740,9 +740,7 @@ export default async function orderRoutes(fastify) {
       where: { orderNo, batchId: latestRow.batchId },
       orderBy: { id: 'asc' },
     });
-    // 過濾備註列（totalWeight=0 且 unitWeight=0）
-    const filtered = rows.filter(r => !((r.totalWeight === 0 || r.totalWeight === null) && (r.unitWeight === 0 || r.unitWeight === null)));
-    return { rows: filtered };
+    return { rows };
   });
 
   // 列出近期工單（所有登入者都能看全部）

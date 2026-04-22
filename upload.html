@@ -441,18 +441,7 @@ function parseRows(json) {
     return obj;
   });
 
-  // 過濾備註列：總數=0 且 單重=0 的列視為備註（品名規格欄常放備註文字），直接拿掉
-  const filtered = allRows.filter(r => {
-    if (!r._valid) return true; // 格式錯誤的保留讓使用者看到
-    const tw = Number(r.totalWeight) || 0;
-    const uw = Number(r.unitWeight) || 0;
-    return !(tw === 0 && uw === 0);
-  });
-  const skippedCount = allRows.length - filtered.length;
-  parsedRows = filtered;
-  if (skippedCount > 0) {
-    toast('已自動過濾 ' + skippedCount + ' 列備註（總數與單重皆為 0）', 'success');
-  }
+  parsedRows = allRows;
 
   renderPreview();
 }
