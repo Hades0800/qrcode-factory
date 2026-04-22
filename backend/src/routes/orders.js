@@ -11,6 +11,16 @@ function hasActivity(o) {
     o.step21At || o.step22At || o.step23At);
 }
 
+// 完整版：同時檢查新格式 stepEntries / pauseEvents（需要 DB 查詢）
+// 新格式紀錄只寫 stepEntry，不寫 stepXAt；只看 hasActivity 會誤判為「沒活動」
+async function hasAnyActivity(prisma, order) {
+  if (hasActivity(order)) return true;
+  const entryCount = await prisma.stepEntry.count({ where: { orderId: order.id } });
+  if (entryCount > 0) return true;
+  const pauseCount = await prisma.pauseEvent.count({ where: { orderId: order.id } });
+  return pauseCount > 0;
+}
+
 // 取得台灣時間的今天日期（UTC+8）
 function getTaiwanToday() {
   const now = new Date();
@@ -112,7 +122,11 @@ function serializeOrder(o) {
   };
 }
 
-const ORDER_INCLUDE = { leader: true, pauseEvents: true, stepEntries: { orderBy: { recordedAt: 'asc' } } };
+const ORDER_INCLUDE = {
+  leader: true,
+  pauseEvents: { where: { deletedAt: null } },
+  stepEntries: { where: { deletedAt: null }, orderBy: { recordedAt: 'asc' } },
+};
 
 export default async function orderRoutes(fastify) {
   fastify.addHook('onRequest', fastify.authenticate);
@@ -143,7 +157,7 @@ export default async function orderRoutes(fastify) {
       try {
         const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
         if (!order) continue;
-        if (hasActivity(order)) {
+        if (await hasAnyActivity(fastify.prisma, order)) {
           // 只清除上傳欄位，保留 productionDate（由實際活動設定）
           await fastify.prisma.order.update({
             where: { orderNo },
@@ -551,7 +565,7 @@ export default async function orderRoutes(fastify) {
         if (!orderNo) continue;
         const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
         if (!order) continue;
-        if (hasActivity(order)) {
+        if (await hasAnyActivity(fastify.prisma, order)) {
           // 清除上傳欄位
           await fastify.prisma.order.update({
             where: { orderNo },
@@ -573,9 +587,8 @@ export default async function orderRoutes(fastify) {
     return { ok: true, deleted, cleared, errors };
   });
 
-  // 刪除工單
-  // - 管理員：可刪任何工單
-  // - 生管：只能刪「還沒開始掃描」的工單（上傳錯了可取消重上傳）
+  // 刪除工單（只允許無生產紀錄的工單；有紀錄回 409，請改用 reset-production）
+  // - 管理員 / 生管 皆可使用
   fastify.delete('/:orderNo', async (request, reply) => {
     const isAdmin = request.user.isAdmin;
     const isPlanner = request.user.isPlanner;
@@ -590,40 +603,122 @@ export default async function orderRoutes(fastify) {
     }
     if (!order) return reply.code(404).send({ error: '找不到工單' });
 
-    // 檢查是否有生產紀錄（含新格式 stepEntries / pauseEvents）
     const entryCount = await fastify.prisma.stepEntry.count({ where: { orderId: order.id } });
     const pauseCount = await fastify.prisma.pauseEvent.count({ where: { orderId: order.id } });
     const hasProductionData = hasActivity(order) || entryCount > 0 || pauseCount > 0;
 
-    if (!isAdmin && hasProductionData) {
-      return reply.code(403).send({ error: '工單已開始生產，無法刪除（請聯絡管理員）' });
+    if (hasProductionData) {
+      return reply.code(409).send({
+        error: '工單已有生產紀錄，無法直接刪除',
+        code: 'HAS_PRODUCTION_DATA',
+        canReset: isAdmin,
+        entryCount, pauseCount,
+      });
     }
 
-    if (hasProductionData) {
-      // 有生產紀錄：清除生產實態，保留上傳資料
-      await fastify.prisma.stepEntry.deleteMany({ where: { orderId: order.id } });
-      await fastify.prisma.pauseEvent.deleteMany({ where: { orderId: order.id } });
-      await fastify.prisma.order.update({
-        where: { orderNo: order.orderNo },
-        data: {
-          step1At: null, step2At: null, step3At: null, step4At: null,
-          step5At: null, step6At: null, step7At: null,
-          step11At: null, step12At: null, step13At: null,
-          step21At: null, step22At: null, step23At: null,
-          step12Note: null, step13Note: null,
-          step4Note: null, step7Note: null,
-          machineNo: null, leaderId: null,
-        },
-      });
-      await audit(fastify.prisma, request, 'clear_production', order.orderNo, 'admin_clear_production');
-      return { ok: true, cleared: true };
-    } else {
-      // 沒有生產紀錄：完全刪除
-      await fastify.prisma.order.delete({ where: { orderNo: order.orderNo } });
-      await audit(fastify.prisma, request, 'delete_order', order.orderNo,
-        isAdmin ? 'admin_delete' : 'planner_delete_unscanned');
-      return { ok: true, deleted: true };
+    await fastify.prisma.order.delete({ where: { orderNo: order.orderNo } });
+    await audit(fastify.prisma, request, 'delete_order', order.orderNo,
+      isAdmin ? 'admin_delete' : 'planner_delete_unscanned');
+    return { ok: true, deleted: true };
+  });
+
+  // 重設生產紀錄（清空 stepEntries/pauseEvents 與 stepXAt 欄位，保留上傳資料）
+  // - Admin only
+  fastify.post('/:orderNo/reset-production', async (request, reply) => {
+    if (!request.user.isAdmin) {
+      return reply.code(403).send({ error: '需要管理員權限' });
     }
+    const rawNo = String(request.params.orderNo || '').trim();
+    if (!rawNo) return reply.code(400).send({ error: '缺少工單號' });
+    let order = await fastify.prisma.order.findUnique({ where: { orderNo: rawNo } });
+    if (!order) {
+      order = await fastify.prisma.order.findUnique({ where: { orderNo: rawNo.toUpperCase() } });
+    }
+    if (!order) return reply.code(404).send({ error: '找不到工單' });
+
+    const entryCount = await fastify.prisma.stepEntry.count({ where: { orderId: order.id } });
+    const pauseCount = await fastify.prisma.pauseEvent.count({ where: { orderId: order.id } });
+
+    await fastify.prisma.stepEntry.deleteMany({ where: { orderId: order.id } });
+    await fastify.prisma.pauseEvent.deleteMany({ where: { orderId: order.id } });
+    await fastify.prisma.order.update({
+      where: { orderNo: order.orderNo },
+      data: {
+        step1At: null, step2At: null, step3At: null, step4At: null,
+        step5At: null, step6At: null, step7At: null,
+        step11At: null, step12At: null, step13At: null,
+        step21At: null, step22At: null, step23At: null,
+        step12Note: null, step13Note: null,
+        step4Note: null, step7Note: null,
+        machineNo: null, leaderId: null,
+      },
+    });
+    await audit(fastify.prisma, request, 'reset_production', order.orderNo,
+      `entries=${entryCount} pauses=${pauseCount}`);
+    return { ok: true, reset: true, entryCount, pauseCount };
+  });
+
+  // 已刪除工單列表（回收桶）
+  // - Admin only
+  fastify.get('/trash', async (request, reply) => {
+    if (!request.user.isAdmin) {
+      return reply.code(403).send({ error: '需要管理員權限' });
+    }
+    // 逃生口：where 有 deletedAt 鍵即跳過中間件自動過濾
+    const orders = await fastify.prisma.order.findMany({
+      where: { deletedAt: { not: null } },
+      orderBy: { deletedAt: 'desc' },
+      take: 200,
+      select: {
+        orderNo: true,
+        deletedAt: true,
+        productSpec: true,
+        moldSpec: true,
+        machineNo: true,
+        productionDate: true,
+        leader: { select: { displayName: true } },
+      },
+    });
+    return { orders };
+  });
+
+  // 還原已軟刪除的工單（連同其 stepEntries / pauseEvents）
+  // - Admin only
+  fastify.post('/:orderNo/restore', async (request, reply) => {
+    if (!request.user.isAdmin) {
+      return reply.code(403).send({ error: '需要管理員權限' });
+    }
+    const rawNo = String(request.params.orderNo || '').trim();
+    if (!rawNo) return reply.code(400).send({ error: '缺少工單號' });
+    // 逃生口：明示 deletedAt 鍵繞過中間件自動過濾，才能查到已軟刪除的工單
+    let order = await fastify.prisma.order.findFirst({
+      where: { orderNo: rawNo, deletedAt: undefined },
+    });
+    if (!order) {
+      order = await fastify.prisma.order.findFirst({
+        where: { orderNo: rawNo.toUpperCase(), deletedAt: undefined },
+      });
+    }
+    if (!order) return reply.code(404).send({ error: '找不到工單' });
+    if (!order.deletedAt) {
+      return reply.code(400).send({ error: '此工單並未被刪除' });
+    }
+    await fastify.prisma.order.update({
+      where: { id: order.id },
+      data: { deletedAt: null },
+    });
+    // 子紀錄（stepEntries / pauseEvents）通常隨工單一起被軟刪除，也一併還原
+    const entryRes = await fastify.prisma.stepEntry.updateMany({
+      where: { orderId: order.id, deletedAt: { not: null } },
+      data: { deletedAt: null },
+    });
+    const pauseRes = await fastify.prisma.pauseEvent.updateMany({
+      where: { orderId: order.id, deletedAt: { not: null } },
+      data: { deletedAt: null },
+    });
+    await audit(fastify.prisma, request, 'restore_order', order.orderNo,
+      `entries=${entryRes.count} pauses=${pauseRes.count}`);
+    return { ok: true, restored: true, entries: entryRes.count, pauses: pauseRes.count };
   });
 
   // 取得工單的上傳原始列（多規格）

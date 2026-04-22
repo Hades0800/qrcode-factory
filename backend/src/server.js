@@ -14,6 +14,47 @@ import adminRoutes from './routes/admin.js';
 
 const prisma = new PrismaClient();
 
+// ─── 軟刪除中間件 ─────────────────────────────────
+// 對指定 model 自動套用：
+//   1. find*/count/aggregate/groupBy 預設加上 deletedAt: null 過濾
+//   2. delete / deleteMany 改寫為 update / updateMany，設定 deletedAt = 當下時間
+// 逃生口：caller 在 where 內明確指定 deletedAt（即使是 undefined）即可跳過自動過濾，
+//        用於「查含已刪除」或「restore 前 lookup」等場景。
+// 注意：nested include 不會進 middleware，必須在 include 內手動加 where: { deletedAt: null }
+const SOFT_DELETE_MODELS = new Set(['Order', 'Leader', 'IdleEvent', 'StepEntry', 'PauseEvent']);
+prisma.$use(async (params, next) => {
+  if (!SOFT_DELETE_MODELS.has(params.model)) return next(params);
+
+  if (params.action === 'findUnique' || params.action === 'findFirst') {
+    params.args = params.args || {};
+    params.args.where = params.args.where || {};
+    if (!('deletedAt' in params.args.where)) {
+      if (params.action === 'findUnique') params.action = 'findFirst';
+      params.args.where.deletedAt = null;
+    }
+  } else if (
+    params.action === 'findMany' ||
+    params.action === 'count' ||
+    params.action === 'aggregate' ||
+    params.action === 'groupBy'
+  ) {
+    params.args = params.args || {};
+    params.args.where = params.args.where || {};
+    if (!('deletedAt' in params.args.where)) {
+      params.args.where.deletedAt = null;
+    }
+  } else if (params.action === 'delete') {
+    params.action = 'update';
+    params.args.data = { deletedAt: new Date() };
+  } else if (params.action === 'deleteMany') {
+    params.action = 'updateMany';
+    params.args = params.args || {};
+    params.args.data = { ...(params.args.data || {}), deletedAt: new Date() };
+  }
+
+  return next(params);
+});
+
 const fastify = Fastify({
   logger: { level: process.env.LOG_LEVEL || 'info' },
   bodyLimit: 2 * 1024 * 1024, // 2MB 限制避免 DoS
@@ -120,7 +161,10 @@ fastify.post('/api/fix-dates', {
   onRequest: [fastify.authenticate, fastify.requireAdmin],
 }, async () => {
   const orders = await fastify.prisma.order.findMany({
-    include: { stepEntries: { orderBy: { recordedAt: 'asc' }, take: 1 }, pauseEvents: { orderBy: { startAt: 'asc' }, take: 1 } },
+    include: {
+      stepEntries: { where: { deletedAt: null }, orderBy: { recordedAt: 'asc' }, take: 1 },
+      pauseEvents: { where: { deletedAt: null }, orderBy: { startAt: 'asc' }, take: 1 },
+    },
   });
   let fixed = 0;
   for (const o of orders) {
@@ -206,11 +250,15 @@ async function ensureAdmin() {
     fastify.log.warn('沒有任何管理員，且 ADMIN_USERNAME/ADMIN_PASSWORD 未設定，跳過建立');
     return;
   }
-  const exists = await prisma.leader.findUnique({ where: { username } });
+  // 含已軟刪除（逃生口：deletedAt 鍵出現即繞過 middleware 自動過濾）
+  const exists = await prisma.leader.findFirst({ where: { username, deletedAt: undefined } });
   if (exists) {
-    if (!exists.isAdmin) {
-      await prisma.leader.update({ where: { id: exists.id }, data: { isAdmin: true } });
-      fastify.log.info(`已將 ${username} 設為管理員`);
+    const patch = {};
+    if (exists.deletedAt) patch.deletedAt = null;
+    if (!exists.isAdmin) patch.isAdmin = true;
+    if (Object.keys(patch).length > 0) {
+      await prisma.leader.update({ where: { id: exists.id }, data: patch });
+      fastify.log.info(`已恢復/提升管理員：${username}`);
     }
     return;
   }

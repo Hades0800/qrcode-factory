@@ -110,7 +110,10 @@ export default async function adminRoutes(fastify) {
   // 修正所有工單的 productionDate 為第一筆活動日期（台灣時間）
   fastify.post('/fix-production-dates', async () => {
     const orders = await fastify.prisma.order.findMany({
-      include: { stepEntries: { orderBy: { recordedAt: 'asc' }, take: 1 }, pauseEvents: { orderBy: { startAt: 'asc' }, take: 1 } },
+      include: {
+        stepEntries: { where: { deletedAt: null }, orderBy: { recordedAt: 'asc' }, take: 1 },
+        pauseEvents: { where: { deletedAt: null }, orderBy: { startAt: 'asc' }, take: 1 },
+      },
     });
     let fixed = 0;
     for (const o of orders) {

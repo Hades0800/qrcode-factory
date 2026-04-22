@@ -244,6 +244,12 @@
   </div>
 
   <div class="card">
+    <h2>已刪除工單（可救回）</h2>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">近期被誤刪的工單會出現在這裡，按「救回」可恢復工單與其生產紀錄。</p>
+    <div id="trashTable">載入中...</div>
+  </div>
+
+  <div class="card">
     <h2>系統工具</h2>
     <button class="btn-primary btn-block" id="fixDatesBtn" style="margin-bottom:8px;">修正所有工單生產日期</button>
     <p style="font-size:12px;color:var(--muted);margin:0;">將所有工單的生產日期更新為第一筆實際活動的日期</p>
@@ -339,6 +345,52 @@ async function deleteLeader(id, name) {
   loadLeaders();
 }
 
+function fmtDateTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const ymd = d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
+  const hm = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  return ymd + ' ' + hm;
+}
+
+async function loadTrash() {
+  const r = await api('/api/orders/trash');
+  if (!r.ok) { $('trashTable').textContent = r.error || '載入失敗'; return; }
+  const orders = r.data.orders || [];
+  if (!orders.length) {
+    $('trashTable').innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0;">目前沒有已刪除的工單</div>';
+    return;
+  }
+  const rows = orders.map(o => {
+    const spec = [o.productSpec, o.moldSpec].filter(Boolean).join(' / ') || '—';
+    const leaderName = (o.leader && o.leader.displayName) || '—';
+    return `
+      <tr>
+        <td><strong>${escapeHtml(o.orderNo)}</strong><br><span style="color:#888;font-size:12px;">${escapeHtml(spec)}</span></td>
+        <td style="font-size:12px;color:#666;">${fmtDateTime(o.deletedAt)}<br><span style="color:#888;">原負責：${escapeHtml(leaderName)}</span></td>
+        <td class="row-actions">
+          <button class="btn-primary" data-restore="${escapeHtml(o.orderNo)}">救回</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+  $('trashTable').innerHTML = `<table><thead><tr><th>工單 / 規格</th><th>刪除時間</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table>`;
+  $('trashTable').querySelectorAll('[data-restore]').forEach(b => {
+    b.onclick = () => restoreOrder(b.dataset.restore);
+  });
+}
+
+async function restoreOrder(orderNo) {
+  if (!confirm('確定救回工單「' + orderNo + '」？\n工單與其生產紀錄都會一起恢復。')) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/restore', { method: 'POST' });
+  if (!r.ok) { toast(r.error || '救回失敗', 'error'); return; }
+  const entries = r.data.entries || 0;
+  const pauses = r.data.pauses || 0;
+  const detail = (entries || pauses) ? `（含工序 ${entries} 筆、停機 ${pauses} 筆）` : '';
+  toast('已救回 ' + orderNo + detail, 'success');
+  loadTrash();
+}
+
 $('fixDatesBtn').onclick = async () => {
   if (!confirm('確定修正所有工單的生產日期？\n\n將根據第一筆實際活動時間重新設定。')) return;
   $('fixDatesBtn').disabled = true;
@@ -355,6 +407,7 @@ if (API_URL.startsWith('PASTE_')) {
   toast('尚未設定 API_URL，請先部署後端', 'error');
 } else {
   loadLeaders();
+  loadTrash();
 }
 </script>
 </body>

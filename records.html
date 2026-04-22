@@ -853,12 +853,29 @@ async function toggleDetail(idx) {
 }
 
 async function deleteOrder(orderNo) {
-  if (!confirm('確定刪除工單「' + orderNo + '」？\n\n⚠️ 此動作無法復原，所有掃描紀錄都會消失。')) return;
+  if (!confirm('確定刪除工單「' + orderNo + '」？\n\n⚠️ 此動作無法復原。')) return;
   const r = await api('/api/orders/' + encodeURIComponent(orderNo), { method: 'DELETE' });
-  if (!r.ok) { toast(r.error || '刪除失敗', 'error'); return; }
-  allOrders = allOrders.filter(o => o.orderNo !== orderNo);
-  render();
-  toast('已刪除 ' + orderNo, 'success');
+  if (r.ok) {
+    allOrders = allOrders.filter(o => o.orderNo !== orderNo);
+    render();
+    toast('已刪除 ' + orderNo, 'success');
+    return;
+  }
+  // 409：已有生產紀錄，提供重設選項（Admin only）
+  if (r.status === 409 && r.data && r.data.code === 'HAS_PRODUCTION_DATA') {
+    if (!r.data.canReset) {
+      toast(r.error || '工單已有生產紀錄，無法刪除（需管理員重設）', 'error');
+      return;
+    }
+    const info = `工單「${orderNo}」已有生產紀錄：\n  ・工序紀錄 ${r.data.entryCount || 0} 筆\n  ・停機紀錄 ${r.data.pauseCount || 0} 筆\n\n是否改為「重設生產紀錄」？\n（會清空生產實態，但保留上傳資料；工單本身不會消失）`;
+    if (!confirm(info)) return;
+    const r2 = await api('/api/orders/' + encodeURIComponent(orderNo) + '/reset-production', { method: 'POST' });
+    if (!r2.ok) { toast(r2.error || '重設失敗', 'error'); return; }
+    await loadOrders();
+    toast('已重設 ' + orderNo + ' 的生產紀錄', 'success');
+    return;
+  }
+  toast(r.error || '刪除失敗', 'error');
 }
 
 function stepCell(t) {
