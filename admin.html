@@ -670,7 +670,6 @@ async function findOrderNo() {
         action = '<div style="display:flex;gap:4px;flex-wrap:wrap;">'
           + restoreRecBtn
           + '<button class="btn-danger" data-finddel="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;">刪除</button>'
-          + '<button data-finddel-force="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;">徹底刪除</button>'
           + '<button data-purge="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:#1c1c1e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
           + '</div>';
       }
@@ -722,9 +721,6 @@ async function findOrderNo() {
   $('findOrderResult').querySelectorAll('[data-finddel]').forEach(b => {
     b.onclick = () => deleteOrderFromFind(b.dataset.finddel);
   });
-  $('findOrderResult').querySelectorAll('[data-finddel-force]').forEach(b => {
-    b.onclick = () => forceDeleteOrderFromFind(b.dataset.finddelForce);
-  });
   $('findOrderResult').querySelectorAll('[data-restore]').forEach(b => {
     b.onclick = () => restoreOrder(b.dataset.restore);
   });
@@ -750,40 +746,22 @@ async function purgeOrder(orderNo) {
   if (typeof loadAuditLog === 'function') loadAuditLog();
 }
 
-async function forceDeleteOrderFromFind(orderNo) {
-  if (!confirm('⚠️ 徹底刪除工單「' + orderNo + '」？\n\n會連同所有工序紀錄、暫停紀錄一起軟刪除。\n（仍可從「已刪除工單」區塊救回）')) return;
-  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '?force=true', { method: 'DELETE' });
+async function deleteOrderFromFind(orderNo) {
+  if (!confirm('確定刪除工單「' + orderNo + '」？\n\n（軟刪除，可從「已刪除工單」區塊救回）')) return;
+  let r = await api('/api/orders/' + encodeURIComponent(orderNo), { method: 'DELETE' });
+  if (!r.ok && r.status === 409 && r.data && r.data.code === 'HAS_PRODUCTION_DATA') {
+    const info = '工單「' + orderNo + '」已有生產紀錄：\n  ・工序紀錄 ' + (r.data.entryCount || 0) + ' 筆\n  ・停機紀錄 ' + (r.data.pauseCount || 0) + ' 筆\n\n要連紀錄一起軟刪除嗎？\n（仍可從「已刪除工單」區塊救回）';
+    if (!confirm(info)) return;
+    r = await api('/api/orders/' + encodeURIComponent(orderNo) + '?force=true', { method: 'DELETE' });
+  }
   if (!r.ok) { toast(r.error || '刪除失敗', 'error'); return; }
   const detail = (r.data.entries || r.data.pauses)
     ? '（含工序 ' + (r.data.entries || 0) + ' 筆、停機 ' + (r.data.pauses || 0) + ' 筆）'
     : '';
-  toast('已徹底刪除 ' + orderNo + detail, 'success');
+  toast('已刪除 ' + orderNo + detail, 'success');
   findOrderNo();
   loadRecovery();
   loadAuditLog();
-}
-
-async function deleteOrderFromFind(orderNo) {
-  if (!confirm('確定刪除工單「' + orderNo + '」？\n\n⚠️ 此動作無法復原（但可從「已刪除工單」區塊救回）。')) return;
-  const r = await api('/api/orders/' + encodeURIComponent(orderNo), { method: 'DELETE' });
-  if (r.ok) {
-    toast('已刪除 ' + orderNo, 'success');
-    findOrderNo();
-    loadRecovery();
-    loadAuditLog();
-    return;
-  }
-  if (r.status === 409 && r.data && r.data.code === 'HAS_PRODUCTION_DATA') {
-    if (!r.data.canReset) { toast(r.error, 'error'); return; }
-    const info = '工單「' + orderNo + '」已有生產紀錄：\n  ・工序紀錄 ' + (r.data.entryCount || 0) + ' 筆\n  ・停機紀錄 ' + (r.data.pauseCount || 0) + ' 筆\n\n是否改為「重設生產紀錄」？';
-    if (!confirm(info)) return;
-    const r2 = await api('/api/orders/' + encodeURIComponent(orderNo) + '/reset-production', { method: 'POST' });
-    if (!r2.ok) { toast(r2.error || '重設失敗', 'error'); return; }
-    toast('已重設 ' + orderNo, 'success');
-    findOrderNo();
-    return;
-  }
-  toast(r.error || '刪除失敗', 'error');
 }
 
 $('findOrderBtn').onclick = findOrderNo;
