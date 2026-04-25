@@ -671,18 +671,13 @@ async function loadOverview() {
                   if (o.step11At) status = '<span style="color:var(--success);">已完成</span>';
                   else if (started) status = '<span style="color:#1f6feb;">生產中</span>';
                   else status = '<span style="color:#f0ad4e;">待生產</span>';
+                  // 顯示「計畫 vs 實際」差異標籤：當兩者都有值且不同時亮黃色標
                   let mismatchTag = '';
-                  if (started) {
-                    const actTimes = [];
-                    ['step1At','step2At','step3At','step4At','step5At','step6At','step7At','step21At','step22At','step23At'].forEach(k => { if (o[k]) actTimes.push(new Date(o[k])); });
-                    (o.stepEntries || []).forEach(e => { if (e.recordedAt) actTimes.push(new Date(e.recordedAt)); });
-                    if (actTimes.length > 0 && o.productionDate) {
-                      const earliest = new Date(Math.min(...actTimes.map(t => t.getTime())));
-                      const actDate = earliest.getFullYear() + '-' + String(earliest.getMonth()+1).padStart(2,'0') + '-' + String(earliest.getDate()).padStart(2,'0');
-                      const pdDate = String(o.productionDate).slice(0, 10);
-                      if (actDate !== pdDate) {
-                        mismatchTag = ' <span style="background:var(--brand);color:#fff;font-size:9px;padding:1px 6px;border-radius:6px;" title="實際開始 ' + actDate + '">日期不符</span>';
-                      }
+                  if (o.actualStartDate && o.plannedDate) {
+                    const actDate = String(o.actualStartDate).slice(0, 10);
+                    const plDate = String(o.plannedDate).slice(0, 10);
+                    if (actDate !== plDate) {
+                      mismatchTag = ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 6px;border-radius:6px;" title="計畫 ' + plDate + ' / 實際 ' + actDate + '">計畫 ' + plDate + '</span>';
                     }
                   }
                   return '<tr>' +

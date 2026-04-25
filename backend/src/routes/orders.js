@@ -21,32 +21,21 @@ async function hasAnyActivity(prisma, order) {
   return pauseCount > 0;
 }
 
-// 取得台灣時間的今天日期（UTC+8）
-function getTaiwanToday() {
-  const now = new Date();
-  // 轉換為台灣時間 (UTC+8)
-  const twTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-  const y = twTime.getUTCFullYear();
-  const m = twTime.getUTCMonth();
-  const d = twTime.getUTCDate();
-  // 回傳 UTC 午夜的日期（僅作為日期標記）
-  return new Date(Date.UTC(y, m, d));
+// 把任意時間轉成「台灣日期」（UTC 午夜，當作純日期標記）
+function toTaiwanDate(t) {
+  const d = t instanceof Date ? t : new Date(t || Date.now());
+  const tw = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+  return new Date(Date.UTC(tw.getUTCFullYear(), tw.getUTCMonth(), tw.getUTCDate()));
 }
 
-// 設定 productionDate 為實際生產開始日期
-// 工單一旦有過任何活動（含已軟刪除的紀錄），就永遠不再覆寫 productionDate
-// 這是為了避免：工單 reset-production 後重做時，日期被當成「第一次活動」重設成今天
-// （deletedAt: undefined 是逃生口，繞過軟刪除中間件的自動過濾）
-async function updateProductionDateToday(fastify, order) {
-  const entryCount = await fastify.prisma.stepEntry.count({ where: { orderId: order.id, deletedAt: undefined } });
-  const pauseCount = await fastify.prisma.pauseEvent.count({ where: { orderId: order.id, deletedAt: undefined } });
-  const hasOldSteps = !!(order.step1At || order.step2At || order.step3At || order.step4At || order.step5At || order.step6At || order.step7At || order.step11At || order.step21At || order.step22At || order.step23At);
-  if (entryCount > 0 || pauseCount > 0 || hasOldSteps) return; // 曾經有過活動，保留現有日期
-  // 真正第一次活動（DB 連歷史紀錄都沒有）：設為今天（台灣時間）
-  const today = getTaiwanToday();
+// 設定 actualStartDate 為實際開始日期（台灣時間）
+// 規則：actualStartDate 一旦有值就永遠不再覆寫；reset-production 才會清空
+// 第一次有活動時（含補登），把那筆活動時間的台灣日期寫入
+async function setActualStartDate(fastify, order, eventTime) {
+  if (order.actualStartDate) return; // 已有值，鎖死不再變
   await fastify.prisma.order.update({
     where: { orderNo: order.orderNo },
-    data: { productionDate: today },
+    data: { actualStartDate: toTaiwanDate(eventTime) },
   });
 }
 
@@ -108,7 +97,14 @@ function serializeOrder(o) {
     step1At: o.step1At, step2At: o.step2At, step3At: o.step3At,
     step4At: o.step4At, step5At: o.step5At, step6At: o.step6At,
     step7At: o.step7At, step11At: o.step11At,
-    productionDate: o.productionDate, productSpec: o.productSpec || '',
+    // 三個日期：
+    //   plannedDate     = 上傳的計畫日（生管說「這張要 X 做」）
+    //   actualStartDate = 第一筆活動的台灣日期（現場第一次掃 QR 那天）
+    //   productionDate  = 兼容舊邏輯，等同於 actualStartDate || plannedDate
+    plannedDate: o.plannedDate || o.productionDate || null,
+    actualStartDate: o.actualStartDate || null,
+    productionDate: o.actualStartDate || o.plannedDate || o.productionDate || null,
+    productSpec: o.productSpec || '',
     moldSpec: o.moldSpec || '', material: o.material || '',
     dispatchQty: o.dispatchQty, bladeCount: o.bladeCount,
     machineSPM: o.machineSPM, unitWeight: o.unitWeight, totalWeight: o.totalWeight,
@@ -231,7 +227,7 @@ export default async function orderRoutes(fastify) {
       }
       time = parsed;
     }
-    await updateProductionDateToday(fastify, order);
+    await setActualStartDate(fastify, order, time);
     const entry = await fastify.prisma.stepEntry.create({
       data: {
         orderId: order.id,
@@ -315,10 +311,11 @@ export default async function orderRoutes(fastify) {
       });
     }
 
-    await updateProductionDateToday(fastify, order);
+    const stepTime = new Date();
+    await setActualStartDate(fastify, order, stepTime);
 
     const updateData = {
-      [cols.time]: new Date(),
+      [cols.time]: stepTime,
       leaderId: request.user.id,
     };
     if (cols.note && note) updateData[cols.note] = clipStr(note, 500);
@@ -365,8 +362,8 @@ export default async function orderRoutes(fastify) {
       where: { orderId: order.id, type, endAt: null },
     });
     if (active) return reply.code(409).send({ error: '已在暫停中，請先恢復' });
-    // 更新 productionDate 為今天
-    await updateProductionDateToday(fastify, order);
+    const pauseStart = new Date();
+    await setActualStartDate(fastify, order, pauseStart);
     await fastify.prisma.pauseEvent.create({
       data: { orderId: order.id, type, note: clipStr(note, 500), activeStep: clipStr(activeStep, 100) },
     });
@@ -386,9 +383,9 @@ export default async function orderRoutes(fastify) {
       where: { orderId: order.id, type, endAt: null },
     });
     if (!active) return reply.code(404).send({ error: '沒有進行中的暫停' });
-    // 更新 productionDate 為今天
-    await updateProductionDateToday(fastify, order);
     const now = new Date();
+    // 補一道保險：若 pause 那次因故沒寫入 actualStartDate，這裡用 pause 開始時間補
+    await setActualStartDate(fastify, order, active.startAt);
     const duration = Math.round((now - active.startAt) / 1000);
     await fastify.prisma.pauseEvent.update({
       where: { id: active.id },
@@ -414,6 +411,7 @@ export default async function orderRoutes(fastify) {
     if (!order) return reply.code(404).send({ error: '找不到工單' });
     const duration = Math.round((endAt - startAt) / 1000);
     const backfillNote = '【補登】' + (note || '');
+    await setActualStartDate(fastify, order, startAt);
     await fastify.prisma.pauseEvent.create({
       data: { orderId: order.id, type, note: clipStr(backfillNote, 500), startAt, endAt, duration },
     });
@@ -492,7 +490,7 @@ export default async function orderRoutes(fastify) {
         }
 
         const data = {
-          productionDate: batchProductionDate,
+          plannedDate: batchProductionDate, // 計畫日期：可被新上傳覆寫
           productSpec: rawRow.productSpec,
           moldSpec: rawRow.moldSpec,
           material: rawRow.material,
@@ -509,20 +507,14 @@ export default async function orderRoutes(fastify) {
         if (existing) {
           const specMatch = !existing.productSpec || !data.productSpec || existing.productSpec === data.productSpec;
           if (specMatch) {
-            // 鎖定規則：
-            //   - machineNo：工單一旦有生產活動就鎖（現場掃 QR 為準）
-            //   - productionDate：工單一旦有生產日期就鎖（首次上傳那天就定案，
-            //     避免「同單號被後續批次反覆上傳→ productionDate 跟著最後一次跑」
-            //     例如 0417 的工單在 0420 又出現會被改成 4/20）
+            // 唯一鎖定欄位：machineNo（工單一旦有生產活動就鎖，現場為準）
+            // plannedDate 不鎖（生管修排程隨時都該被反映）；actualStartDate 跟上傳完全無關
             const hasActivity = await hasAnyActivity(fastify.prisma, existing);
             const lockMachine = hasActivity && existing.machineNo;
-            const lockDate = !!existing.productionDate;
             const merged = {};
             for (const key of Object.keys(data)) {
               if (key === 'machineNo' && lockMachine) {
                 merged[key] = existing.machineNo;
-              } else if (key === 'productionDate' && lockDate) {
-                merged[key] = existing.productionDate;
               } else {
                 merged[key] = (data[key] != null && data[key] !== '') ? data[key] : existing[key];
               }
@@ -677,6 +669,7 @@ export default async function orderRoutes(fastify) {
         step12Note: null, step13Note: null,
         step4Note: null, step7Note: null,
         machineNo: null, leaderId: null,
+        actualStartDate: null, // reset 後重做時，第一筆新紀錄會重新設定 actualStartDate
       },
     });
     await audit(fastify.prisma, request, 'reset_production', order.orderNo,

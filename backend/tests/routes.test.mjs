@@ -508,10 +508,11 @@ await test('bulk-upload：已有 productionDate 的工單，再上傳也不覆�
   assert.equal(storedDateStr, '2026-04-17', 'productionDate 應保留 4/17（已有值就鎖），不被 0420 覆寫');
 });
 
-await test('bulk-upload：productionDate 為 null 時，上傳會設值（首次上傳）', async () => {
+await test('bulk-upload：寫入 plannedDate（取代舊的 productionDate）', async () => {
+  // 新架構：上傳寫 plannedDate，不再寫 productionDate
   const { fastify, state } = await buildApp(PLANNER);
   await fastify.prisma.order.create({
-    data: { orderNo: 'D0000000003', productSpec: 'SPEC-NEW', productionDate: null },
+    data: { orderNo: 'D0000000003', productSpec: 'SPEC-NEW', plannedDate: null },
   });
   const res = await fastify.inject({
     method: 'POST', url: '/api/orders/bulk-upload',
@@ -524,8 +525,28 @@ await test('bulk-upload：productionDate 為 null 時，上傳會設值（首次
   });
   assert.equal(res.statusCode, 200);
   const stored = state.orders.get('D0000000003');
-  assert.ok(stored.productionDate, 'productionDate 為 null 時應被設值');
-  assert.equal(new Date(stored.productionDate).toISOString().slice(0, 10), '2026-04-25');
+  assert.ok(stored.plannedDate, 'plannedDate 應被設值');
+  assert.equal(new Date(stored.plannedDate).toISOString().slice(0, 10), '2026-04-25');
+});
+
+await test('bulk-upload：plannedDate 可被新上傳覆寫（生管修排程要能反映）', async () => {
+  const { fastify, state } = await buildApp(PLANNER);
+  const date0417 = new Date('2026-04-17T00:00:00Z');
+  await fastify.prisma.order.create({
+    data: { orderNo: 'D0000000004', productSpec: 'SPEC-PLAN', plannedDate: date0417 },
+  });
+  const res = await fastify.inject({
+    method: 'POST', url: '/api/orders/bulk-upload',
+    headers: { 'content-type': 'application/json' },
+    payload: JSON.stringify({
+      orders: [{ orderNo: 'D0000000004', productSpec: 'SPEC-PLAN' }],
+      filename: '0420.xlsx',
+      uploadDate: '2026-04-20',
+    }),
+  });
+  assert.equal(res.statusCode, 200);
+  const stored = state.orders.get('D0000000004');
+  assert.equal(new Date(stored.plannedDate).toISOString().slice(0, 10), '2026-04-20', 'plannedDate 應被覆寫成 4/20');
 });
 
 await test('step-entries：reset 後重做時，不可把 productionDate 改成今天（regression）', async () => {
@@ -555,10 +576,10 @@ await test('step-entries：reset 後重做時，不可把 productionDate 改成�
   assert.equal(storedDateStr, '2026-04-21', 'productionDate 應保留 4/21（曾經有過活動，含已軟刪除）');
 });
 
-await test('step-entries：真正全新工單第一次活動時，productionDate 設為今天（維持原行為）', async () => {
+await test('step-entries：全新工單第一次活動時，actualStartDate 設為當天（取代舊 productionDate 邏輯）', async () => {
   const { fastify, state } = await buildApp(PLANNER);
   await fastify.prisma.order.create({
-    data: { orderNo: 'E0000000002', machineNo: 'No3-60', productSpec: 'SPEC-NEW', productionDate: null },
+    data: { orderNo: 'E0000000002', machineNo: 'No3-60', productSpec: 'SPEC-NEW', actualStartDate: null },
   });
   const res = await fastify.inject({
     method: 'POST', url: '/api/orders/E0000000002/step-entries',
@@ -567,7 +588,36 @@ await test('step-entries：真正全新工單第一次活動時，productionDate
   });
   assert.equal(res.statusCode, 200);
   const stored = state.orders.get('E0000000002');
-  assert.ok(stored.productionDate, '全新工單第一次活動應自動設 productionDate');
+  assert.ok(stored.actualStartDate, '全新工單第一次活動應自動設 actualStartDate');
+});
+
+await test('reset-production：清除 actualStartDate（讓 reset 後重新累積）', async () => {
+  const { fastify, state } = await buildApp(ADMIN);
+  const order = await fastify.prisma.order.create({
+    data: { orderNo: 'F0000000001', actualStartDate: new Date('2026-04-21T00:00:00Z') },
+  });
+  await fastify.prisma.stepEntry.create({ data: { orderId: order.id, stepNo: '1', seq: 1, recordedAt: new Date() } });
+  const res = await fastify.inject({ method: 'POST', url: '/api/orders/F0000000001/reset-production' });
+  assert.equal(res.statusCode, 200);
+  const stored = state.orders.get('F0000000001');
+  assert.equal(stored.actualStartDate, null, 'reset 後 actualStartDate 應被清空');
+});
+
+await test('step-entries：補登舊日期時，actualStartDate 用補登時間（不是今天）', async () => {
+  const { fastify, state } = await buildApp(PLANNER);
+  await fastify.prisma.order.create({
+    data: { orderNo: 'F0000000002', machineNo: 'No3-60', actualStartDate: null },
+  });
+  const res = await fastify.inject({
+    method: 'POST', url: '/api/orders/F0000000002/step-entries',
+    headers: { 'content-type': 'application/json' },
+    payload: JSON.stringify({ stepNo: '1', recordedAt: '2026-04-15T08:00:00Z' }),
+  });
+  assert.equal(res.statusCode, 200);
+  const stored = state.orders.get('F0000000002');
+  assert.ok(stored.actualStartDate);
+  // 4/15 08:00 UTC = 4/15 16:00 台灣 → 台灣日期 = 4/15
+  assert.equal(new Date(stored.actualStartDate).toISOString().slice(0, 10), '2026-04-15', 'actualStartDate 應用補登時間（4/15），不是今天');
 });
 
 await test('DELETE ?force=true（Admin）→ 連紀錄一起軟刪除', async () => {

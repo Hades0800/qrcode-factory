@@ -751,9 +751,9 @@ function render() {
           </div>
         </div>
         <div class="rc-meta" style="margin-top:10px;">
-          <span>機台 <strong>${escapeHtml(o.machineNo || '—')}</strong></span>
+          <span>機台 <strong>${escapeHtml(o.machineNo || '—')}</strong>${o.plannedMachineNo && o.plannedMachineNo !== o.machineNo ? `<span style="color:#a98e44;font-size:11px;margin-left:4px;">（計畫 ${escapeHtml(o.plannedMachineNo)}）</span>` : ''}</span>
           <span>組長 <strong>${escapeHtml(o.leaderName || '—')}</strong></span>
-          <span>日期 ${o.productionDate ? String(o.productionDate).slice(0,10) : '—'}</span>
+          <span>日期 ${o.productionDate ? String(o.productionDate).slice(0,10) : '—'}${o.actualStartDate && o.plannedDate && String(o.actualStartDate).slice(0,10) !== String(o.plannedDate).slice(0,10) ? `<span style="color:#a98e44;font-size:11px;margin-left:4px;">（計畫 ${escapeHtml(String(o.plannedDate).slice(0,10))}）</span>` : ''}</span>
         </div>
         <div class="rc-expand" style="margin-top:10px;cursor:pointer;" onclick="toggleDetail(${idx})">▶ 展開工單明細</div>
         <div class="rc-detail" id="detail-${idx}">

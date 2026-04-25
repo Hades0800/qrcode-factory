@@ -166,6 +166,62 @@ export default async function adminRoutes(fastify) {
     };
   });
 
+  // 一次性 migration：把舊 productionDate 拆成 plannedDate + actualStartDate
+  // - actualStartDate：用第一筆活動的台灣日期
+  // - plannedDate：找最早未取消批次的 productionDate；找不到就用舊 productionDate
+  fastify.post('/migrate-dates', async () => {
+    const toTwDate = (t) => {
+      const d = t instanceof Date ? t : new Date(t);
+      const tw = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+      return new Date(Date.UTC(tw.getUTCFullYear(), tw.getUTCMonth(), tw.getUTCDate()));
+    };
+    const orders = await fastify.prisma.order.findMany({
+      include: {
+        stepEntries: { where: { deletedAt: null }, orderBy: { recordedAt: 'asc' }, take: 1 },
+        pauseEvents: { where: { deletedAt: null }, orderBy: { startAt: 'asc' }, take: 1 },
+      },
+    });
+    let updated = 0;
+    for (const o of orders) {
+      // 計算 actualStartDate
+      const times = [];
+      ['step1At','step2At','step3At','step4At','step5At','step6At','step7At','step11At','step21At','step22At','step23At'].forEach(k => {
+        if (o[k]) times.push(new Date(o[k]));
+      });
+      if (o.stepEntries && o.stepEntries.length > 0) times.push(new Date(o.stepEntries[0].recordedAt));
+      if (o.pauseEvents && o.pauseEvents.length > 0) times.push(new Date(o.pauseEvents[0].startAt));
+      const actualStartDate = times.length > 0
+        ? toTwDate(new Date(Math.min(...times.map(t => t.getTime()))))
+        : null;
+
+      // 計算 plannedDate：最早一筆未取消批次的 productionDate
+      let plannedDate = null;
+      const earliestRow = await fastify.prisma.uploadRow.findFirst({
+        where: { orderNo: o.orderNo, batch: { cancelledAt: null } },
+        include: { batch: { select: { productionDate: true, uploadedAt: true } } },
+        orderBy: { batchId: 'asc' },
+      });
+      if (earliestRow && earliestRow.batch && earliestRow.batch.productionDate) {
+        plannedDate = earliestRow.batch.productionDate;
+      } else if (o.productionDate) {
+        plannedDate = o.productionDate;
+      }
+
+      const needUpdate = (
+        (actualStartDate && (!o.actualStartDate || new Date(o.actualStartDate).getTime() !== actualStartDate.getTime())) ||
+        (plannedDate && (!o.plannedDate || new Date(o.plannedDate).getTime() !== new Date(plannedDate).getTime()))
+      );
+      if (needUpdate) {
+        await fastify.prisma.order.update({
+          where: { id: o.id },
+          data: { actualStartDate, plannedDate },
+        });
+        updated++;
+      }
+    }
+    return { ok: true, total: orders.length, updated };
+  });
+
   // 修正所有工單的 productionDate 為第一筆活動日期（台灣時間）
   fastify.post('/fix-production-dates', async () => {
     const orders = await fastify.prisma.order.findMany({

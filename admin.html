@@ -261,8 +261,12 @@
 
   <div class="card">
     <h2>系統工具</h2>
-    <button class="btn-primary btn-block" id="fixDatesBtn" style="margin-bottom:8px;">修正所有工單生產日期</button>
-    <p style="font-size:12px;color:var(--muted);margin:0;">將所有工單的生產日期更新為第一筆實際活動的日期</p>
+    <button class="btn-primary btn-block" id="migrateDatesBtn" style="margin-bottom:6px;">遷移：拆分計畫日期 / 實際開始日期</button>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 14px;">把舊 productionDate 拆成「計畫日期 (plannedDate)」與「實際開始日期 (actualStartDate)」。執行後即時頁、紀錄頁、製造概覽會以實際日期為準，並標出計畫日期不同處。建議只跑一次。</p>
+    <div id="migrateDatesResult" style="margin:0 0 14px;"></div>
+
+    <button class="btn-secondary btn-block" id="fixDatesBtn" style="margin-bottom:6px;">舊版：修正所有工單生產日期</button>
+    <p style="font-size:12px;color:var(--muted);margin:0;">舊功能（依第一筆活動重設 productionDate）。新流程已用「遷移」取代，平常不需要按。</p>
     <div id="fixDatesResult" style="margin-top:8px;"></div>
   </div>
 
@@ -523,6 +527,18 @@ async function deleteOrderFromFind(orderNo) {
 
 $('findOrderBtn').onclick = findOrderNo;
 $('findOrderInput').addEventListener('keydown', e => { if (e.key === 'Enter') findOrderNo(); });
+
+$('migrateDatesBtn').onclick = async () => {
+  if (!confirm('遷移 productionDate → plannedDate + actualStartDate？\n\n會掃所有工單，依第一筆活動算實際日期、依最早未取消批次算計畫日期。\n建議備份 DB 後再執行。')) return;
+  $('migrateDatesBtn').disabled = true;
+  $('migrateDatesBtn').textContent = '遷移中...';
+  const r = await api('/api/admin/migrate-dates', { method: 'POST', body: {} });
+  $('migrateDatesBtn').disabled = false;
+  $('migrateDatesBtn').textContent = '遷移：拆分計畫日期 / 實際開始日期';
+  if (!r.ok) { toast(r.error || '遷移失敗', 'error'); return; }
+  $('migrateDatesResult').innerHTML = '<span style="color:var(--success);font-weight:600;">✓ 完成：共 ' + r.data.total + ' 張工單，更新 ' + r.data.updated + ' 張</span>';
+  toast('遷移完成', 'success');
+};
 
 $('fixDatesBtn').onclick = async () => {
   if (!confirm('確定修正所有工單的生產日期？\n\n將根據第一筆實際活動時間重新設定。')) return;

@@ -695,6 +695,10 @@ function renderContent() {
           <div style="margin-bottom:8px;padding:6px 10px;background:#fff3cd;border-left:3px solid #f0ad4e;border-radius:4px;font-size:12px;color:#8a6d3b;">
             <strong>原計劃生產機台：</strong>${escapeHtml(o.plannedMachineNo)}
           </div>` : ''}
+          ${o.actualStartDate && o.plannedDate && String(o.actualStartDate).slice(0,10) !== String(o.plannedDate).slice(0,10) ? `
+          <div style="margin-bottom:8px;padding:6px 10px;background:#fff3cd;border-left:3px solid #f0ad4e;border-radius:4px;font-size:12px;color:#8a6d3b;">
+            <strong>計畫日期：</strong>${escapeHtml(String(o.plannedDate).slice(0,10))} <span style="color:#a98e44;">（實際開始 ${escapeHtml(String(o.actualStartDate).slice(0,10))}）</span>
+          </div>` : ''}
           <div class="order-info" style="margin-bottom:12px;">
             <span class="oi-label">小組長</span><span class="oi-value">${escapeHtml(o.leaderName)}</span>
           </div>

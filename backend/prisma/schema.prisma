@@ -39,7 +39,9 @@ model Order {
   leader            Leader?  @relation(fields: [leaderId], references: [id])
 
   // 匯入欄位（生管 Excel 上傳）
-  productionDate DateTime?
+  productionDate DateTime?  // 已棄用：保留兼容，新邏輯改用 plannedDate / actualStartDate
+  plannedDate    DateTime?  // 計畫日期：Excel 上傳的日期，可被新上傳覆寫（生管的計畫）
+  actualStartDate DateTime? // 實際開始日期：第一筆 stepEntry/pauseEvent 的台灣日期，永久鎖定（現場事實）
   productSpec    String?
   moldSpec       String?
   material       String?
@@ -80,6 +82,8 @@ model Order {
 
   @@index([orderNo])
   @@index([productionDate])
+  @@index([plannedDate])
+  @@index([actualStartDate])
   @@index([machineNo])
   @@index([updatedAt])
   @@index([deletedAt])
