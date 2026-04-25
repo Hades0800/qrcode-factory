@@ -747,13 +747,8 @@ async function purgeOrder(orderNo) {
 }
 
 async function deleteOrderFromFind(orderNo) {
-  if (!confirm('確定刪除工單「' + orderNo + '」？\n\n（軟刪除，可從「已刪除工單」區塊救回）')) return;
-  let r = await api('/api/orders/' + encodeURIComponent(orderNo), { method: 'DELETE' });
-  if (!r.ok && r.status === 409 && r.data && r.data.code === 'HAS_PRODUCTION_DATA') {
-    const info = '工單「' + orderNo + '」已有生產紀錄：\n  ・工序紀錄 ' + (r.data.entryCount || 0) + ' 筆\n  ・停機紀錄 ' + (r.data.pauseCount || 0) + ' 筆\n\n要連紀錄一起軟刪除嗎？\n（仍可從「已刪除工單」區塊救回）';
-    if (!confirm(info)) return;
-    r = await api('/api/orders/' + encodeURIComponent(orderNo) + '?force=true', { method: 'DELETE' });
-  }
+  if (!confirm('確定刪除工單「' + orderNo + '」？\n\n會連同所有生產紀錄一起軟刪除，可從「已刪除工單」區塊救回完整狀態。')) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '?force=true', { method: 'DELETE' });
   if (!r.ok) { toast(r.error || '刪除失敗', 'error'); return; }
   const detail = (r.data.entries || r.data.pauses)
     ? '（含工序 ' + (r.data.entries || 0) + ' 筆、停機 ' + (r.data.pauses || 0) + ' 筆）'
