@@ -1172,7 +1172,12 @@ $('specTypeConfirm').onclick = async () => {
     body: { specType: specPick.type, difficultyFactor: specPick.factor },
   });
   $('specTypeConfirm').disabled = false;
-  if (!r.ok) { toast(r.error || '設定失敗', 'error'); return; }
+  if (!r.ok) {
+    console.error('spec-type failed:', r);
+    const hint = r.data && r.data.hint ? '\n' + r.data.hint : '';
+    alert('設定失敗（' + (r.status || '?') + '）：' + (r.error || '未知錯誤') + hint);
+    return;
+  }
   order = r.data.order;
   renderSpecType();
   saveState();
