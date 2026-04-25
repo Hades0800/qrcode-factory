@@ -114,18 +114,31 @@ export default async function adminRoutes(fastify) {
     if (!q) return reply.code(400).send({ error: '請提供 q 參數' });
     if (q.length > 60) return reply.code(400).send({ error: 'q 太長' });
 
-    // 工單表（含軟刪除：用 deletedAt:undefined 繞過 middleware 自動過濾）
-    const orders = await fastify.prisma.order.findMany({
-      where: { orderNo: { contains: q }, deletedAt: undefined },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-      select: {
-        id: true, orderNo: true, machineNo: true, plannedMachineNo: true,
-        productSpec: true, moldSpec: true, material: true,
-        productionDate: true, createdAt: true, updatedAt: true, deletedAt: true,
-        leader: { select: { displayName: true } },
-      },
-    });
+    // 工單表（同時查使用中 + 已軟刪除，合併）
+    // 不依賴 deletedAt:undefined 這種 fragile 寫法；改成兩段顯式 query
+    const SELECT_FIELDS = {
+      id: true, orderNo: true, machineNo: true, plannedMachineNo: true,
+      productSpec: true, moldSpec: true, material: true,
+      productionDate: true, createdAt: true, updatedAt: true, deletedAt: true,
+      leader: { select: { displayName: true } },
+    };
+    const [activeOrders, deletedOrders] = await Promise.all([
+      // middleware 會自動補 deletedAt: null，這裡只查使用中的
+      fastify.prisma.order.findMany({
+        where: { orderNo: { contains: q } },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: SELECT_FIELDS,
+      }),
+      // 顯式查已刪除（where 內有 deletedAt 鍵，middleware 不會再注入）
+      fastify.prisma.order.findMany({
+        where: { orderNo: { contains: q }, deletedAt: { not: null } },
+        orderBy: { deletedAt: 'desc' },
+        take: 50,
+        select: SELECT_FIELDS,
+      }),
+    ]);
+    const orders = [...activeOrders, ...deletedOrders];
 
     // 上傳列表（含已取消批次）
     const uploadRows = await fastify.prisma.uploadRow.findMany({
