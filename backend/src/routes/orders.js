@@ -713,14 +713,17 @@ export default async function orderRoutes(fastify) {
     }
     const rawNo = String(request.params.orderNo || '').trim();
     if (!rawNo) return reply.code(400).send({ error: '缺少工單號' });
-    // 逃生口：明示 deletedAt 鍵繞過中間件自動過濾，才能查到已軟刪除的工單
-    let order = await fastify.prisma.order.findFirst({
-      where: { orderNo: rawNo, deletedAt: undefined },
-    });
-    if (!order) {
+    // 找工單：先試使用中的（middleware 自動加 deletedAt: null），找不到再明確查已軟刪除的
+    // 不依賴 deletedAt:undefined 這種 fragile 寫法（Prisma 對 undefined 行為不穩）
+    const candidates = [rawNo, rawNo.toUpperCase()].filter((v, i, a) => a.indexOf(v) === i);
+    let order = null;
+    for (const no of candidates) {
+      order = await fastify.prisma.order.findFirst({ where: { orderNo: no } });
+      if (order) break;
       order = await fastify.prisma.order.findFirst({
-        where: { orderNo: rawNo.toUpperCase(), deletedAt: undefined },
+        where: { orderNo: no, deletedAt: { not: null } },
       });
+      if (order) break;
     }
     if (!order) return reply.code(404).send({ error: '找不到工單' });
 
