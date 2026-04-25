@@ -42,6 +42,9 @@ model Order {
   productionDate DateTime?  // 已棄用：保留兼容，新邏輯改用 plannedDate / actualStartDate
   plannedDate    DateTime?  // 計畫日期：Excel 上傳的日期，可被新上傳覆寫（生管的計畫）
   actualStartDate DateTime? // 實際開始日期：第一筆 stepEntry/pauseEvent 的台灣日期，永久鎖定（現場事實）
+  // 規格類型（現場技術員選擇）
+  specType         String?  // 'new' = 新製規格、'mass' = 量產規格
+  difficultyFactor Float?   // 新製規格的難易權重係數（1.1 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6）→ 生產時間 = 理論時間 × 係數
   productSpec    String?
   moldSpec       String?
   material       String?

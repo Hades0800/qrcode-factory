@@ -104,6 +104,8 @@ function serializeOrder(o) {
     plannedDate: o.plannedDate || o.productionDate || null,
     actualStartDate: o.actualStartDate || null,
     productionDate: o.actualStartDate || o.plannedDate || o.productionDate || null,
+    specType: o.specType || null,           // 'new' | 'mass' | null
+    difficultyFactor: o.difficultyFactor || null,  // 新製規格才有
     productSpec: o.productSpec || '',
     moldSpec: o.moldSpec || '', material: o.material || '',
     dispatchQty: o.dispatchQty, bladeCount: o.bladeCount,
@@ -335,6 +337,38 @@ export default async function orderRoutes(fastify) {
       include: ORDER_INCLUDE,
     });
     return { order: serializeOrder(updated) };
+  });
+
+  // 設定規格類型（現場技術員選擇）
+  // body: { specType: 'new' | 'mass', difficultyFactor?: 1.1~1.6 }
+  // - 量產規格不需 difficultyFactor，會被忽略並寫成 null
+  // - 新製規格必須帶合法 difficultyFactor
+  fastify.post('/:orderNo/spec-type', async (request, reply) => {
+    const orderNo = String(request.params.orderNo || '').toUpperCase();
+    const { specType, difficultyFactor } = request.body || {};
+    if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
+    if (!['new', 'mass'].includes(specType)) {
+      return reply.code(400).send({ error: '無效規格類型（需為 new 或 mass）' });
+    }
+    let factor = null;
+    if (specType === 'new') {
+      const allowed = [1.1, 1.2, 1.3, 1.4, 1.5, 1.6];
+      const f = Number(difficultyFactor);
+      // 浮點數比對允許微小誤差
+      const match = allowed.find(a => Math.abs(a - f) < 0.001);
+      if (!match) {
+        return reply.code(400).send({ error: '難易係數必須為 1.1 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6 之一' });
+      }
+      factor = match;
+    }
+    const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
+    if (!order) return reply.code(404).send({ error: '找不到工單' });
+    const updated = await fastify.prisma.order.update({
+      where: { orderNo },
+      data: { specType, difficultyFactor: factor },
+      include: ORDER_INCLUDE,
+    });
+    return { ok: true, order: serializeOrder(updated) };
   });
 
   // 紀錄某步驟

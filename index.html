@@ -709,7 +709,42 @@
         <div class="num" id="orderNoText"></div>
         <div class="updated" id="orderUpdated"></div>
       </div>
+      <!-- 規格類型 -->
+      <div style="margin-top:14px;padding:12px 14px;background:#f8f8fa;border-radius:10px;border:1px solid var(--border);">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600;letter-spacing:.5px;">規格類型</div>
+        <div id="specTypeDisplay" style="font-size:14px;font-weight:600;color:var(--muted);">尚未設定</div>
+        <button class="btn-secondary btn-block" id="setSpecTypeBtn" style="margin-top:8px;font-size:13px;padding:10px;">＋ 設定 / 修改規格類型</button>
+      </div>
       <button class="btn-secondary btn-block" id="changeOrderBtn" style="margin-top:14px;">更換工單</button>
+    </div>
+
+    <!-- 規格類型 modal -->
+    <div id="specTypeModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:20px;">
+      <div style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:20px;box-shadow:0 12px 32px rgba(0,0,0,.25);">
+        <div style="font-size:16px;font-weight:700;margin-bottom:14px;color:var(--ink);">設定規格類型</div>
+        <div style="margin-bottom:16px;">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">類型</div>
+          <div style="display:flex;gap:8px;">
+            <button class="spec-choice" data-spec="new" style="flex:1;padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font-weight:600;font-size:14px;">新製規格</button>
+            <button class="spec-choice" data-spec="mass" style="flex:1;padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font-weight:600;font-size:14px;">量產規格</button>
+          </div>
+        </div>
+        <div id="difficultyArea" style="display:none;margin-bottom:16px;">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">難易權重係數（生產時間 = 理論時間 × 係數）</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
+            <button class="diff-choice" data-diff="1.1" style="padding:12px;border:2px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-weight:700;">1.1</button>
+            <button class="diff-choice" data-diff="1.2" style="padding:12px;border:2px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-weight:700;">1.2</button>
+            <button class="diff-choice" data-diff="1.3" style="padding:12px;border:2px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-weight:700;">1.3</button>
+            <button class="diff-choice" data-diff="1.4" style="padding:12px;border:2px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-weight:700;">1.4</button>
+            <button class="diff-choice" data-diff="1.5" style="padding:12px;border:2px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-weight:700;">1.5</button>
+            <button class="diff-choice" data-diff="1.6" style="padding:12px;border:2px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-weight:700;">1.6</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-secondary" id="specTypeCancel" style="flex:1;padding:12px;">取消</button>
+          <button class="btn-primary" id="specTypeConfirm" style="flex:1;padding:12px;" disabled>確定</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1043,12 +1078,107 @@ async function setOrder(no) {
   $('orderShow').style.display = 'block';
   $('orderNoText').textContent = no;
   $('orderUpdated').textContent = order.updatedAt ? ('最後更新：' + fmtTime(order.updatedAt)) : '尚未開始';
+  renderSpecType();
   saveState();
   renderSteps();
 }
 
+function renderSpecType() {
+  const el = $('specTypeDisplay');
+  if (!el) return;
+  if (!order || !order.specType) {
+    el.style.color = 'var(--muted)';
+    el.textContent = '尚未設定';
+    return;
+  }
+  el.style.color = 'var(--ink)';
+  if (order.specType === 'new') {
+    el.innerHTML = '🆕 新製規格 <span style="color:var(--brand);font-size:13px;margin-left:6px;">難易係數 ' + (order.difficultyFactor || '—') + '</span>';
+  } else if (order.specType === 'mass') {
+    el.innerHTML = '📦 量產規格';
+  } else {
+    el.textContent = order.specType;
+  }
+}
+
 $('setOrderBtn').onclick = () => setOrder($('orderInput').value);
 $('orderInput').addEventListener('keydown', e => { if (e.key === 'Enter') setOrder($('orderInput').value); });
+
+// ── 規格類型 modal ──
+let specPick = { type: null, factor: null };
+function openSpecTypeModal() {
+  if (!order) { toast('請先載入工單', 'error'); return; }
+  // 預設帶入目前已選的（可修改）
+  specPick = { type: order.specType || null, factor: order.difficultyFactor || null };
+  $('specTypeModal').style.display = 'flex';
+  syncSpecTypeUI();
+}
+function closeSpecTypeModal() {
+  $('specTypeModal').style.display = 'none';
+}
+function syncSpecTypeUI() {
+  // 類型按鈕高亮
+  document.querySelectorAll('.spec-choice').forEach(b => {
+    if (b.dataset.spec === specPick.type) {
+      b.style.borderColor = 'var(--brand)';
+      b.style.background = 'var(--brand-soft)';
+      b.style.color = 'var(--brand)';
+    } else {
+      b.style.borderColor = 'var(--border)';
+      b.style.background = '#fff';
+      b.style.color = 'var(--ink)';
+    }
+  });
+  // 難易係數區塊只在 new 顯示
+  $('difficultyArea').style.display = specPick.type === 'new' ? 'block' : 'none';
+  document.querySelectorAll('.diff-choice').forEach(b => {
+    if (Number(b.dataset.diff) === Number(specPick.factor)) {
+      b.style.borderColor = 'var(--brand)';
+      b.style.background = 'var(--brand-soft)';
+      b.style.color = 'var(--brand)';
+    } else {
+      b.style.borderColor = 'var(--border)';
+      b.style.background = '#fff';
+      b.style.color = 'var(--ink)';
+    }
+  });
+  // 確定按鈕只在資料完整時可按
+  const valid = specPick.type === 'mass' || (specPick.type === 'new' && specPick.factor);
+  $('specTypeConfirm').disabled = !valid;
+  $('specTypeConfirm').style.opacity = valid ? '1' : '.4';
+}
+
+$('setSpecTypeBtn').onclick = openSpecTypeModal;
+$('specTypeCancel').onclick = closeSpecTypeModal;
+document.querySelectorAll('.spec-choice').forEach(b => {
+  b.onclick = () => {
+    specPick.type = b.dataset.spec;
+    if (specPick.type === 'mass') specPick.factor = null;
+    syncSpecTypeUI();
+  };
+});
+document.querySelectorAll('.diff-choice').forEach(b => {
+  b.onclick = () => {
+    specPick.factor = Number(b.dataset.diff);
+    syncSpecTypeUI();
+  };
+});
+$('specTypeConfirm').onclick = async () => {
+  if (!specPick.type) return;
+  if (specPick.type === 'new' && !specPick.factor) { toast('請選擇難易權重係數', 'error'); return; }
+  $('specTypeConfirm').disabled = true;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/spec-type', {
+    method: 'POST',
+    body: { specType: specPick.type, difficultyFactor: specPick.factor },
+  });
+  $('specTypeConfirm').disabled = false;
+  if (!r.ok) { toast(r.error || '設定失敗', 'error'); return; }
+  order = r.data.order;
+  renderSpecType();
+  saveState();
+  closeSpecTypeModal();
+  toast('已設定規格類型', 'success');
+};
 $('scanOrderBtn').onclick = () => openScanner('order');
 $('idleBtn').onclick = async () => {
   if (!selectedMachine) { toast('請先選擇機台', 'error'); return; }
