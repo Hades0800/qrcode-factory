@@ -537,12 +537,25 @@ async function loadOrders() {
   renderContent();
 }
 
+// 上次 render 的資料指紋；相同代表畫面無需重畫，避免每 30 秒自動 refresh 導致畫面閃動 / scroll 位置重設
+let lastRenderHash = '';
 function renderContent() {
   const content = $('content');
   if (!activeMachine) {
     content.innerHTML = '<div class="empty-msg">請選擇機台</div>';
+    lastRenderHash = '';
     return;
   }
+  // 計算指紋：機台 + 各工單的關鍵欄位（updatedAt、stepEntries 數、暫停狀態、完成狀態）
+  const fingerprint = activeMachine + '|' + idleMachinesToday.has(activeMachine) + '|' + (allOrders || []).map(o =>
+    o.orderNo + ':' + (o.machineNo || '') + ':' + (o.updatedAt || '') + ':' + (o.step11At || '') +
+    ':' + ((o.stepEntries || []).length) +
+    ':' + (o.pause12 && o.pause12.active ? 'p12' : '') +
+    ':' + (o.pause13 && o.pause13.active ? 'p13' : '') +
+    ':' + (o.plannedMachineNo || '')
+  ).join(';');
+  if (fingerprint === lastRenderHash) return; // 資料無變化，跳過重畫，畫面與 scroll 位置維持原狀
+  lastRenderHash = fingerprint;
 
   const m = MACHINES.find(x => x.id === activeMachine);
   const today = new Date();
