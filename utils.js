@@ -74,10 +74,19 @@ async function api(path, options = {}) {
     const token = localStorage.getItem('token') || '';
     const headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
     if (token) headers['Authorization'] = 'Bearer ' + token;
+    const method = (options.method || 'GET').toUpperCase();
+    // fastify 對 POST/PUT/PATCH 若 Content-Type 是 application/json 但 body 空會回 FST_ERR_CTP_EMPTY_JSON_BODY
+    // 這裡若呼叫端沒帶 body，自動補空物件確保通過解析
+    let body;
+    if (options.body !== undefined && options.body !== null) {
+      body = JSON.stringify(options.body);
+    } else if (method !== 'GET' && method !== 'HEAD' && method !== 'DELETE') {
+      body = '{}';
+    }
     const res = await fetch(API_URL + path, {
-      method: options.method || 'GET',
+      method,
       headers,
-      body: options.body ? JSON.stringify(options.body) : undefined,
+      body,
     });
     let data;
     try { data = await res.json(); }

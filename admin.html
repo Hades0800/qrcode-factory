@@ -613,8 +613,7 @@ async function restoreOrder(orderNo) {
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/restore', { method: 'POST' });
   if (!r.ok) {
     console.error('Restore failed:', { orderNo, status: r.status, error: r.error, data: r.data });
-    const dump = r.data ? JSON.stringify(r.data, null, 2) : '(no body)';
-    alert('救回失敗 status=' + (r.status || '?') + '\norderNo=' + orderNo + '\n\nResponse body:\n' + dump);
+    toast('救回失敗（' + (r.status || '?') + '）：' + (r.error || '未知錯誤'), 'error');
     return;
   }
   const entries = r.data.entries || 0;
