@@ -395,14 +395,17 @@ async function loadTrash() {
 }
 
 async function restoreOrder(orderNo) {
-  if (!confirm('確定救回工單「' + orderNo + '」？\n工單與其生產紀錄都會一起恢復。')) return;
+  if (!confirm('確定救回工單「' + orderNo + '」？\n如果工單已被刪除，會還原工單；不論如何，所有被軟刪除的工序 / 暫停紀錄都會還原。')) return;
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/restore', { method: 'POST' });
   if (!r.ok) { toast(r.error || '救回失敗', 'error'); return; }
   const entries = r.data.entries || 0;
   const pauses = r.data.pauses || 0;
-  const detail = (entries || pauses) ? `（含工序 ${entries} 筆、停機 ${pauses} 筆）` : '';
+  const orderPart = r.data.orderRestored ? '工單' : '';
+  const detail = (entries || pauses) ? `（${orderPart ? orderPart + '＋' : ''}工序 ${entries} 筆、停機 ${pauses} 筆）` : (orderPart ? `（${orderPart}）` : '');
   toast('已救回 ' + orderNo + detail, 'success');
   loadTrash();
+  // 如果是從「查單號歷史」按的，重整查詢結果讓「救回紀錄」按鈕消失
+  if ($('findOrderResult').innerHTML) findOrderNo();
 }
 
 async function findOrderNo() {
@@ -424,17 +427,26 @@ async function findOrderNo() {
     html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:10px;">';
     html += '<table style="min-width:640px;"><thead><tr><th>工單號</th><th>機台 / 規格</th><th>狀態</th><th>建立 / 更新</th><th>操作</th></tr></thead><tbody>';
     orders.forEach(o => {
+      const softCount = (o.softDeletedEntries || 0) + (o.softDeletedPauses || 0);
       const status = o.deletedAt
         ? '<span style="color:var(--brand);">已刪除 ' + fmtDateTime(o.deletedAt) + '</span>'
-        : '<span style="color:var(--success);">使用中</span>';
+        : '<span style="color:var(--success);">使用中</span>'
+          + (softCount > 0 ? '<br><span style="color:#a98e44;font-size:11px;">含 ' + (o.softDeletedEntries || 0) + ' 筆已刪工序、' + (o.softDeletedPauses || 0) + ' 筆已刪暫停</span>' : '');
       const spec = [o.productSpec, o.moldSpec, o.material].filter(Boolean).join(' / ') || '—';
       const machine = (o.machineNo || '—') + (o.plannedMachineNo && o.plannedMachineNo !== o.machineNo ? '（原計劃 ' + escapeHtml(o.plannedMachineNo) + '）' : '');
-      const action = o.deletedAt
-        ? '<button class="btn-secondary" data-restore="' + escapeHtml(o.orderNo) + '" style="padding:6px 12px;font-size:12px;">救回</button>'
-        : '<div style="display:flex;gap:4px;flex-wrap:wrap;">'
+      let action;
+      if (o.deletedAt) {
+        action = '<button class="btn-secondary" data-restore="' + escapeHtml(o.orderNo) + '" style="padding:6px 12px;font-size:12px;">救回</button>';
+      } else {
+        const restoreRecBtn = softCount > 0
+          ? '<button data-restore="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:#f0ad4e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="把 reset 軟刪除的紀錄救回">救回紀錄 (' + softCount + ')</button>'
+          : '';
+        action = '<div style="display:flex;gap:4px;flex-wrap:wrap;">'
+          + restoreRecBtn
           + '<button class="btn-danger" data-finddel="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;">刪除</button>'
           + '<button data-finddel-force="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;">徹底刪除</button>'
           + '</div>';
+      }
       html += '<tr>'
         + '<td><strong>' + escapeHtml(o.orderNo) + '</strong></td>'
         + '<td><div>' + escapeHtml(machine) + '</div><div style="color:#888;font-size:12px;">' + escapeHtml(spec) + '</div></td>'

@@ -290,13 +290,32 @@ await test('POST /:orderNo/restore（Planner）→ 403', async () => {
   await fastify.close();
 });
 
-await test('POST /:orderNo/restore（未刪除的工單）→ 400', async () => {
+await test('POST /:orderNo/restore（工單沒刪、也沒軟刪子紀錄）→ 400', async () => {
   const { fastify } = await buildApp(ADMIN);
   await fastify.prisma.order.create({ data: { orderNo: 'A0000000008' } });
   const res = await fastify.inject({ method: 'POST', url: '/api/orders/A0000000008/restore' });
   assert.equal(res.statusCode, 400);
-  assert.match(JSON.parse(res.body).error, /並未被刪除/);
-  await fastify.close();
+  assert.match(JSON.parse(res.body).error, /沒有任何已刪除的內容/);
+});
+
+await test('POST /:orderNo/restore（工單沒刪、但有軟刪子紀錄）→ 還原子紀錄', async () => {
+  // 情境：reset-production 把 stepEntries 軟刪了，事後想救回
+  const { fastify, state } = await buildApp(ADMIN);
+  const order = await fastify.prisma.order.create({ data: { orderNo: 'A0000000020' } });
+  const e1 = await fastify.prisma.stepEntry.create({ data: { orderId: order.id, stepNo: '1', seq: 1, recordedAt: new Date() } });
+  const e2 = await fastify.prisma.stepEntry.create({ data: { orderId: order.id, stepNo: '2', seq: 1, recordedAt: new Date() } });
+  // 模擬被 reset 軟刪
+  state.stepEntries.get(e1.id).deletedAt = new Date();
+  state.stepEntries.get(e2.id).deletedAt = new Date();
+
+  const res = await fastify.inject({ method: 'POST', url: '/api/orders/A0000000020/restore' });
+  assert.equal(res.statusCode, 200);
+  const body = JSON.parse(res.body);
+  assert.equal(body.orderRestored, false, '工單沒被刪，不應寫 orderRestored=true');
+  assert.equal(body.entries, 2);
+  // stepEntries 應該還原
+  assert.ok(state.stepEntries.get(e1.id).deletedAt === null);
+  assert.ok(state.stepEntries.get(e2.id).deletedAt === null);
 });
 
 await test('GET /trash（Admin）→ 只列軟刪除的工單', async () => {

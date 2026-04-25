@@ -701,8 +701,12 @@ export default async function orderRoutes(fastify) {
     return { orders };
   });
 
-  // 還原已軟刪除的工單（連同其 stepEntries / pauseEvents）
+  // 還原已軟刪除的工單，或單獨還原被 reset 軟刪的子紀錄
   // - Admin only
+  // 兩種情境：
+  //   1. 整張工單被軟刪除 → 還原工單 + 連帶還原所有軟刪子紀錄
+  //   2. 工單仍使用中、但有軟刪除的 stepEntries / pauseEvents（例如 reset-production 後悔了）
+  //      → 只還原子紀錄
   fastify.post('/:orderNo/restore', async (request, reply) => {
     if (!request.user.isAdmin) {
       return reply.code(403).send({ error: '需要管理員權限' });
@@ -719,14 +723,17 @@ export default async function orderRoutes(fastify) {
       });
     }
     if (!order) return reply.code(404).send({ error: '找不到工單' });
-    if (!order.deletedAt) {
-      return reply.code(400).send({ error: '此工單並未被刪除' });
+
+    // 還原工單本體（如果是軟刪狀態）
+    let orderRestored = false;
+    if (order.deletedAt) {
+      await fastify.prisma.order.update({
+        where: { id: order.id },
+        data: { deletedAt: null },
+      });
+      orderRestored = true;
     }
-    await fastify.prisma.order.update({
-      where: { id: order.id },
-      data: { deletedAt: null },
-    });
-    // 子紀錄（stepEntries / pauseEvents）通常隨工單一起被軟刪除，也一併還原
+    // 還原所有軟刪除的子紀錄
     const entryRes = await fastify.prisma.stepEntry.updateMany({
       where: { orderId: order.id, deletedAt: { not: null } },
       data: { deletedAt: null },
@@ -735,9 +742,21 @@ export default async function orderRoutes(fastify) {
       where: { orderId: order.id, deletedAt: { not: null } },
       data: { deletedAt: null },
     });
-    await audit(fastify.prisma, request, 'restore_order', order.orderNo,
+
+    if (!orderRestored && entryRes.count === 0 && pauseRes.count === 0) {
+      return reply.code(400).send({ error: '此工單沒有任何已刪除的內容可救回' });
+    }
+
+    const action = orderRestored ? 'restore_order' : 'restore_records';
+    await audit(fastify.prisma, request, action, order.orderNo,
       `entries=${entryRes.count} pauses=${pauseRes.count}`);
-    return { ok: true, restored: true, entries: entryRes.count, pauses: pauseRes.count };
+    return {
+      ok: true,
+      restored: true,
+      orderRestored,
+      entries: entryRes.count,
+      pauses: pauseRes.count,
+    };
   });
 
   // 取得工單的上傳原始列（多規格）

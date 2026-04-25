@@ -140,6 +140,23 @@ export default async function adminRoutes(fastify) {
     ]);
     const orders = [...activeOrders, ...deletedOrders];
 
+    // 對每張工單算「已軟刪除的子紀錄計數」（提示是否能救回 reset 掉的紀錄）
+    const orderIds = orders.map(o => o.id);
+    const [softDeletedEntries, softDeletedPauses] = orderIds.length === 0 ? [[], []] : await Promise.all([
+      fastify.prisma.stepEntry.groupBy({
+        by: ['orderId'],
+        where: { orderId: { in: orderIds }, deletedAt: { not: null } },
+        _count: { _all: true },
+      }),
+      fastify.prisma.pauseEvent.groupBy({
+        by: ['orderId'],
+        where: { orderId: { in: orderIds }, deletedAt: { not: null } },
+        _count: { _all: true },
+      }),
+    ]);
+    const entryCountMap = Object.fromEntries(softDeletedEntries.map(g => [g.orderId, g._count._all]));
+    const pauseCountMap = Object.fromEntries(softDeletedPauses.map(g => [g.orderId, g._count._all]));
+
     // 上傳列表（含已取消批次）
     const uploadRows = await fastify.prisma.uploadRow.findMany({
       where: { orderNo: { contains: q } },
@@ -161,6 +178,8 @@ export default async function adminRoutes(fastify) {
         ...o,
         leaderName: o.leader?.displayName || null,
         leader: undefined,
+        softDeletedEntries: entryCountMap[o.id] || 0,
+        softDeletedPauses: pauseCountMap[o.id] || 0,
       })),
       uploadRows,
     };
