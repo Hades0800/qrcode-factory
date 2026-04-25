@@ -611,7 +611,11 @@ function renderAuditLog() {
 async function restoreOrder(orderNo) {
   if (!confirm('確定救回工單「' + orderNo + '」？\n如果工單已被刪除，會還原工單；不論如何，所有被軟刪除的工序 / 暫停紀錄都會還原。')) return;
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/restore', { method: 'POST' });
-  if (!r.ok) { toast(r.error || '救回失敗', 'error'); return; }
+  if (!r.ok) {
+    console.error('Restore failed:', { orderNo, status: r.status, error: r.error, data: r.data });
+    toast('救回失敗（' + (r.status || '?') + '）：' + (r.error || '未知錯誤'), 'error');
+    return;
+  }
   const entries = r.data.entries || 0;
   const pauses = r.data.pauses || 0;
   const orderPart = r.data.orderRestored ? '工單' : '';
