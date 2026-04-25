@@ -606,13 +606,19 @@ export default async function orderRoutes(fastify) {
     return { ok: true, deleted, cleared, errors };
   });
 
-  // 刪除工單（只允許無生產紀錄的工單；有紀錄回 409，請改用 reset-production）
-  // - 管理員 / 生管 皆可使用
+  // 刪除工單
+  // - 預設：只允許無生產紀錄的工單；有紀錄回 409
+  // - ?force=true（admin only）：連同所有 stepEntries / pauseEvents 一起軟刪除（用於清測試單）
+  // - 管理員 / 生管 皆可使用（force 限 admin）
   fastify.delete('/:orderNo', async (request, reply) => {
     const isAdmin = request.user.isAdmin;
     const isPlanner = request.user.isPlanner;
     if (!isAdmin && !isPlanner) {
       return reply.code(403).send({ error: '權限不足' });
+    }
+    const force = request.query.force === 'true' || request.query.force === '1';
+    if (force && !isAdmin) {
+      return reply.code(403).send({ error: 'force 模式僅限管理員' });
     }
     const rawNo = String(request.params.orderNo || '').trim();
     if (!rawNo) return reply.code(400).send({ error: '缺少工單號' });
@@ -626,7 +632,7 @@ export default async function orderRoutes(fastify) {
     const pauseCount = await fastify.prisma.pauseEvent.count({ where: { orderId: order.id } });
     const hasProductionData = hasActivity(order) || entryCount > 0 || pauseCount > 0;
 
-    if (hasProductionData) {
+    if (hasProductionData && !force) {
       return reply.code(409).send({
         error: '工單已有生產紀錄，無法直接刪除',
         code: 'HAS_PRODUCTION_DATA',
@@ -635,10 +641,16 @@ export default async function orderRoutes(fastify) {
       });
     }
 
+    if (force && hasProductionData) {
+      // 連紀錄一起軟刪除
+      await fastify.prisma.stepEntry.deleteMany({ where: { orderId: order.id } });
+      await fastify.prisma.pauseEvent.deleteMany({ where: { orderId: order.id } });
+    }
     await fastify.prisma.order.delete({ where: { orderNo: order.orderNo } });
     await audit(fastify.prisma, request, 'delete_order', order.orderNo,
-      isAdmin ? 'admin_delete' : 'planner_delete_unscanned');
-    return { ok: true, deleted: true };
+      force ? `admin_force_delete entries=${entryCount} pauses=${pauseCount}` :
+      (isAdmin ? 'admin_delete' : 'planner_delete_unscanned'));
+    return { ok: true, deleted: true, force, entries: force ? entryCount : 0, pauses: force ? pauseCount : 0 };
   });
 
   // 重設生產紀錄（清空 stepEntries/pauseEvents 與 stepXAt 欄位，保留上傳資料）

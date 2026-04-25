@@ -426,7 +426,10 @@ async function findOrderNo() {
       const machine = (o.machineNo || '—') + (o.plannedMachineNo && o.plannedMachineNo !== o.machineNo ? '（原計劃 ' + escapeHtml(o.plannedMachineNo) + '）' : '');
       const action = o.deletedAt
         ? '<button class="btn-secondary" data-restore="' + escapeHtml(o.orderNo) + '" style="padding:6px 12px;font-size:12px;">救回</button>'
-        : '<button class="btn-danger" data-finddel="' + escapeHtml(o.orderNo) + '" style="padding:6px 12px;font-size:12px;">刪除</button>';
+        : '<div style="display:flex;gap:4px;flex-wrap:wrap;">'
+          + '<button class="btn-danger" data-finddel="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;">刪除</button>'
+          + '<button data-finddel-force="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;">徹底刪除</button>'
+          + '</div>';
       html += '<tr>'
         + '<td><strong>' + escapeHtml(o.orderNo) + '</strong></td>'
         + '<td><div>' + escapeHtml(machine) + '</div><div style="color:#888;font-size:12px;">' + escapeHtml(spec) + '</div></td>'
@@ -458,9 +461,24 @@ async function findOrderNo() {
   $('findOrderResult').querySelectorAll('[data-finddel]').forEach(b => {
     b.onclick = () => deleteOrderFromFind(b.dataset.finddel);
   });
+  $('findOrderResult').querySelectorAll('[data-finddel-force]').forEach(b => {
+    b.onclick = () => forceDeleteOrderFromFind(b.dataset.finddelForce);
+  });
   $('findOrderResult').querySelectorAll('[data-restore]').forEach(b => {
     b.onclick = () => restoreOrder(b.dataset.restore);
   });
+}
+
+async function forceDeleteOrderFromFind(orderNo) {
+  if (!confirm('⚠️ 徹底刪除工單「' + orderNo + '」？\n\n會連同所有工序紀錄、暫停紀錄一起軟刪除。\n（仍可從「已刪除工單」區塊救回）')) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '?force=true', { method: 'DELETE' });
+  if (!r.ok) { toast(r.error || '刪除失敗', 'error'); return; }
+  const detail = (r.data.entries || r.data.pauses)
+    ? '（含工序 ' + (r.data.entries || 0) + ' 筆、停機 ' + (r.data.pauses || 0) + ' 筆）'
+    : '';
+  toast('已徹底刪除 ' + orderNo + detail, 'success');
+  findOrderNo();
+  loadTrash();
 }
 
 async function deleteOrderFromFind(orderNo) {

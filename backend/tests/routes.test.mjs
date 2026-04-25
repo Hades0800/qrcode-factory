@@ -554,6 +554,36 @@ await test('step-entries：真正全新工單第一次活動時，productionDate
   assert.ok(stored.productionDate, '全新工單第一次活動應自動設 productionDate');
 });
 
+await test('DELETE ?force=true（Admin）→ 連紀錄一起軟刪除', async () => {
+  const { fastify, state } = await buildApp(ADMIN);
+  const order = await fastify.prisma.order.create({ data: { orderNo: 'G0000000001' } });
+  await fastify.prisma.stepEntry.create({ data: { orderId: order.id, stepNo: '1', seq: 1, recordedAt: new Date() } });
+  await fastify.prisma.stepEntry.create({ data: { orderId: order.id, stepNo: '2', seq: 1, recordedAt: new Date() } });
+  await fastify.prisma.pauseEvent.create({ data: { orderId: order.id, type: '12', startAt: new Date() } });
+
+  const res = await fastify.inject({ method: 'DELETE', url: '/api/orders/G0000000001?force=true' });
+  assert.equal(res.statusCode, 200);
+  const body = JSON.parse(res.body);
+  assert.equal(body.deleted, true);
+  assert.equal(body.force, true);
+  assert.equal(body.entries, 2);
+  assert.equal(body.pauses, 1);
+
+  const stored = state.orders.get('G0000000001');
+  assert.ok(stored.deletedAt, '工單應軟刪除');
+  const entries = Array.from(state.stepEntries.values());
+  assert.ok(entries.every(e => e.deletedAt), '所有 stepEntries 應軟刪除');
+  const pauses = Array.from(state.pauseEvents.values());
+  assert.ok(pauses.every(p => p.deletedAt), '所有 pauseEvents 應軟刪除');
+});
+
+await test('DELETE ?force=true（Planner）→ 403', async () => {
+  const { fastify } = await buildApp(PLANNER);
+  await fastify.prisma.order.create({ data: { orderNo: 'G0000000002' } });
+  const res = await fastify.inject({ method: 'DELETE', url: '/api/orders/G0000000002?force=true' });
+  assert.equal(res.statusCode, 403);
+});
+
 await test('GET /:orderNo：找不到工單會自動建立並回傳 wasCreated=true', async () => {
   // 防呆機制：前端拿到 wasCreated=true 後跳 confirm，讓使用者確認單號是否打錯
   const { fastify, state } = await buildApp(PLANNER);
