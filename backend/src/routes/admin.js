@@ -107,6 +107,52 @@ export default async function adminRoutes(fastify) {
     return { ok: true };
   });
 
+  // 查單號完整歷史（含已軟刪除的工單、含已取消批次的上傳列）
+  // - 用模糊比對：q 是 prefix / 完整單號 / 部分都行
+  fastify.get('/find-orderno', async (request, reply) => {
+    const q = String(request.query.q || '').trim().toUpperCase();
+    if (!q) return reply.code(400).send({ error: '請提供 q 參數' });
+    if (q.length > 60) return reply.code(400).send({ error: 'q 太長' });
+
+    // 工單表（含軟刪除：用 deletedAt:undefined 繞過 middleware 自動過濾）
+    const orders = await fastify.prisma.order.findMany({
+      where: { orderNo: { contains: q }, deletedAt: undefined },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: {
+        id: true, orderNo: true, machineNo: true, plannedMachineNo: true,
+        productSpec: true, moldSpec: true, material: true,
+        productionDate: true, createdAt: true, updatedAt: true, deletedAt: true,
+        leader: { select: { displayName: true } },
+      },
+    });
+
+    // 上傳列表（含已取消批次）
+    const uploadRows = await fastify.prisma.uploadRow.findMany({
+      where: { orderNo: { contains: q } },
+      orderBy: { id: 'desc' },
+      take: 100,
+      include: {
+        batch: {
+          select: {
+            id: true, filename: true, uploadedByName: true,
+            uploadedAt: true, cancelledAt: true,
+          },
+        },
+      },
+    });
+
+    return {
+      ok: true,
+      orders: orders.map(o => ({
+        ...o,
+        leaderName: o.leader?.displayName || null,
+        leader: undefined,
+      })),
+      uploadRows,
+    };
+  });
+
   // 修正所有工單的 productionDate 為第一筆活動日期（台灣時間）
   fastify.post('/fix-production-dates', async () => {
     const orders = await fastify.prisma.order.findMany({
