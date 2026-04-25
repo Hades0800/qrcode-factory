@@ -1022,6 +1022,15 @@ async function setOrder(no) {
   if (!selectedMachine) { toast('請先選擇機台', 'error'); return; }
   const r = await api('/api/orders/' + encodeURIComponent(no));
   if (!r.ok) { toast(r.error, 'error'); return; }
+  // 後端在工單不存在時會自動建立，並回傳 wasCreated:true
+  // 為避免單號 key 錯後一路記到錯的單上（例如把 0 打成 9），跳確認對話框讓使用者再看一次
+  if (r.data.wasCreated) {
+    const ok = confirm('系統中還沒有「' + no + '」這張工單的上傳資料。\n\n請再次確認單號是否輸入正確。\n\n如確定要建立並記錄，按「確定」；\n若可能打錯了，按「取消」回上一步。');
+    if (!ok) {
+      // 使用者取消：不繼續流程（建立的空殼工單會留在 DB，可由 admin 在「查單號歷史」清理）
+      return;
+    }
+  }
   orderNo = no;
   order = r.data.order;
   // 設定機台到 DB

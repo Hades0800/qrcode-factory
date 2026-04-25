@@ -186,6 +186,8 @@ export default async function orderRoutes(fastify) {
   });
 
   // 取得（不存在自動建立）
+  // 為支援「先做後上傳」流程，所有已登入使用者都能觸發自動建立。
+  // 但回傳 wasCreated:true 讓前端可顯示警告，提醒班長確認單號正確
   fastify.get('/:orderNo', async (request, reply) => {
     const orderNo = String(request.params.orderNo || '').toUpperCase();
     if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤（需 1 英文 + 10 數字）' });
@@ -193,13 +195,17 @@ export default async function orderRoutes(fastify) {
       where: { orderNo },
       include: ORDER_INCLUDE,
     });
+    let wasCreated = false;
     if (!order) {
       order = await fastify.prisma.order.create({
         data: { orderNo, leaderId: request.user.id },
         include: ORDER_INCLUDE,
       });
+      wasCreated = true;
+      await audit(fastify.prisma, request, 'auto_create_order', orderNo,
+        `via=GET user=${request.user.username || request.user.id}`);
     }
-    return { order: serializeOrder(order) };
+    return { order: serializeOrder(order), wasCreated };
   });
 
   // 記錄工序（可重複，日誌式；支援補登自訂時間）

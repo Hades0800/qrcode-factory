@@ -554,6 +554,30 @@ await test('step-entries：真正全新工單第一次活動時，productionDate
   assert.ok(stored.productionDate, '全新工單第一次活動應自動設 productionDate');
 });
 
+await test('GET /:orderNo：找不到工單會自動建立並回傳 wasCreated=true', async () => {
+  // 防呆機制：前端拿到 wasCreated=true 後跳 confirm，讓使用者確認單號是否打錯
+  const { fastify, state } = await buildApp(PLANNER);
+  const res = await fastify.inject({ method: 'GET', url: '/api/orders/F0000000099' });
+  assert.equal(res.statusCode, 200);
+  const body = JSON.parse(res.body);
+  assert.equal(body.wasCreated, true, '新工單應回傳 wasCreated=true');
+  assert.equal(body.order.orderNo, 'F0000000099');
+  assert.ok(state.orders.get('F0000000099'), '工單應已建立');
+  // 也應留下 auto_create_order 的稽核紀錄
+  const audit = state.auditLogs.find(a => a.action === 'auto_create_order');
+  assert.ok(audit, '應寫入 auto_create_order 稽核紀錄');
+  assert.equal(audit.target, 'F0000000099');
+});
+
+await test('GET /:orderNo：已存在的工單不會回 wasCreated=true', async () => {
+  const { fastify } = await buildApp(PLANNER);
+  await fastify.prisma.order.create({ data: { orderNo: 'F0000000098' } });
+  const res = await fastify.inject({ method: 'GET', url: '/api/orders/F0000000098' });
+  assert.equal(res.statusCode, 200);
+  const body = JSON.parse(res.body);
+  assert.ok(!body.wasCreated, '已存在的工單不該帶 wasCreated 標記');
+});
+
 await test('刪除後再 DELETE → 404（軟刪除的工單不該被找到）', async () => {
   const { fastify, state } = await buildApp(ADMIN);
   await fastify.prisma.order.create({ data: { orderNo: 'A0000000009' } });
