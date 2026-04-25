@@ -245,8 +245,36 @@
 
   <div class="card">
     <h2>已刪除工單（可救回）</h2>
-    <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">近期被誤刪的工單會出現在這裡，按「救回」可恢復工單與其生產紀錄。</p>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">整張被刪掉的工單。按「救回」會還原工單 + 它的所有生產紀錄。</p>
     <div id="trashTable">載入中...</div>
+  </div>
+
+  <div class="card">
+    <h2>已重設的生產紀錄（可救回）</h2>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">工單還在、但生產紀錄被「重設」軟刪除的清單。按「救回紀錄」會把那些被軟刪的工序與暫停紀錄還原。</p>
+    <div id="resetTable">載入中...</div>
+  </div>
+
+  <div class="card">
+    <h2>已取消的上傳批次（可救回）</h2>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">被取消的上傳批次。按「救回批次」會回填工單上傳欄位（規格、派工量等），但會跳過已被新批次填過的欄位。</p>
+    <div id="cancelledBatchesTable">載入中...</div>
+  </div>
+
+  <div class="card">
+    <h2>操作紀錄</h2>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+      <span style="font-size:12px;color:var(--muted);">最近</span>
+      <select id="auditDays" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);font-size:13px;">
+        <option value="1">1 天</option>
+        <option value="3">3 天</option>
+        <option value="7" selected>7 天</option>
+        <option value="14">14 天</option>
+        <option value="30">30 天</option>
+      </select>
+      <span style="font-size:12px;color:var(--muted);">的所有刪除 / 重設 / 取消 / 救回 / 自動建單動作</span>
+    </div>
+    <div id="auditLog">載入中...</div>
   </div>
 
   <div class="card">
@@ -394,6 +422,125 @@ async function loadTrash() {
   });
 }
 
+// 已重設的生產紀錄（工單仍使用中、但有軟刪 stepEntries / pauseEvents）
+async function loadResetRecords() {
+  const r = await api('/api/admin/orders-with-soft-deleted-records');
+  if (!r.ok) { $('resetTable').textContent = r.error || '載入失敗'; return; }
+  const orders = r.data.orders || [];
+  if (!orders.length) {
+    $('resetTable').innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0;">目前沒有可救回的重設紀錄</div>';
+    return;
+  }
+  const rows = orders.map(o => {
+    const spec = [o.productSpec, o.moldSpec].filter(Boolean).join(' / ') || '—';
+    const detail = `工序 ${o.softDeletedEntries} 筆` + (o.softDeletedPauses ? `、暫停 ${o.softDeletedPauses} 筆` : '');
+    return `
+      <tr>
+        <td><strong>${escapeHtml(o.orderNo)}</strong><br><span style="color:#888;font-size:12px;">${escapeHtml(o.machineNo || '—')} / ${escapeHtml(spec)}</span></td>
+        <td style="font-size:12px;color:#666;">${o.lastDeletedAt ? fmtDateTime(o.lastDeletedAt) : '—'}<br><span style="color:#a98e44;">${escapeHtml(detail)}</span></td>
+        <td class="row-actions">
+          <button data-restore-rec="${escapeHtml(o.orderNo)}" style="padding:7px 12px;font-size:12px;background:#f0ad4e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;">救回紀錄</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+  $('resetTable').innerHTML = `<div style="overflow-x:auto;"><table style="min-width:560px;"><thead><tr><th>工單 / 機台 / 規格</th><th>最近重設時間</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  $('resetTable').querySelectorAll('[data-restore-rec]').forEach(b => {
+    b.onclick = () => restoreOrder(b.dataset.restoreRec);
+  });
+}
+
+// 已取消的上傳批次（可救回）
+async function loadCancelledBatches() {
+  const r = await api('/api/admin/cancelled-upload-batches');
+  if (!r.ok) { $('cancelledBatchesTable').textContent = r.error || '載入失敗'; return; }
+  const batches = r.data.batches || [];
+  if (!batches.length) {
+    $('cancelledBatchesTable').innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0;">目前沒有已取消的上傳批次</div>';
+    return;
+  }
+  const rows = batches.map(b => `
+    <tr>
+      <td><strong>${escapeHtml(b.filename)}</strong><br><span style="color:#888;font-size:12px;">${escapeHtml(b.uploadedByName || '—')} 上傳於 ${fmtDateTime(b.uploadedAt)}</span></td>
+      <td style="font-size:12px;color:#666;">${fmtDateTime(b.cancelledAt)}<br><span style="color:#888;">${b.rowCount || 0} 列 / ${(b.orderNos || []).length} 張單</span></td>
+      <td class="row-actions">
+        <button data-restore-batch="${b.id}" data-filename="${escapeHtml(b.filename)}" style="padding:7px 12px;font-size:12px;background:#f0ad4e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;">救回批次</button>
+      </td>
+    </tr>
+  `).join('');
+  $('cancelledBatchesTable').innerHTML = `<div style="overflow-x:auto;"><table style="min-width:600px;"><thead><tr><th>檔名 / 上傳人</th><th>取消時間</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  $('cancelledBatchesTable').querySelectorAll('[data-restore-batch]').forEach(b => {
+    b.onclick = () => restoreBatch(b.dataset.restoreBatch, b.dataset.filename);
+  });
+}
+
+async function restoreBatch(id, filename) {
+  if (!confirm('救回上傳批次「' + filename + '」？\n會回填工單的上傳欄位，但會跳過已被新批次填過的欄位（不蓋新值）。')) return;
+  const r = await api('/api/orders/upload-batches/' + encodeURIComponent(id) + '/restore', { method: 'POST' });
+  if (!r.ok) { toast(r.error || '救回失敗', 'error'); return; }
+  toast('已救回 ' + filename + '（回填 ' + r.data.restored + ' 張、跳過 ' + r.data.skipped + ' 張）', 'success');
+  loadCancelledBatches();
+  loadAuditLog();
+}
+
+// 操作紀錄
+const ACTION_LABELS = {
+  delete_order: '刪除工單',
+  reset_production: '重設生產紀錄',
+  restore_order: '救回工單',
+  restore_records: '救回紀錄',
+  cancel_batch: '取消上傳批次',
+  restore_batch: '救回上傳批次',
+  auto_create_order: '自動建單',
+  delete_leader: '刪除帳號',
+  create_leader: '新增帳號',
+  reset_password: '重設密碼',
+  clear_production: '清除生產（舊）',
+};
+const ACTION_COLORS = {
+  delete_order: 'var(--brand)', reset_production: '#f0ad4e', cancel_batch: 'var(--brand)',
+  restore_order: 'var(--success)', restore_records: 'var(--success)', restore_batch: 'var(--success)',
+  auto_create_order: '#1f6feb',
+  delete_leader: 'var(--brand)', create_leader: 'var(--success)', reset_password: '#1f6feb',
+};
+
+async function loadAuditLog() {
+  const days = $('auditDays').value || '7';
+  const r = await api('/api/admin/audit-log?days=' + encodeURIComponent(days));
+  if (!r.ok) { $('auditLog').textContent = r.error || '載入失敗'; return; }
+  const logs = r.data.logs || [];
+  if (!logs.length) {
+    $('auditLog').innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0;">最近 ' + days + ' 天沒有任何操作紀錄</div>';
+    return;
+  }
+  // 按日期分組
+  const groups = {};
+  logs.forEach(l => {
+    const day = String(l.createdAt).slice(0, 10);
+    (groups[day] = groups[day] || []).push(l);
+  });
+  const html = Object.keys(groups).sort().reverse().map(day => {
+    const items = groups[day].map(l => {
+      const action = ACTION_LABELS[l.action] || l.action;
+      const color = ACTION_COLORS[l.action] || 'var(--muted)';
+      const time = String(l.createdAt).slice(11, 16);
+      const target = l.target ? ' <strong>' + escapeHtml(l.target) + '</strong>' : '';
+      const detail = l.detail ? '<span style="color:var(--muted);font-size:11px;margin-left:6px;">（' + escapeHtml(l.detail) + '）</span>' : '';
+      return '<div style="padding:6px 8px;border-bottom:1px solid var(--border);font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+        + '<span style="color:#666;min-width:48px;">' + time + '</span>'
+        + '<span style="color:#666;min-width:60px;">' + escapeHtml(l.actorName || '—') + '</span>'
+        + '<span style="color:' + color + ';font-weight:600;">' + escapeHtml(action) + '</span>'
+        + target + detail
+        + '</div>';
+    }).join('');
+    return '<div style="margin-bottom:14px;">'
+      + '<div style="font-size:13px;font-weight:700;color:var(--ink);margin:8px 0 6px;padding:4px 0;border-bottom:2px solid var(--border);">' + escapeHtml(day) + '（' + groups[day].length + ' 筆）</div>'
+      + items
+      + '</div>';
+  }).join('');
+  $('auditLog').innerHTML = html;
+}
+
 async function restoreOrder(orderNo) {
   if (!confirm('確定救回工單「' + orderNo + '」？\n如果工單已被刪除，會還原工單；不論如何，所有被軟刪除的工序 / 暫停紀錄都會還原。')) return;
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/restore', { method: 'POST' });
@@ -404,6 +551,8 @@ async function restoreOrder(orderNo) {
   const detail = (entries || pauses) ? `（${orderPart ? orderPart + '＋' : ''}工序 ${entries} 筆、停機 ${pauses} 筆）` : (orderPart ? `（${orderPart}）` : '');
   toast('已救回 ' + orderNo + detail, 'success');
   loadTrash();
+  if (typeof loadResetRecords === 'function') loadResetRecords();
+  if (typeof loadAuditLog === 'function') loadAuditLog();
   // 如果是從「查單號歷史」按的，重整查詢結果讓「救回紀錄」按鈕消失
   if ($('findOrderResult').innerHTML) findOrderNo();
 }
@@ -564,11 +713,16 @@ $('fixDatesBtn').onclick = async () => {
   toast('修正完成', 'success');
 };
 
+$('auditDays').onchange = () => loadAuditLog();
+
 if (API_URL.startsWith('PASTE_')) {
   toast('尚未設定 API_URL，請先部署後端', 'error');
 } else {
   loadLeaders();
   loadTrash();
+  loadResetRecords();
+  loadCancelledBatches();
+  loadAuditLog();
 }
 </script>
 </body>

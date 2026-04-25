@@ -185,6 +185,84 @@ export default async function adminRoutes(fastify) {
     };
   });
 
+  // 列出有「軟刪除生產紀錄」但工單仍使用中的工單（reset-production 之後可救回）
+  fastify.get('/orders-with-soft-deleted-records', async () => {
+    const [softEntryGroups, softPauseGroups] = await Promise.all([
+      fastify.prisma.stepEntry.groupBy({
+        by: ['orderId'],
+        where: { deletedAt: { not: null } },
+        _count: { _all: true },
+        _max: { deletedAt: true },
+      }),
+      fastify.prisma.pauseEvent.groupBy({
+        by: ['orderId'],
+        where: { deletedAt: { not: null } },
+        _count: { _all: true },
+        _max: { deletedAt: true },
+      }),
+    ]);
+    const orderIds = Array.from(new Set([
+      ...softEntryGroups.map(g => g.orderId),
+      ...softPauseGroups.map(g => g.orderId),
+    ]));
+    if (orderIds.length === 0) return { orders: [] };
+    // 只列「使用中」的工單（軟刪除工單已在 trash 區塊，避免重複）
+    const orders = await fastify.prisma.order.findMany({
+      where: { id: { in: orderIds } },
+      select: {
+        id: true, orderNo: true, machineNo: true, productSpec: true, moldSpec: true,
+        plannedDate: true, actualStartDate: true,
+        leader: { select: { displayName: true } },
+      },
+    });
+    const entryMap = Object.fromEntries(softEntryGroups.map(g => [g.orderId, g]));
+    const pauseMap = Object.fromEntries(softPauseGroups.map(g => [g.orderId, g]));
+    return {
+      orders: orders.map(o => {
+        const e = entryMap[o.id], p = pauseMap[o.id];
+        const lastDeletedAt = [e?._max?.deletedAt, p?._max?.deletedAt]
+          .filter(Boolean).sort((a, b) => new Date(b) - new Date(a))[0] || null;
+        return {
+          ...o,
+          leaderName: o.leader?.displayName || null,
+          leader: undefined,
+          softDeletedEntries: e?._count?._all || 0,
+          softDeletedPauses: p?._count?._all || 0,
+          lastDeletedAt,
+        };
+      }).sort((a, b) => new Date(b.lastDeletedAt || 0) - new Date(a.lastDeletedAt || 0)),
+    };
+  });
+
+  // 列出已取消的上傳批次
+  fastify.get('/cancelled-upload-batches', async () => {
+    const batches = await fastify.prisma.uploadBatch.findMany({
+      where: { cancelledAt: { not: null } },
+      orderBy: { cancelledAt: 'desc' },
+      take: 200,
+      select: {
+        id: true, filename: true, uploadedByName: true, uploadedAt: true,
+        cancelledAt: true, rowCount: true, productionDate: true, orderNos: true,
+      },
+    });
+    return { batches };
+  });
+
+  // 操作紀錄（audit log）
+  // ?days=7 取最近 7 天；可選 ?action=delete_order 過濾
+  fastify.get('/audit-log', async (request) => {
+    const days = Math.min(Math.max(Number(request.query.days) || 7, 1), 90);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const where = { createdAt: { gte: since } };
+    if (request.query.action) where.action = String(request.query.action).slice(0, 60);
+    const logs = await fastify.prisma.auditLog.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
+    return { logs, days };
+  });
+
   // 一次性 migration：把舊 productionDate 拆成 plannedDate + actualStartDate
   // - actualStartDate：用第一筆活動的台灣日期
   // - plannedDate：找最早未取消批次的 productionDate；找不到就用舊 productionDate

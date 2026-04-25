@@ -178,6 +178,59 @@ export default async function orderRoutes(fastify) {
     return { ok: true, cleared };
   });
 
+  // 救回已取消的上傳批次：把批次標記取消移除 + 回填工單上傳欄位
+  // 規則：只填工單目前為 null 的欄位（避免覆蓋後續批次填的新值）
+  // - Admin only
+  fastify.post('/upload-batches/:id/restore', async (request, reply) => {
+    if (!request.user.isAdmin) {
+      return reply.code(403).send({ error: '需要管理員權限' });
+    }
+    const id = Number(request.params.id);
+    if (!id) return reply.code(400).send({ error: '無效 id' });
+    const batch = await fastify.prisma.uploadBatch.findUnique({ where: { id } });
+    if (!batch) return reply.code(404).send({ error: '找不到上傳批次' });
+    if (!batch.cancelledAt) return reply.code(400).send({ error: '此批次未取消，無需救回' });
+
+    const fields = ['productSpec', 'moldSpec', 'material', 'dispatchQty', 'bladeCount', 'machineSPM', 'unitWeight', 'totalWeight'];
+    let restored = 0, skipped = 0;
+    for (const orderNo of (batch.orderNos || [])) {
+      try {
+        const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
+        if (!order) { skipped++; continue; }
+        // 拿該批次的第一筆 UploadRow（有效狀態）
+        const row = await fastify.prisma.uploadRow.findFirst({
+          where: { batchId: id, orderNo, status: { in: ['created', 'updated'] } },
+          orderBy: { id: 'asc' },
+        });
+        if (!row) { skipped++; continue; }
+        // 只填 order 仍為 null 的欄位（新批次填過的不蓋）
+        const data = {};
+        for (const k of fields) {
+          if (order[k] === null || order[k] === undefined) {
+            if (row[k] !== null && row[k] !== undefined) data[k] = row[k];
+          }
+        }
+        // plannedDate 同樣處理（用批次的 productionDate）
+        if (!order.plannedDate && batch.productionDate) {
+          data.plannedDate = batch.productionDate;
+        }
+        if (Object.keys(data).length > 0) {
+          await fastify.prisma.order.update({ where: { id: order.id }, data });
+          restored++;
+        } else {
+          skipped++;
+        }
+      } catch (e) { /* ignore single-row errors */ }
+    }
+    await fastify.prisma.uploadBatch.update({
+      where: { id },
+      data: { cancelledAt: null },
+    });
+    await audit(fastify.prisma, request, 'restore_batch', batch.id,
+      `filename=${batch.filename} restored=${restored} skipped=${skipped}`);
+    return { ok: true, restored, skipped };
+  });
+
   // 取得（不存在自動建立）
   // 為支援「先做後上傳」流程，所有已登入使用者都能觸發自動建立。
   // 但回傳 wasCreated:true 讓前端可顯示警告，提醒班長確認單號正確

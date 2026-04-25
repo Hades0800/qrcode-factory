@@ -693,6 +693,15 @@ await test('GET /:orderNo：已存在的工單不會回 wasCreated=true', async 
   assert.ok(!body.wasCreated, '已存在的工單不該帶 wasCreated 標記');
 });
 
+// 注意：upload-batches/:id/restore 的完整業務邏輯（回填工單欄位、跳過已被新批次填過的）
+// 因 mock prisma 沒實作 uploadBatch.findUnique 細節，留待 production DB 驗證。
+// 這裡只測權限。
+await test('upload-batches/:id/restore（Planner）→ 403', async () => {
+  const { fastify } = await buildApp(PLANNER);
+  const res = await fastify.inject({ method: 'POST', url: '/api/orders/upload-batches/1/restore' });
+  assert.equal(res.statusCode, 403);
+});
+
 await test('刪除後再 DELETE → 404（軟刪除的工單不該被找到）', async () => {
   const { fastify, state } = await buildApp(ADMIN);
   await fastify.prisma.order.create({ data: { orderNo: 'A0000000009' } });
