@@ -154,26 +154,23 @@ export default async function orderRoutes(fastify) {
     if (!batch) return reply.code(404).send({ error: '找不到上傳批次' });
     if (batch.cancelledAt) return reply.code(400).send({ error: '此批次已取消過' });
 
-    let deleted = 0, cleared = 0;
+    // 取消上傳只動「上傳資料」：把工單的上傳欄位清空 + 標記批次取消
+    // 工單本身（含 productionDate、機台、所有生產紀錄）都不動
+    // 如要刪空殼工單請另行用 admin 的「徹底刪除」
+    let cleared = 0;
     for (const orderNo of (batch.orderNos || [])) {
       try {
         const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
         if (!order) continue;
-        if (await hasAnyActivity(fastify.prisma, order)) {
-          // 只清除上傳欄位，保留 productionDate（由實際活動設定）
-          await fastify.prisma.order.update({
-            where: { orderNo },
-            data: {
-              productSpec: null, moldSpec: null,
-              material: null, dispatchQty: null, bladeCount: null,
-              machineSPM: null, unitWeight: null, totalWeight: null,
-            },
-          });
-          cleared++;
-        } else {
-          await fastify.prisma.order.delete({ where: { orderNo } });
-          deleted++;
-        }
+        await fastify.prisma.order.update({
+          where: { orderNo },
+          data: {
+            productSpec: null, moldSpec: null,
+            material: null, dispatchQty: null, bladeCount: null,
+            machineSPM: null, unitWeight: null, totalWeight: null,
+          },
+        });
+        cleared++;
       } catch (e) { /* ignore */ }
     }
     await fastify.prisma.uploadBatch.update({
@@ -181,8 +178,8 @@ export default async function orderRoutes(fastify) {
       data: { cancelledAt: new Date() },
     });
     await audit(fastify.prisma, request, 'cancel_batch', batch.id,
-      `filename=${batch.filename} deleted=${deleted} cleared=${cleared}`);
-    return { ok: true, deleted, cleared };
+      `filename=${batch.filename} cleared=${cleared}`);
+    return { ok: true, cleared };
   });
 
   // 取得（不存在自動建立）
@@ -561,10 +558,10 @@ export default async function orderRoutes(fastify) {
     return { ok: true, created, updated, skipped, errors, total: rows.length, batchId: batch.id };
   });
 
-  // 批次取消上傳（保留掃描紀錄）
-  // - 沒有掃描紀錄的工單：完全刪除
-  // - 有掃描紀錄的工單：只清除上傳欄位，保留 step 時間
-  // 上傳資料與實態紀錄獨立，重傳時會自動重新配對
+  // 批次取消上傳：只動上傳資料，工單本身不刪
+  // - 不論工單是否有生產紀錄，一律只清上傳欄位（productSpec、moldSpec、material 等）
+  // - 工單本身（productionDate、機台、生產紀錄）一律保留
+  // - 上傳資料與實態紀錄獨立，重傳時會自動重新配對
   fastify.post('/bulk-cancel-upload', async (request, reply) => {
     if (!request.user.isAdmin && !request.user.isPlanner) {
       return reply.code(403).send({ error: '需要生管或管理員權限' });
@@ -576,7 +573,7 @@ export default async function orderRoutes(fastify) {
     if (orderNos.length > 500) {
       return reply.code(400).send({ error: '單次上限 500 筆' });
     }
-    let deleted = 0, cleared = 0;
+    let cleared = 0;
     const errors = [];
     for (const rawNo of orderNos) {
       try {
@@ -584,26 +581,20 @@ export default async function orderRoutes(fastify) {
         if (!orderNo) continue;
         const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
         if (!order) continue;
-        if (await hasAnyActivity(fastify.prisma, order)) {
-          // 清除上傳欄位
-          await fastify.prisma.order.update({
-            where: { orderNo },
-            data: {
-              productionDate: null, productSpec: null, moldSpec: null,
-              material: null, dispatchQty: null, bladeCount: null,
-              machineSPM: null, unitWeight: null, totalWeight: null,
-            },
-          });
-          cleared++;
-        } else {
-          await fastify.prisma.order.delete({ where: { orderNo } });
-          deleted++;
-        }
+        await fastify.prisma.order.update({
+          where: { orderNo },
+          data: {
+            productSpec: null, moldSpec: null,
+            material: null, dispatchQty: null, bladeCount: null,
+            machineSPM: null, unitWeight: null, totalWeight: null,
+          },
+        });
+        cleared++;
       } catch (e) {
         errors.push(rawNo + ': ' + e.message);
       }
     }
-    return { ok: true, deleted, cleared, errors };
+    return { ok: true, cleared, errors };
   });
 
   // 刪除工單

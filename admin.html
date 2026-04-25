@@ -417,7 +417,8 @@ async function findOrderNo() {
   let html = '';
   if (orders.length > 0) {
     html += '<h3 style="margin:8px 0;font-size:13px;color:var(--muted);">工單表（' + orders.length + ' 筆）</h3>';
-    html += '<table><thead><tr><th>工單號</th><th>機台 / 規格</th><th>狀態</th><th>建立 / 更新</th><th>操作</th></tr></thead><tbody>';
+    html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:10px;">';
+    html += '<table style="min-width:640px;"><thead><tr><th>工單號</th><th>機台 / 規格</th><th>狀態</th><th>建立 / 更新</th><th>操作</th></tr></thead><tbody>';
     orders.forEach(o => {
       const status = o.deletedAt
         ? '<span style="color:var(--brand);">已刪除 ' + fmtDateTime(o.deletedAt) + '</span>'
@@ -438,24 +439,41 @@ async function findOrderNo() {
         + '<td>' + action + '</td>'
         + '</tr>';
     });
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
   }
   if (uploadRows.length > 0) {
     html += '<h3 style="margin:16px 0 8px;font-size:13px;color:var(--muted);">上傳記錄（' + uploadRows.length + ' 筆，含已取消批次）</h3>';
-    html += '<table><thead><tr><th>檔名 / 上傳人</th><th>單號 / 規格</th><th>狀態</th><th>批次時間</th></tr></thead><tbody>';
+    html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:10px;">';
+    html += '<table style="min-width:720px;"><thead><tr><th>檔名 / 上傳人</th><th>單號 / 規格</th><th>處理</th><th>批次狀態</th><th>批次時間</th></tr></thead><tbody>';
     uploadRows.forEach(u => {
       const b = u.batch || {};
-      const cancelled = b.cancelledAt ? '<span style="color:var(--brand);">已取消 ' + fmtDateTime(b.cancelledAt) + '</span>' : '<span style="color:var(--success);">有效</span>';
-      const rowStatus = u.status === 'error' ? '<span style="color:var(--brand);">' + escapeHtml(u.errorMsg || u.status) + '</span>' : escapeHtml(u.status);
+      const cancelled = b.cancelledAt
+        ? '<span style="color:var(--brand);white-space:nowrap;">已取消<br><span style="font-size:11px;">' + fmtDateTime(b.cancelledAt) + '</span></span>'
+        : '<span style="color:var(--success);white-space:nowrap;">有效</span>';
+      // status 簡化顯示：error 簡短標示「失敗」並用 title 帶完整訊息（hover 看）
+      let rowStatus;
+      if (u.status === 'error') {
+        const msg = String(u.errorMsg || '').slice(0, 200);
+        rowStatus = '<span style="color:var(--brand);font-size:11px;background:#fdf2f2;padding:2px 6px;border-radius:4px;" title="' + escapeHtml(msg) + '">失敗</span>';
+      } else if (u.status === 'created') {
+        rowStatus = '<span style="color:var(--success);font-size:11px;">新建</span>';
+      } else if (u.status === 'updated') {
+        rowStatus = '<span style="color:#1f6feb;font-size:11px;">更新</span>';
+      } else if (u.status === 'skipped') {
+        rowStatus = '<span style="color:#f0ad4e;font-size:11px;" title="' + escapeHtml(u.errorMsg || '') + '">跳過</span>';
+      } else {
+        rowStatus = '<span style="font-size:11px;">' + escapeHtml(u.status) + '</span>';
+      }
       const spec = [u.productSpec, u.moldSpec, u.material].filter(Boolean).join(' / ') || '—';
       html += '<tr>'
-        + '<td><div>' + escapeHtml(b.filename || '?') + '</div><div style="color:#888;font-size:12px;">' + escapeHtml(b.uploadedByName || '—') + '</div></td>'
-        + '<td><div><strong>' + escapeHtml(u.orderNo) + '</strong> ' + rowStatus + '</div><div style="color:#888;font-size:12px;">' + escapeHtml(spec) + '</div></td>'
+        + '<td style="white-space:nowrap;"><div>' + escapeHtml(b.filename || '?') + '</div><div style="color:#888;font-size:12px;">' + escapeHtml(b.uploadedByName || '—') + '</div></td>'
+        + '<td><div><strong>' + escapeHtml(u.orderNo) + '</strong></div><div style="color:#888;font-size:12px;">' + escapeHtml(spec) + '</div></td>'
+        + '<td>' + rowStatus + '</td>'
         + '<td>' + cancelled + '</td>'
-        + '<td style="font-size:12px;color:#666;">' + fmtDateTime(b.uploadedAt) + '</td>'
+        + '<td style="font-size:12px;color:#666;white-space:nowrap;">' + fmtDateTime(b.uploadedAt) + '</td>'
         + '</tr>';
     });
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
   }
   $('findOrderResult').innerHTML = html;
   $('findOrderResult').querySelectorAll('[data-finddel]').forEach(b => {

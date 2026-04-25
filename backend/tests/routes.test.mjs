@@ -334,14 +334,11 @@ await test('GET /trash（沒有已刪除工單）→ 200 + orders=[]', async () 
 });
 
 await test('bulk-cancel-upload：有 stepEntries 的工單不該被誤刪（regression）', async () => {
-  // 情境：生管上傳工單後，班長已用新格式（stepEntries）紀錄，接著生管按取消批次
-  // 舊 bug：hasActivity 只看 stepXAt，誤判「沒活動」→ 軟刪整張工單
-  // 修法：改用 hasAnyActivity 同時查 stepEntries / pauseEvents
+  // 取消上傳只動上傳資料，工單本身與紀錄都保留
   const { fastify, state } = await buildApp(PLANNER);
   const order = await fastify.prisma.order.create({
     data: { orderNo: 'B0000000001', productSpec: 'ORIG-SPEC' },
   });
-  // 班長用新格式記過工序，stepXAt 全是 null
   await fastify.prisma.stepEntry.create({ data: { orderId: order.id, stepNo: '1', seq: 1, recordedAt: new Date() } });
   const res = await fastify.inject({
     method: 'POST', url: '/api/orders/bulk-cancel-upload',
@@ -350,16 +347,13 @@ await test('bulk-cancel-upload：有 stepEntries 的工單不該被誤刪（regr
   });
   assert.equal(res.statusCode, 200);
   const body = JSON.parse(res.body);
-  assert.equal(body.deleted, 0, '不該被刪除');
-  assert.equal(body.cleared, 1, '應只清上傳欄位');
+  assert.equal(body.cleared, 1, '應清上傳欄位');
   const stored = state.orders.get('B0000000001');
   assert.equal(stored.deletedAt, null, '工單不該被軟刪除');
   assert.equal(stored.productSpec, null, 'productSpec 應被清空');
-  // stepEntry 不受影響
   const entries = Array.from(state.stepEntries.values());
   assert.equal(entries.length, 1);
   assert.equal(entries[0].deletedAt, null, 'stepEntry 不該被動到');
-  await fastify.close();
 });
 
 await test('bulk-cancel-upload：有 pauseEvents 的工單也不該被誤刪', async () => {
@@ -372,23 +366,23 @@ await test('bulk-cancel-upload：有 pauseEvents 的工單也不該被誤刪', a
     payload: JSON.stringify({ orderNos: ['B0000000002'] }),
   });
   assert.equal(res.statusCode, 200);
-  assert.equal(JSON.parse(res.body).deleted, 0);
   assert.equal(state.orders.get('B0000000002').deletedAt, null);
-  await fastify.close();
 });
 
-await test('bulk-cancel-upload：真正沒紀錄的工單會被刪掉（維持原行為）', async () => {
+await test('bulk-cancel-upload：沒紀錄的工單也只清欄位、不軟刪（新原則）', async () => {
+  // 新原則：取消上傳一律不刪工單，避免「取消上傳→工單也消失」的誤解
   const { fastify, state } = await buildApp(PLANNER);
-  await fastify.prisma.order.create({ data: { orderNo: 'B0000000003' } });
+  await fastify.prisma.order.create({ data: { orderNo: 'B0000000003', productSpec: 'X' } });
   const res = await fastify.inject({
     method: 'POST', url: '/api/orders/bulk-cancel-upload',
     headers: { 'content-type': 'application/json' },
     payload: JSON.stringify({ orderNos: ['B0000000003'] }),
   });
   assert.equal(res.statusCode, 200);
-  assert.equal(JSON.parse(res.body).deleted, 1);
-  assert.ok(state.orders.get('B0000000003').deletedAt, '真空工單應被軟刪');
-  await fastify.close();
+  assert.equal(JSON.parse(res.body).cleared, 1);
+  const stored = state.orders.get('B0000000003');
+  assert.equal(stored.deletedAt, null, '工單不該被軟刪');
+  assert.equal(stored.productSpec, null, 'productSpec 應被清空');
 });
 
 await test('bulk-upload：已有活動的工單，上傳不覆蓋 machineNo（regression）', async () => {
