@@ -384,9 +384,11 @@ function handleFile(file) {
   const reader = new FileReader();
   reader.onload = e => {
     try {
+      // raw: true → 拿 Excel 儲存格實際資料，避免「自訂格式」造假
+      // 例如儲存格實際是數字 1159421004，自訂格式顯示成 F1159421004 → raw 模式下 orderNo 會是純數字 → 不通過格式檢查
       const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
       const sheet = wb.Sheets[wb.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      const json = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true });
       parseRows(json);
     } catch(err) {
       toast('Excel 解析失敗：' + err.message, 'error');
@@ -448,6 +450,10 @@ function parseRows(json) {
         obj[k] = (isNaN(n) || n === 0) ? null : n;
       }
     });
+    // 疑似殘留行：orderNo 看起來合法但其他欄位（規格/領料/機台/數量）全空
+    // 通常是 Excel 殘留資料（之前刪除沒清乾淨、隱藏列、白字格式）
+    const otherFields = ['productSpec','moldSpec','material','machineNo','dispatchQty','bladeCount','machineSPM','unitWeight','totalWeight'];
+    obj._suspicious = obj._valid && otherFields.every(k => obj[k] === undefined || obj[k] === null || obj[k] === '');
     return obj;
   });
 
@@ -459,17 +465,27 @@ function parseRows(json) {
 function renderPreview() {
   $('previewCard').style.display = 'block';
   $('result').innerHTML = '';
-  const valid = parsedRows.filter(r => r._valid).length;
-  const invalid = parsedRows.length - valid;
+  const valid = parsedRows.filter(r => r._valid && !r._suspicious).length;
+  const suspicious = parsedRows.filter(r => r._suspicious).length;
+  const invalid = parsedRows.length - valid - suspicious;
   $('statsRow').innerHTML = `
     <div class="stat-pill">共 <strong>${parsedRows.length}</strong> 筆</div>
     <div class="stat-pill">有效 <strong>${valid}</strong></div>
     ${invalid ? `<div class="stat-pill" style="color:var(--brand);">格式錯誤 <strong>${invalid}</strong></div>` : ''}
+    ${suspicious ? `<div class="stat-pill" style="color:#f0ad4e;">疑似殘留 <strong>${suspicious}</strong></div>` : ''}
   `;
-  $('previewBody').innerHTML = parsedRows.map((r, i) => `
-    <tr>
+  $('previewBody').innerHTML = parsedRows.map((r, i) => {
+    const statusCell = r._suspicious
+      ? '<span style="color:#f0ad4e;">⚠ 疑似殘留</span>'
+      : (r._valid ? '&#10003;' : '<span class="err">&#10007;</span>');
+    const orderCell = r._suspicious
+      ? `<span style="color:#f0ad4e;">${escapeHtml(r.orderNo)} (其他欄位皆空，不上傳)</span>`
+      : `<span class="${r._valid ? '' : 'err'}">${escapeHtml(r.orderNo)}${r._valid ? '' : ' (格式錯誤)'}</span>`;
+    const rowStyle = r._suspicious ? ' style="background:#fff3cd;"' : '';
+    return `
+    <tr${rowStyle}>
       <td>${i + 1}</td>
-      <td class="${r._valid ? '' : 'err'}">${escapeHtml(r.orderNo)}${r._valid ? '' : ' (格式錯誤)'}</td>
+      <td>${orderCell}</td>
       <td>${escapeHtml(r.productionDate || '')}</td>
       <td>${escapeHtml(r.productSpec || '')}</td>
       <td>${escapeHtml(r.moldSpec || '')}</td>
@@ -480,9 +496,10 @@ function renderPreview() {
       <td>${escapeHtml(r.machineSPM || '')}</td>
       <td>${escapeHtml(r.unitWeight || '')}</td>
       <td>${escapeHtml(r.totalWeight || '')}</td>
-      <td>${r._valid ? '&#10003;' : '<span class="err">&#10007;</span>'}</td>
+      <td>${statusCell}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
   $('previewCard').scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -494,7 +511,7 @@ $('cancelBtn').onclick = () => {
 };
 
 $('uploadBtn').onclick = async () => {
-  const rows = parsedRows.filter(r => r._valid);
+  const rows = parsedRows.filter(r => r._valid && !r._suspicious);
   if (rows.length === 0) { toast('沒有有效的工單', 'error'); return; }
   const selectedDate = $('uploadDate').value;
   const today = new Date();
