@@ -802,7 +802,16 @@ export default async function orderRoutes(fastify) {
     });
 
     if (!orderRestored && entryRes.count === 0 && pauseRes.count === 0) {
-      return reply.code(400).send({ error: '此工單沒有任何已刪除的內容可救回' });
+      return reply.code(400).send({
+        error: '此工單沒有任何已刪除的內容可救回',
+        debug: {
+          orderId: order.id,
+          orderNo: order.orderNo,
+          orderDeletedAt: order.deletedAt,
+          entriesAffected: entryRes.count,
+          pausesAffected: pauseRes.count,
+        },
+      });
     }
 
     const action = orderRestored ? 'restore_order' : 'restore_records';

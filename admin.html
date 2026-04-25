@@ -613,7 +613,11 @@ async function restoreOrder(orderNo) {
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/restore', { method: 'POST' });
   if (!r.ok) {
     console.error('Restore failed:', { orderNo, status: r.status, error: r.error, data: r.data });
-    toast('救回失敗（' + (r.status || '?') + '）：' + (r.error || '未知錯誤'), 'error');
+    let msg = '救回失敗（' + (r.status || '?') + '）：' + (r.error || '未知錯誤');
+    if (r.data && r.data.debug) {
+      msg += '\n\n診斷資訊：\n' + JSON.stringify(r.data.debug, null, 2);
+    }
+    alert(msg);
     return;
   }
   const entries = r.data.entries || 0;
