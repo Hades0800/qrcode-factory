@@ -1178,7 +1178,11 @@ $('specTypeConfirm').onclick = async () => {
     alert('設定失敗（' + (r.status || '?') + '）：' + (r.error || '未知錯誤') + hint);
     return;
   }
-  order = r.data.order;
+  // 後端用 raw SQL 寫入，回傳精簡 payload，本地直接更新欄位
+  if (order) {
+    order.specType = r.data.specType;
+    order.difficultyFactor = r.data.difficultyFactor;
+  }
   renderSpecType();
   saveState();
   closeSpecTypeModal();

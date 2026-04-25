@@ -340,9 +340,8 @@ export default async function orderRoutes(fastify) {
   });
 
   // 設定規格類型（現場技術員選擇）
+  // 用 raw SQL 寫入避免 Prisma client 沒 regenerate 時拋錯
   // body: { specType: 'new' | 'mass', difficultyFactor?: 1.1~1.6 }
-  // - 量產規格不需 difficultyFactor，會被忽略並寫成 null
-  // - 新製規格必須帶合法 difficultyFactor
   fastify.post('/:orderNo/spec-type', async (request, reply) => {
     try {
       const orderNo = String(request.params.orderNo || '').toUpperCase();
@@ -361,21 +360,24 @@ export default async function orderRoutes(fastify) {
         }
         factor = match;
       }
-      const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
-      if (!order) return reply.code(404).send({ error: '找不到工單' });
-      const updated = await fastify.prisma.order.update({
-        where: { orderNo },
-        data: { specType, difficultyFactor: factor },
-        include: ORDER_INCLUDE,
-      });
-      return { ok: true, order: serializeOrder(updated) };
+      // 先確保欄位存在（idempotent，沒有就建、有就略過）—— 為了在 prisma client 沒 regenerate 的環境也能跑
+      await fastify.prisma.$executeRawUnsafe(
+        'ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "specType" TEXT, ADD COLUMN IF NOT EXISTS "difficultyFactor" DOUBLE PRECISION'
+      );
+      // 寫入 raw SQL（繞過 Prisma client 是否認識新欄位的限制）
+      const result = await fastify.prisma.$executeRaw`
+        UPDATE "Order"
+        SET "specType" = ${specType}, "difficultyFactor" = ${factor}
+        WHERE "orderNo" = ${orderNo}
+      `;
+      if (result === 0) return reply.code(404).send({ error: '找不到工單' });
+      // 不 include 完整 order（避免 select 撞到 client schema mismatch）
+      return { ok: true, specType, difficultyFactor: factor };
     } catch (e) {
       request.log.error(e, 'spec-type failed');
-      // 常見：DB schema 還沒 push 到 specType / difficultyFactor 欄位 → Prisma 拋 P2009/P2025/etc
       return reply.code(500).send({
         error: '設定失敗：' + (e.message || String(e)),
         code: e.code || null,
-        hint: 'Zeabur 部署可能尚未完成，請稍候 1~2 分鐘再試；如持續失敗請通知工程師檢查 prisma db push',
       });
     }
   });
