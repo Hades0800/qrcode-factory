@@ -888,6 +888,56 @@ export default async function orderRoutes(fastify) {
     };
   });
 
+  // 永久刪除工單（從 DB 抹掉，無法救回）
+  // - Admin only
+  // - 用 raw SQL 繞過軟刪除中間件，連同所有 stepEntries / pauseEvents 一起 DELETE
+  // - 給「清測試資料」場景使用，正常營運請用一般刪除（軟刪）
+  fastify.post('/:orderNo/purge', async (request, reply) => {
+    if (!request.user.isAdmin) {
+      return reply.code(403).send({ error: '需要管理員權限' });
+    }
+    try {
+      const rawNo = String(request.params.orderNo || '').trim();
+      if (!rawNo) return reply.code(400).send({ error: '缺少工單號' });
+      const candidates = [rawNo, rawNo.toUpperCase()].filter((v, i, a) => a.indexOf(v) === i);
+      // 用 raw SQL 找工單（不被軟刪除中間件過濾）
+      let orderId = null;
+      let foundOrderNo = null;
+      for (const no of candidates) {
+        const rows = await fastify.prisma.$queryRaw`
+          SELECT id, "orderNo" FROM "Order" WHERE "orderNo" = ${no} LIMIT 1
+        `;
+        if (rows && rows.length > 0) {
+          orderId = rows[0].id;
+          foundOrderNo = rows[0].orderNo;
+          break;
+        }
+      }
+      if (!orderId) return reply.code(404).send({ error: '找不到工單' });
+
+      const entryRows = await fastify.prisma.$queryRaw`
+        SELECT COUNT(*)::int AS cnt FROM "StepEntry" WHERE "orderId" = ${orderId}
+      `;
+      const pauseRows = await fastify.prisma.$queryRaw`
+        SELECT COUNT(*)::int AS cnt FROM "PauseEvent" WHERE "orderId" = ${orderId}
+      `;
+      const entryCount = entryRows[0]?.cnt || 0;
+      const pauseCount = pauseRows[0]?.cnt || 0;
+
+      // 子紀錄先刪、再刪 Order（onDelete: Cascade 也會處理，但顯式刪比較清楚）
+      await fastify.prisma.$executeRaw`DELETE FROM "StepEntry" WHERE "orderId" = ${orderId}`;
+      await fastify.prisma.$executeRaw`DELETE FROM "PauseEvent" WHERE "orderId" = ${orderId}`;
+      await fastify.prisma.$executeRaw`DELETE FROM "Order" WHERE "id" = ${orderId}`;
+
+      await audit(fastify.prisma, request, 'purge_order', foundOrderNo,
+        `entries=${entryCount} pauses=${pauseCount}`);
+      return { ok: true, purged: true, orderNo: foundOrderNo, entries: entryCount, pauses: pauseCount };
+    } catch (e) {
+      request.log.error(e, 'purge failed');
+      return reply.code(500).send({ error: '永久刪除失敗：' + (e.message || String(e)) });
+    }
+  });
+
   // 取得工單的上傳原始列（多規格）
   fastify.get('/:orderNo/upload-rows', async (request) => {
     const orderNo = String(request.params.orderNo || '').trim().toUpperCase();

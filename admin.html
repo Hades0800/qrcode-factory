@@ -470,6 +470,9 @@ function renderRecovery() {
   $('recoveryContent').querySelectorAll('[data-restore-batch]').forEach(b => {
     b.onclick = () => restoreBatch(b.dataset.restoreBatch, b.dataset.filename);
   });
+  $('recoveryContent').querySelectorAll('[data-purge]').forEach(b => {
+    b.onclick = () => purgeOrder(b.dataset.purge);
+  });
 
   // 分頁器
   if (totalPages <= 1) {
@@ -488,11 +491,12 @@ function recoveryRowHtml(tab, it) {
   if (tab === 'deleted') {
     const spec = [it.productSpec, it.moldSpec].filter(Boolean).join(' / ') || '—';
     const time = String(it.deletedAt).slice(11, 16);
-    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--border);font-size:13px;flex-wrap:wrap;">'
+    return '<div style="display:flex;align-items:center;gap:6px;padding:8px 6px;border-bottom:1px solid var(--border);font-size:13px;flex-wrap:wrap;">'
       + '<span style="color:#666;min-width:48px;">' + time + '</span>'
       + '<div style="flex:1;min-width:160px;"><strong>' + escapeHtml(it.orderNo) + '</strong>'
       + '<div style="color:#888;font-size:12px;">' + escapeHtml(spec) + '</div></div>'
       + '<button class="btn-primary" data-restore="' + escapeHtml(it.orderNo) + '" style="padding:6px 12px;font-size:12px;">救回</button>'
+      + '<button data-purge="' + escapeHtml(it.orderNo) + '" style="padding:6px 12px;font-size:12px;background:#1c1c1e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
       + '</div>';
   }
   if (tab === 'reset') {
@@ -655,7 +659,10 @@ async function findOrderNo() {
       const machine = (o.machineNo || '—') + (o.plannedMachineNo && o.plannedMachineNo !== o.machineNo ? '（原計劃 ' + escapeHtml(o.plannedMachineNo) + '）' : '');
       let action;
       if (o.deletedAt) {
-        action = '<button class="btn-secondary" data-restore="' + escapeHtml(o.orderNo) + '" style="padding:6px 12px;font-size:12px;">救回</button>';
+        action = '<div style="display:flex;gap:4px;flex-wrap:wrap;">'
+          + '<button class="btn-secondary" data-restore="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;">救回</button>'
+          + '<button data-purge="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:#1c1c1e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
+          + '</div>';
       } else {
         const restoreRecBtn = softCount > 0
           ? '<button data-restore="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:#f0ad4e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="把 reset 軟刪除的紀錄救回">救回紀錄 (' + softCount + ')</button>'
@@ -664,6 +671,7 @@ async function findOrderNo() {
           + restoreRecBtn
           + '<button class="btn-danger" data-finddel="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;">刪除</button>'
           + '<button data-finddel-force="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;">徹底刪除</button>'
+          + '<button data-purge="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:#1c1c1e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
           + '</div>';
       }
       html += '<tr>'
@@ -720,6 +728,26 @@ async function findOrderNo() {
   $('findOrderResult').querySelectorAll('[data-restore]').forEach(b => {
     b.onclick = () => restoreOrder(b.dataset.restore);
   });
+  $('findOrderResult').querySelectorAll('[data-purge]').forEach(b => {
+    b.onclick = () => purgeOrder(b.dataset.purge);
+  });
+}
+
+async function purgeOrder(orderNo) {
+  // 兩段式 confirm 避免誤點
+  if (!confirm('⛔ 永久刪除工單「' + orderNo + '」？\n\n會從資料庫**完全抹除**，包含所有工序與暫停紀錄。\n**無法救回**。\n\n通常只用在清測試單。確定要繼續？')) return;
+  const typed = prompt('再次確認：請輸入工單號「' + orderNo + '」表示同意永久刪除');
+  if (!typed || typed.trim().toUpperCase() !== String(orderNo).toUpperCase()) {
+    toast('輸入不一致，已取消', 'error');
+    return;
+  }
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/purge', { method: 'POST' });
+  if (!r.ok) { toast(r.error || '永久刪除失敗', 'error'); return; }
+  const detail = (r.data.entries || r.data.pauses) ? '（含工序 ' + (r.data.entries || 0) + ' 筆、停機 ' + (r.data.pauses || 0) + ' 筆）' : '';
+  toast('已永久刪除 ' + orderNo + detail, 'success');
+  if ($('findOrderResult').innerHTML) findOrderNo();
+  if (typeof loadRecovery === 'function') loadRecovery();
+  if (typeof loadAuditLog === 'function') loadAuditLog();
 }
 
 async function forceDeleteOrderFromFind(orderNo) {
