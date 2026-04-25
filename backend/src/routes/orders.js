@@ -34,14 +34,15 @@ function getTaiwanToday() {
 }
 
 // 設定 productionDate 為實際生產開始日期
-// 第一次活動時覆蓋上傳日期，之後不再變動
+// 工單一旦有過任何活動（含已軟刪除的紀錄），就永遠不再覆寫 productionDate
+// 這是為了避免：工單 reset-production 後重做時，日期被當成「第一次活動」重設成今天
+// （deletedAt: undefined 是逃生口，繞過軟刪除中間件的自動過濾）
 async function updateProductionDateToday(fastify, order) {
-  // 檢查是否已有實際生產活動（不含本次）
-  const entryCount = await fastify.prisma.stepEntry.count({ where: { orderId: order.id } });
-  const pauseCount = await fastify.prisma.pauseEvent.count({ where: { orderId: order.id } });
+  const entryCount = await fastify.prisma.stepEntry.count({ where: { orderId: order.id, deletedAt: undefined } });
+  const pauseCount = await fastify.prisma.pauseEvent.count({ where: { orderId: order.id, deletedAt: undefined } });
   const hasOldSteps = !!(order.step1At || order.step2At || order.step3At || order.step4At || order.step5At || order.step6At || order.step7At || order.step11At || order.step21At || order.step22At || order.step23At);
-  if (entryCount > 0 || pauseCount > 0 || hasOldSteps) return; // 已有活動紀錄，保留開始日期
-  // 第一次活動：設為今天（台灣時間）
+  if (entryCount > 0 || pauseCount > 0 || hasOldSteps) return; // 曾經有過活動，保留現有日期
+  // 真正第一次活動（DB 連歷史紀錄都沒有）：設為今天（台灣時間）
   const today = getTaiwanToday();
   await fastify.prisma.order.update({
     where: { orderNo: order.orderNo },
