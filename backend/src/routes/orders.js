@@ -766,15 +766,17 @@ export default async function orderRoutes(fastify) {
     }
     const rawNo = String(request.params.orderNo || '').trim();
     if (!rawNo) return reply.code(400).send({ error: '缺少工單號' });
-    // 找工單：先試使用中的（middleware 自動加 deletedAt: null），找不到再明確查已軟刪除的
-    // 不依賴 deletedAt:undefined 這種 fragile 寫法（Prisma 對 undefined 行為不穩）
+    // 兩個查詢都顯式指定 deletedAt，完全不依賴 middleware（避免行為不一致）
+    // 先查已軟刪除的（最常見的救回情境）；找不到再查使用中的（救回 reset 子紀錄場景）
     const candidates = [rawNo, rawNo.toUpperCase()].filter((v, i, a) => a.indexOf(v) === i);
     let order = null;
     for (const no of candidates) {
-      order = await fastify.prisma.order.findFirst({ where: { orderNo: no } });
-      if (order) break;
       order = await fastify.prisma.order.findFirst({
         where: { orderNo: no, deletedAt: { not: null } },
+      });
+      if (order) break;
+      order = await fastify.prisma.order.findFirst({
+        where: { orderNo: no, deletedAt: null },
       });
       if (order) break;
     }
