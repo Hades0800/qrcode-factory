@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node src/server.js",
+    "start": "prisma generate && prisma db push --accept-data-loss && node src/server.js",
     "dev": "node --watch src/server.js",
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
