@@ -509,10 +509,14 @@ export default async function orderRoutes(fastify) {
         if (existing) {
           const specMatch = !existing.productSpec || !data.productSpec || existing.productSpec === data.productSpec;
           if (specMatch) {
-            // 若工單已有生產活動，現場性欄位（機台、生產日期）以現場記錄為準，上傳不得覆蓋
+            // 鎖定規則：
+            //   - machineNo：工單一旦有生產活動就鎖（現場掃 QR 為準）
+            //   - productionDate：工單一旦有生產日期就鎖（首次上傳那天就定案，
+            //     避免「同單號被後續批次反覆上傳→ productionDate 跟著最後一次跑」
+            //     例如 0417 的工單在 0420 又出現會被改成 4/20）
             const hasActivity = await hasAnyActivity(fastify.prisma, existing);
             const lockMachine = hasActivity && existing.machineNo;
-            const lockDate = hasActivity && existing.productionDate;
+            const lockDate = !!existing.productionDate;
             const merged = {};
             for (const key of Object.keys(data)) {
               if (key === 'machineNo' && lockMachine) {

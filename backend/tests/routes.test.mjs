@@ -485,25 +485,47 @@ await test('bulk-upload：已有活動的工單，上傳不覆蓋 productionDate
   assert.equal(storedDateStr, '2026-04-21', 'productionDate 應保持 4/21（現場為準），不被 4/23 覆寫');
 });
 
-await test('bulk-upload：無活動的工單，上傳的 productionDate 會更新（維持原行為）', async () => {
+await test('bulk-upload：已有 productionDate 的工單，再上傳也不覆寫（含無活動工單）', async () => {
+  // 新規則：productionDate 一旦設定就永遠不被覆寫
+  // 例如同單號出現在 0417.xlsx + 0420.xlsx，第二次上傳不該把日期改成 4/20
   const { fastify, state } = await buildApp(PLANNER);
-  const oldDate = new Date('2026-04-20T00:00:00Z');
+  const date0417 = new Date('2026-04-17T00:00:00Z');
   await fastify.prisma.order.create({
-    data: { orderNo: 'D0000000002', productSpec: 'SPEC-Y', productionDate: oldDate },
+    data: { orderNo: 'D0000000002', productSpec: 'SPEC-Y', productionDate: date0417 },
   });
   const res = await fastify.inject({
     method: 'POST', url: '/api/orders/bulk-upload',
     headers: { 'content-type': 'application/json' },
     payload: JSON.stringify({
       orders: [{ orderNo: 'D0000000002', productSpec: 'SPEC-Y' }],
-      filename: 'test.xlsx',
-      uploadDate: '2026-04-25',
+      filename: '0420.xlsx',
+      uploadDate: '2026-04-20',
     }),
   });
   assert.equal(res.statusCode, 200);
   const stored = state.orders.get('D0000000002');
   const storedDateStr = new Date(stored.productionDate).toISOString().slice(0, 10);
-  assert.equal(storedDateStr, '2026-04-25', '沒活動的工單 productionDate 仍可被上傳更新');
+  assert.equal(storedDateStr, '2026-04-17', 'productionDate 應保留 4/17（已有值就鎖），不被 0420 覆寫');
+});
+
+await test('bulk-upload：productionDate 為 null 時，上傳會設值（首次上傳）', async () => {
+  const { fastify, state } = await buildApp(PLANNER);
+  await fastify.prisma.order.create({
+    data: { orderNo: 'D0000000003', productSpec: 'SPEC-NEW', productionDate: null },
+  });
+  const res = await fastify.inject({
+    method: 'POST', url: '/api/orders/bulk-upload',
+    headers: { 'content-type': 'application/json' },
+    payload: JSON.stringify({
+      orders: [{ orderNo: 'D0000000003', productSpec: 'SPEC-NEW' }],
+      filename: 'test.xlsx',
+      uploadDate: '2026-04-25',
+    }),
+  });
+  assert.equal(res.statusCode, 200);
+  const stored = state.orders.get('D0000000003');
+  assert.ok(stored.productionDate, 'productionDate 為 null 時應被設值');
+  assert.equal(new Date(stored.productionDate).toISOString().slice(0, 10), '2026-04-25');
 });
 
 await test('step-entries：reset 後重做時，不可把 productionDate 改成今天（regression）', async () => {
