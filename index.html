@@ -1056,7 +1056,14 @@ async function setOrder(no) {
   if (!/^[A-Z]\d{10}$/.test(no)) { toast('工單號格式錯誤：需 1 個英文字母 + 10 個數字（例：F1150407024）', 'error'); return; }
   if (!selectedMachine) { toast('請先選擇機台', 'error'); return; }
   const r = await api('/api/orders/' + encodeURIComponent(no));
-  if (!r.ok) { toast(r.error, 'error'); return; }
+  if (!r.ok) {
+    if (r.status === 409 && r.data && r.data.code === 'SOFT_DELETED') {
+      alert('工單「' + no + '」之前已被刪除。\n\n請聯絡管理員到 admin 頁面的「回收桶 → 已刪除工單」救回，或改用其他工單號。');
+      return;
+    }
+    toast(r.error, 'error');
+    return;
+  }
   // 後端在工單不存在時會自動建立，並回傳 wasCreated:true
   // 為避免單號 key 錯後一路記到錯的單上（例如把 0 打成 9），跳確認對話框讓使用者再看一次
   if (r.data.wasCreated) {

@@ -245,13 +245,39 @@ export default async function orderRoutes(fastify) {
     });
     let wasCreated = false;
     if (!order) {
-      order = await fastify.prisma.order.create({
-        data: { orderNo, leaderId: request.user.id },
-        include: ORDER_INCLUDE,
+      // findUnique 受軟刪除中間件過濾影響，可能 DB 裡有但 deletedAt 不為 null。
+      // 用顯式查詢確認是否真的不存在（否則 create 會撞 unique constraint）
+      const softDeleted = await fastify.prisma.order.findFirst({
+        where: { orderNo, deletedAt: { not: null } },
       });
-      wasCreated = true;
-      await audit(fastify.prisma, request, 'auto_create_order', orderNo,
-        `via=GET user=${request.user.username || request.user.id}`);
+      if (softDeleted) {
+        return reply.code(409).send({
+          error: '此工單號之前已被刪除，無法直接重新建立',
+          code: 'SOFT_DELETED',
+          hint: '請聯絡管理員到 admin 頁面「回收桶」救回此工單，或請使用其他工單號',
+          deletedAt: softDeleted.deletedAt,
+        });
+      }
+      // 真的不存在 → 嘗試 create；用 try/catch 處理 race condition（兩個 request 同時建）
+      try {
+        order = await fastify.prisma.order.create({
+          data: { orderNo, leaderId: request.user.id },
+          include: ORDER_INCLUDE,
+        });
+        wasCreated = true;
+        await audit(fastify.prisma, request, 'auto_create_order', orderNo,
+          `via=GET user=${request.user.username || request.user.id}`);
+      } catch (e) {
+        if (e.code === 'P2002') {
+          // 別的 request 剛建好；再讀一次
+          order = await fastify.prisma.order.findUnique({
+            where: { orderNo }, include: ORDER_INCLUDE,
+          });
+          if (!order) throw e; // 仍然找不到就讓錯誤往外拋
+        } else {
+          throw e;
+        }
+      }
     }
     return { order: serializeOrder(order), wasCreated };
   });
