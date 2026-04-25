@@ -417,18 +417,22 @@ async function findOrderNo() {
   let html = '';
   if (orders.length > 0) {
     html += '<h3 style="margin:8px 0;font-size:13px;color:var(--muted);">工單表（' + orders.length + ' 筆）</h3>';
-    html += '<table><thead><tr><th>工單號</th><th>機台 / 規格</th><th>狀態</th><th>建立 / 更新</th></tr></thead><tbody>';
+    html += '<table><thead><tr><th>工單號</th><th>機台 / 規格</th><th>狀態</th><th>建立 / 更新</th><th>操作</th></tr></thead><tbody>';
     orders.forEach(o => {
       const status = o.deletedAt
         ? '<span style="color:var(--brand);">已刪除 ' + fmtDateTime(o.deletedAt) + '</span>'
         : '<span style="color:var(--success);">使用中</span>';
       const spec = [o.productSpec, o.moldSpec, o.material].filter(Boolean).join(' / ') || '—';
       const machine = (o.machineNo || '—') + (o.plannedMachineNo && o.plannedMachineNo !== o.machineNo ? '（原計劃 ' + escapeHtml(o.plannedMachineNo) + '）' : '');
+      const action = o.deletedAt
+        ? '<button class="btn-secondary" data-restore="' + escapeHtml(o.orderNo) + '" style="padding:6px 12px;font-size:12px;">救回</button>'
+        : '<button class="btn-danger" data-finddel="' + escapeHtml(o.orderNo) + '" style="padding:6px 12px;font-size:12px;">刪除</button>';
       html += '<tr>'
         + '<td><strong>' + escapeHtml(o.orderNo) + '</strong></td>'
         + '<td><div>' + escapeHtml(machine) + '</div><div style="color:#888;font-size:12px;">' + escapeHtml(spec) + '</div></td>'
         + '<td>' + status + '</td>'
         + '<td style="font-size:12px;color:#666;">建：' + fmtDateTime(o.createdAt) + '<br>更：' + fmtDateTime(o.updatedAt) + '</td>'
+        + '<td>' + action + '</td>'
         + '</tr>';
     });
     html += '</tbody></table>';
@@ -451,6 +455,34 @@ async function findOrderNo() {
     html += '</tbody></table>';
   }
   $('findOrderResult').innerHTML = html;
+  $('findOrderResult').querySelectorAll('[data-finddel]').forEach(b => {
+    b.onclick = () => deleteOrderFromFind(b.dataset.finddel);
+  });
+  $('findOrderResult').querySelectorAll('[data-restore]').forEach(b => {
+    b.onclick = () => restoreOrder(b.dataset.restore);
+  });
+}
+
+async function deleteOrderFromFind(orderNo) {
+  if (!confirm('確定刪除工單「' + orderNo + '」？\n\n⚠️ 此動作無法復原（但可從「已刪除工單」區塊救回）。')) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo), { method: 'DELETE' });
+  if (r.ok) {
+    toast('已刪除 ' + orderNo, 'success');
+    findOrderNo();
+    loadTrash();
+    return;
+  }
+  if (r.status === 409 && r.data && r.data.code === 'HAS_PRODUCTION_DATA') {
+    if (!r.data.canReset) { toast(r.error, 'error'); return; }
+    const info = '工單「' + orderNo + '」已有生產紀錄：\n  ・工序紀錄 ' + (r.data.entryCount || 0) + ' 筆\n  ・停機紀錄 ' + (r.data.pauseCount || 0) + ' 筆\n\n是否改為「重設生產紀錄」？';
+    if (!confirm(info)) return;
+    const r2 = await api('/api/orders/' + encodeURIComponent(orderNo) + '/reset-production', { method: 'POST' });
+    if (!r2.ok) { toast(r2.error || '重設失敗', 'error'); return; }
+    toast('已重設 ' + orderNo, 'success');
+    findOrderNo();
+    return;
+  }
+  toast(r.error || '刪除失敗', 'error');
 }
 
 $('findOrderBtn').onclick = findOrderNo;
