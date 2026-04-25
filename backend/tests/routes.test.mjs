@@ -467,6 +467,51 @@ await test('bulk-upload：有活動但原本沒 machineNo 時，上傳的 machin
   assert.equal(stored.machineNo, 'No2-250', '原本空的 machineNo 可被填入');
 });
 
+await test('bulk-upload：已有活動的工單，上傳不覆蓋 productionDate（regression）', async () => {
+  // 情境：班長 4/21 已記錄工單，生管 4/23 重新上傳同工單，uploadDate=4/23
+  // 期望：productionDate 保持 4/21（現場為準），上傳不得覆寫
+  const { fastify, state } = await buildApp(PLANNER);
+  const productionDateApr21 = new Date('2026-04-21T00:00:00Z');
+  const order = await fastify.prisma.order.create({
+    data: { orderNo: 'D0000000001', machineNo: 'No3-60', productSpec: 'SPEC-X', productionDate: productionDateApr21 },
+  });
+  await fastify.prisma.stepEntry.create({ data: { orderId: order.id, stepNo: '1', seq: 1, recordedAt: new Date() } });
+  const res = await fastify.inject({
+    method: 'POST', url: '/api/orders/bulk-upload',
+    headers: { 'content-type': 'application/json' },
+    payload: JSON.stringify({
+      orders: [{ orderNo: 'D0000000001', machineNo: 'No3-60', productSpec: 'SPEC-X' }],
+      filename: 'test.xlsx',
+      uploadDate: '2026-04-23',
+    }),
+  });
+  assert.equal(res.statusCode, 200);
+  const stored = state.orders.get('D0000000001');
+  const storedDateStr = new Date(stored.productionDate).toISOString().slice(0, 10);
+  assert.equal(storedDateStr, '2026-04-21', 'productionDate 應保持 4/21（現場為準），不被 4/23 覆寫');
+});
+
+await test('bulk-upload：無活動的工單，上傳的 productionDate 會更新（維持原行為）', async () => {
+  const { fastify, state } = await buildApp(PLANNER);
+  const oldDate = new Date('2026-04-20T00:00:00Z');
+  await fastify.prisma.order.create({
+    data: { orderNo: 'D0000000002', productSpec: 'SPEC-Y', productionDate: oldDate },
+  });
+  const res = await fastify.inject({
+    method: 'POST', url: '/api/orders/bulk-upload',
+    headers: { 'content-type': 'application/json' },
+    payload: JSON.stringify({
+      orders: [{ orderNo: 'D0000000002', productSpec: 'SPEC-Y' }],
+      filename: 'test.xlsx',
+      uploadDate: '2026-04-25',
+    }),
+  });
+  assert.equal(res.statusCode, 200);
+  const stored = state.orders.get('D0000000002');
+  const storedDateStr = new Date(stored.productionDate).toISOString().slice(0, 10);
+  assert.equal(storedDateStr, '2026-04-25', '沒活動的工單 productionDate 仍可被上傳更新');
+});
+
 await test('刪除後再 DELETE → 404（軟刪除的工單不該被找到）', async () => {
   const { fastify, state } = await buildApp(ADMIN);
   await fastify.prisma.order.create({ data: { orderNo: 'A0000000009' } });
