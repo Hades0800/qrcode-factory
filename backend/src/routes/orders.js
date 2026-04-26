@@ -285,11 +285,16 @@ export default async function orderRoutes(fastify) {
   // 記錄工序（可重複，日誌式；支援補登自訂時間）
   fastify.post('/:orderNo/step-entries', async (request, reply) => {
     const orderNo = String(request.params.orderNo || '').toUpperCase();
-    const { stepNo, recordedAt: manualTime } = request.body || {};
+    const { stepNo, recordedAt: manualTime, note: rawNote } = request.body || {};
     if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
-    const validSteps = ['1','2','3','4','5','6','7','21','22','23','12','13'];
+    const validSteps = ['1','2','3','4','5','6','7','21','22','23','12','13','30'];
     if (!validSteps.includes(stepNo)) {
       return reply.code(400).send({ error: '無效工序編號' });
+    }
+    // stepNo=30 (更換規格) 必須帶文字描述
+    const note = typeof rawNote === 'string' ? rawNote.trim().slice(0, 200) : null;
+    if (stepNo === '30' && !note) {
+      return reply.code(400).send({ error: '更換規格需填入規格描述' });
     }
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) return reply.code(404).send({ error: '找不到工單' });
@@ -316,6 +321,7 @@ export default async function orderRoutes(fastify) {
         seq: prevCount + 1,
         recordedAt: time,
         isManual,
+        note,
         leaderId: request.user.id,
         leaderName: request.user.displayName || null,
       },

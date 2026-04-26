@@ -1348,6 +1348,37 @@ function renderSteps() {
     wrap.appendChild(div);
   });
 
+  // 更換規格（stepNo=30）— 多規格工單切換時技術員手動填入
+  const specChangeEntries = (order.stepEntries || []).filter(e => e.stepNo === '30');
+  const specDiv = document.createElement('div');
+  specDiv.className = 'step' + (specChangeEntries.length ? ' done' : '');
+  specDiv.style.borderLeft = '4px solid #f0ad4e';
+  let specBody = '<div class="title">更換規格' +
+    (specChangeEntries.length ? `<span class="badge ok" style="background:#f0ad4e;">×${specChangeEntries.length}</span>` : '') +
+    '</div>';
+  specBody += '<div class="hint">多規格工單切換規格時填入（例：規格 2、規格 3）</div>';
+  specChangeEntries.forEach(e => {
+    const elapsed = now - new Date(e.recordedAt).getTime();
+    const canCancel = elapsed < 5 * 60 * 1000;
+    const manualTag = e.isManual ? '<span class="manual-tag">補登</span>' : '';
+    specBody += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${canCancel ? '#fff4d6' : '#fff8e8'};border-radius:8px;border-left:3px solid #f0ad4e;">`;
+    specBody += `<span style="font-size:12px;color:#b8860b;font-weight:600;flex:1;">📋 ${escapeHtml(e.note || '')} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
+    if (canCancel && !isPaused) {
+      specBody += `<button class="btn-danger" data-cancel-entry="${e.id}" style="padding:4px 10px;font-size:11px;min-height:28px;">取消</button>`;
+    }
+    specBody += '</div>';
+  });
+  if (isPaused) {
+    specBody += '<button class="btn-success btn-block" disabled style="background:#f0ad4e;">📋 記錄更換</button>';
+  } else {
+    specBody += `<div style="display:flex;gap:6px;">`;
+    specBody += `<input type="text" id="specChangeInput" placeholder="新規格描述（例：規格 2）" maxlength="200" style="flex:1;padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">`;
+    specBody += `<button id="specChangeBtn" style="flex:0 0 auto;padding:10px 18px;background:#f0ad4e;color:#fff;border:none;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;">📋 記錄</button>`;
+    specBody += `</div>`;
+  }
+  specDiv.innerHTML = `<div class="step-body">${specBody}</div>`;
+  wrap.appendChild(specDiv);
+
   area.appendChild(wrap);
 
   // 底部動作按鈕
@@ -1523,8 +1554,32 @@ function renderSteps() {
   area.querySelectorAll('[data-backfill-submit]').forEach(b => {
     b.onclick = () => backfillStepEntry(b.getAttribute('data-backfill-submit'));
   });
+  // 更換規格
+  const specBtn = document.getElementById('specChangeBtn');
+  if (specBtn) {
+    specBtn.onclick = () => {
+      const input = document.getElementById('specChangeInput');
+      const text = (input?.value || '').trim();
+      if (!text) { toast('請填入規格描述', 'error'); input?.focus(); return; }
+      recordSpecChange(text);
+    };
+    const input = document.getElementById('specChangeInput');
+    if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') specBtn.click(); });
+  }
 
   $('bottomBar').classList.remove('show');
+}
+
+async function recordSpecChange(note) {
+  if (!orderNo) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/step-entries', {
+    method: 'POST',
+    body: { stepNo: '30', note },
+  });
+  if (!r.ok) { toast(r.error, 'error'); return; }
+  order = r.data.order;
+  renderSteps();
+  toast('📋 已記錄更換：' + note, 'success');
 }
 
 function getCurrentStep() {

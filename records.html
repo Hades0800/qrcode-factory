@@ -262,6 +262,18 @@
     color: var(--brand);
   }
   .rc-timeline li.day-divider::before { display: none; }
+  .rc-timeline li.spec-change {
+    padding-left: 0;
+    padding-top: 8px;
+    padding-bottom: 12px;
+    margin: 6px 0;
+    border-top: 2px dashed #f0ad4e;
+    color: #b8860b;
+    font-size: 13px;
+    font-weight: 700;
+    background: linear-gradient(to bottom, #fff8e8 0%, transparent 100%);
+  }
+  .rc-timeline li.spec-change::before { display: none; }
   .rc-card-pause {
     display: flex; gap: 16px; margin-top: 10px; font-size: 13px; color: var(--muted);
     padding-top: 10px; border-top: 1px solid var(--border);
@@ -643,6 +655,11 @@ function render() {
     });
     // 新日誌 stepEntries
     (o.stepEntries || []).forEach(e => {
+      if (e.stepNo === '30') {
+        const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
+        allItems.push({ time: new Date(e.recordedAt), label: '📋 更換規格：' + escapeHtml(e.note || '') + manual, style: 'spec-change' });
+        return;
+      }
       const name = entryLabels[e.stepNo] || ('工序'+e.stepNo);
       const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
       allItems.push({ time: new Date(e.recordedAt), label: name + manual, style: 'done' });
@@ -676,6 +693,7 @@ function render() {
         if (it.style === 'pause') cls = 'done pause-event';
         else if (it.style === 'abnormal') cls = 'done abnormal-event';
         else if (it.style === 'resume') cls = 'done resume-event';
+        else if (it.style === 'spec-change') cls = 'spec-change';
 
         const d = it.time;
         const dateStr = pad(d.getMonth()+1) + '/' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());

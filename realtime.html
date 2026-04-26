@@ -352,6 +352,18 @@
   .timeline li.resume-event .tl-dot { background: var(--success); box-shadow: 0 0 0 2px var(--success); }
   .timeline li.resume-event .tl-time { color: var(--success); }
   .timeline li.resume-event .tl-label { color: var(--success); font-style: italic; }
+  .timeline li.spec-change {
+    padding-left: 0;
+    padding-top: 8px;
+    padding-bottom: 12px;
+    margin: 6px 0;
+    border-top: 2px dashed #f0ad4e;
+    background: linear-gradient(to bottom, #fff8e8 0%, transparent 100%);
+  }
+  .timeline li.spec-change::before { display: none; }
+  .timeline li.spec-change .tl-dot { display: none; }
+  .timeline li.spec-change .tl-time { color: #b8860b; }
+  .timeline li.spec-change .tl-label { color: #b8860b; font-weight: 700; font-size: 13px; }
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: .5; }
@@ -821,6 +833,11 @@ function buildTimeline(o, isAdmin) {
 
   // 新格式 stepEntries（日誌式，可多次）
   (o.stepEntries || []).forEach(e => {
+    if (e.stepNo === '30') {
+      const suffix = (e.isManual ? '（補登）' : '');
+      items.push({ time: new Date(e.recordedAt), label: '📋 更換規格：' + (e.note || '') + suffix, type: 'spec-change', entryId: e.id });
+      return;
+    }
     const labelMap = {'1':'原料準備與設置','2':'模刀具準備與安裝','3':'試模與規格品質確認','4':'斷續試稼生產製造','5':'穩定連續生產製造','6':'後工程接續生產','7':'其他作業','21':'設備啓動準備','22':'生產準備完成','23':'生產無工令'};
     const name = labelMap[e.stepNo] || ('工序 ' + e.stepNo);
     const suffix = (e.isManual ? '（補登）' : '');
@@ -862,6 +879,7 @@ function buildTimeline(o, isAdmin) {
     else if (it.type === 'pause') cls = 'done pause-event';
     else if (it.type === 'abnormal') cls = 'done abnormal-event';
     else if (it.type === 'resume') cls = 'done resume-event';
+    else if (it.type === 'spec-change') cls = 'spec-change';
 
     // 時間格式：MM/DD HH:MM（+與上一筆的時間差）
     const pad = n => String(n).padStart(2, '0');
