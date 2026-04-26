@@ -1554,17 +1554,16 @@ function renderSteps() {
   area.querySelectorAll('[data-backfill-submit]').forEach(b => {
     b.onclick = () => backfillStepEntry(b.getAttribute('data-backfill-submit'));
   });
-  // 更換規格
+  // 更換規格（不綁 Enter，避免行動裝置誤觸；只能按按鈕）
   const specBtn = document.getElementById('specChangeBtn');
   if (specBtn) {
     specBtn.onclick = () => {
       const input = document.getElementById('specChangeInput');
       const text = (input?.value || '').trim();
       if (!text) { toast('請填入規格描述', 'error'); input?.focus(); return; }
+      if (!confirm('確定記錄更換規格為「' + text + '」？')) return;
       recordSpecChange(text);
     };
-    const input = document.getElementById('specChangeInput');
-    if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') specBtn.click(); });
   }
 
   $('bottomBar').classList.remove('show');

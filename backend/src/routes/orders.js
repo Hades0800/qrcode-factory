@@ -115,6 +115,7 @@ function serializeOrder(o) {
     stepEntries: (o.stepEntries || []).map(e => ({
       id: e.id, stepNo: e.stepNo, seq: e.seq,
       recordedAt: e.recordedAt, isManual: e.isManual || false,
+      note: e.note || null,
       leaderName: e.leaderName,
     })),
     createdAt: o.createdAt,
