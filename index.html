@@ -805,13 +805,14 @@ const PRE_STEPS = [
 ];
 
 const STEPS = [
-  { id: '1', title: '01. 原料準備與設置',     hint: '' },
-  { id: '2', title: '02. 模刀具準備與安裝',   hint: '' },
-  { id: '3', title: '03. 試模與規格品質確認', hint: '' },
-  { id: '4', title: '04. 斷續試稼生產製造',   hint: '無法連續生產3分鐘' },
-  { id: '5', title: '05. 穩定連續生產製造',   hint: '' },
-  { id: '6', title: '06. 後工程接續生產',     hint: '軋平、捲網、波浪網等' },
-  { id: '7', title: '07. 其他作業',           hint: '清潔清運或包裝入庫等' },
+  { id: '1', title: '01. 原料準備與設置',          hint: '' },
+  { id: '2', title: '02. 模刀具準備與安裝',        hint: '' },
+  { id: '3', title: '03. 試模與規格品質確認',      hint: '' },
+  { id: '4', title: '04. 穩定連續生產-無中斷',     hint: '連續生產期間沒有任何中斷' },
+  { id: '5', title: '05. 穩定連續生產-中斷調整',   hint: '生產過程中有少量調整中斷' },
+  { id: '8', title: '06. 穩定連續生產-中斷多次',   hint: '生產過程中多次中斷' },
+  { id: '6', title: '07. 後工程接續生產',          hint: '軋平、捲網、波浪網等' },
+  { id: '7', title: '08. 其他作業',                hint: '清潔清運或包裝入庫等' },
 ];
 
 const ACTIONS_FINISH = { id: '11', title: '工單完成與結束', hint: '開始新的製造工單', style: 'act-success', icon: '✓' };
@@ -829,6 +830,7 @@ const STEP_FIELD = {
   '3':  { time: 'step3At',  note: null },
   '4':  { time: 'step4At',  note: null },
   '5':  { time: 'step5At',  note: null },
+  '8':  { time: 'step8At',  note: null },
   '6':  { time: 'step6At',  note: null },
   '7':  { time: 'step7At',  note: null },
   '11': { time: 'step11At', note: null },

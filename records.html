@@ -627,8 +627,8 @@ function render() {
     { key: 'step1At', label: '原料準備' },
     { key: 'step2At', label: '模刀具' },
     { key: 'step3At', label: '試模確認' },
-    { key: 'step4At', label: '斷續試稼' },
-    { key: 'step5At', label: '穩定生產' },
+    { key: 'step4At', label: '穩定生產-無中斷' },
+    { key: 'step5At', label: '穩定生產-中斷調整' },
     { key: 'step6At', label: '後工程' },
     { key: 'step7At', label: '其他作業' },
     { key: 'step11At', label: '完成' },
@@ -647,7 +647,7 @@ function render() {
 
     // 合併所有事件到一個時間軸（只顯示有的）
     const allItems = [];
-    const entryLabels = {'1':'原料準備','2':'模刀具','3':'試模確認','4':'斷續試稼','5':'穩定生產','6':'後工程','7':'其他作業','21':'設備啓動','22':'準備完成','23':'無工令'};
+    const entryLabels = {'1':'原料準備','2':'模刀具','3':'試模確認','4':'穩定生產-無中斷','5':'穩定生產-中斷調整','8':'穩定生產-中斷多次','6':'後工程','7':'其他作業','21':'設備啓動','22':'準備完成','23':'無工令'};
 
     // 舊格式 stepXAt
     STEP_NAMES.forEach(s => {
@@ -962,7 +962,7 @@ $('exportBtn').onclick = () => {
     '規格類型','難易係數',
     '小組長',
     '21.設備啓動','22.準備完成','23.無工令',
-    '01.原料準備','02.模刀具','03.試模確認','04.斷續試稼','05.穩定生產','06.後工程','07.其他作業','11.完成',
+    '01.原料準備','02.模刀具','03.試模確認','04.穩定生產-無中斷','05.穩定生產-中斷調整','06.穩定生產-中斷多次','07.後工程','08.其他作業','11.完成',
     '暫停次數','暫停秒數','異常次數','異常秒數','最後更新',
   ];
   // 從 stepEntries 取各步驟第一次紀錄時間（優先），fallback 到舊格式 stepXAt
@@ -988,7 +988,7 @@ $('exportBtn').onclick = () => {
     o.leaderName,
     getAllStepTimes(o, '21', 'step21At'), getAllStepTimes(o, '22', 'step22At'), getAllStepTimes(o, '23', 'step23At'),
     getAllStepTimes(o, '1', 'step1At'), getAllStepTimes(o, '2', 'step2At'), getAllStepTimes(o, '3', 'step3At'), getAllStepTimes(o, '4', 'step4At'),
-    getAllStepTimes(o, '5', 'step5At'), getAllStepTimes(o, '6', 'step6At'), getAllStepTimes(o, '7', 'step7At'), fmtTime(o.step11At),
+    getAllStepTimes(o, '5', 'step5At'), getAllStepTimes(o, '8', null), getAllStepTimes(o, '6', 'step6At'), getAllStepTimes(o, '7', 'step7At'), fmtTime(o.step11At),
     ((o.pause12 && o.pause12.history) || []).filter(e => !isExcludedPause(e)).length,
     ((o.pause12 && o.pause12.history) || []).filter(e => !isExcludedPause(e)).reduce((s, e) => s + (e.duration || 0), 0),
     ((o.pause13 && o.pause13.history) || []).filter(e => !isExcludedPause(e)).length,
