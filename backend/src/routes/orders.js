@@ -106,6 +106,7 @@ function serializeOrder(o) {
     productionDate: o.actualStartDate || o.plannedDate || o.productionDate || null,
     specType: o.specType || null,           // 'new' | 'mass' | null
     difficultyFactor: o.difficultyFactor || null,  // 新製規格才有
+    changeScope: o.changeScope || null,      // '@' | '#' | '@#' | null
     productSpec: o.productSpec || '',
     moldSpec: o.moldSpec || '', material: o.material || '',
     dispatchQty: o.dispatchQty, bladeCount: o.bladeCount,
@@ -408,6 +409,35 @@ export default async function orderRoutes(fastify) {
       return { ok: true, specType, difficultyFactor: factor };
     } catch (e) {
       request.log.error(e, 'spec-type failed');
+      return reply.code(500).send({
+        error: '設定失敗：' + (e.message || String(e)),
+        code: e.code || null,
+      });
+    }
+  });
+
+  // 設定更換範圍（@ = 僅換原料 / # = 僅換模刀具 / @# = 兩者都換 / null = 清除）
+  // 用 raw SQL，跟 spec-type 同 pattern，不依賴 Prisma client regenerate
+  fastify.post('/:orderNo/change-scope', async (request, reply) => {
+    try {
+      const orderNo = String(request.params.orderNo || '').toUpperCase();
+      const { changeScope } = request.body || {};
+      if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
+      if (changeScope !== null && !['@', '#', '@#'].includes(changeScope)) {
+        return reply.code(400).send({ error: '無效的更換範圍（需為 @ / # / @# / null）' });
+      }
+      await fastify.prisma.$executeRawUnsafe(
+        'ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "changeScope" TEXT'
+      );
+      const result = await fastify.prisma.$executeRaw`
+        UPDATE "Order"
+        SET "changeScope" = ${changeScope}
+        WHERE "orderNo" = ${orderNo}
+      `;
+      if (result === 0) return reply.code(404).send({ error: '找不到工單' });
+      return { ok: true, changeScope };
+    } catch (e) {
+      request.log.error(e, 'change-scope failed');
       return reply.code(500).send({
         error: '設定失敗：' + (e.message || String(e)),
         code: e.code || null,

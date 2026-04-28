@@ -45,6 +45,7 @@ model Order {
   // 規格類型（現場技術員選擇）
   specType         String?  // 'new' = 新製規格、'mass' = 量產規格
   difficultyFactor Float?   // 新製規格的難易權重係數（1.1 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6）→ 生產時間 = 理論時間 × 係數
+  changeScope      String?  // '@' = 僅換原料 / '#' = 僅換模刀具 / '@#' = 兩者都換
   productSpec    String?
   moldSpec       String?
   material       String?

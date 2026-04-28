@@ -748,6 +748,20 @@
     </div>
   </div>
 
+  <!-- 更換範圍（第三步） -->
+  <div class="card" id="scopeCard" style="display:none;">
+    <h2>選擇符號 <span class="required">第三步</span></h2>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">
+      @ ＝ 工單僅更換原料　／　# ＝ 工單僅更換模刀具　／　@# ＝ 兩者都更換
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="scope-choice" data-scope="@" style="flex:1;padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font-weight:700;font-size:18px;">@</button>
+      <button class="scope-choice" data-scope="#" style="flex:1;padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font-weight:700;font-size:18px;">#</button>
+      <button class="scope-choice" data-scope="@#" style="flex:1;padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font-weight:700;font-size:18px;">@#</button>
+      <button class="scope-choice" data-scope="" style="flex:0 0 auto;padding:14px;border:2px solid var(--border);border-radius:10px;background:#f8f8fa;cursor:pointer;font-weight:600;font-size:13px;color:var(--muted);">清除</button>
+    </div>
+  </div>
+
   <!-- 步驟區（動態生成） -->
   <div id="stepsArea" style="display:none;"></div>
 </div>
@@ -957,6 +971,7 @@ function logout(silent) {
   $('orderCard').style.display = 'none';
   $('orderEmpty').style.display = 'block';
   $('orderShow').style.display = 'none';
+  $('scopeCard').style.display = 'none';
   $('stepsArea').style.display = 'none';
   $('orderInput').value = '';
   $('bottomBar').classList.remove('show');
@@ -1085,9 +1100,11 @@ async function setOrder(no) {
   if (mr.ok) order = mr.data.order;
   $('orderEmpty').style.display = 'none';
   $('orderShow').style.display = 'block';
+  $('scopeCard').style.display = 'block';
   $('orderNoText').textContent = no;
   $('orderUpdated').textContent = order.updatedAt ? ('最後更新：' + fmtTime(order.updatedAt)) : '尚未開始';
   renderSpecType();
+  renderChangeScope();
   saveState();
   renderSteps();
 }
@@ -1109,6 +1126,33 @@ function renderSpecType() {
     el.textContent = order.specType;
   }
 }
+
+// ── 更換範圍（第三步） ──
+function renderChangeScope() {
+  const current = (order && order.changeScope) || '';
+  document.querySelectorAll('.scope-choice').forEach(b => {
+    const val = b.getAttribute('data-scope');
+    const isSelected = val !== '' && val === current;
+    b.style.background = isSelected ? 'var(--brand)' : (val === '' ? '#f8f8fa' : '#fff');
+    b.style.color = isSelected ? '#fff' : (val === '' ? 'var(--muted)' : 'var(--ink)');
+    b.style.borderColor = isSelected ? 'var(--brand)' : 'var(--border)';
+  });
+}
+
+document.querySelectorAll('.scope-choice').forEach(b => {
+  b.onclick = async () => {
+    if (!order || !orderNo) { toast('請先載入工單', 'error'); return; }
+    const val = b.getAttribute('data-scope') || null;
+    const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/change-scope', {
+      method: 'POST',
+      body: { changeScope: val },
+    });
+    if (!r.ok) { toast(r.error || '設定失敗', 'error'); return; }
+    order.changeScope = r.data.changeScope;
+    renderChangeScope();
+    toast(val ? ('已設定為 ' + val) : '已清除', 'success');
+  };
+});
 
 $('setOrderBtn').onclick = () => setOrder($('orderInput').value);
 $('orderInput').addEventListener('keydown', e => { if (e.key === 'Enter') setOrder($('orderInput').value); });
@@ -1219,6 +1263,7 @@ $('changeOrderBtn').onclick = () => {
   orderNo = ''; order = null;
   $('orderEmpty').style.display = 'block';
   $('orderShow').style.display = 'none';
+  $('scopeCard').style.display = 'none';
   $('orderInput').value = '';
   $('stepsArea').style.display = 'none';
   $('bottomBar').classList.remove('show');
@@ -1795,6 +1840,7 @@ function finishOrder() {
   $('orderCard').style.display = 'none';
   $('orderEmpty').style.display = 'block';
   $('orderShow').style.display = 'none';
+  $('scopeCard').style.display = 'none';
   $('orderInput').value = '';
   $('stepsArea').style.display = 'none';
   $('bottomBar').classList.remove('show');

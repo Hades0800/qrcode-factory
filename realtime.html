@@ -575,7 +575,8 @@ function renderContent() {
     ':' + (o.pause12 && o.pause12.active ? 'p12' : '') +
     ':' + (o.pause13 && o.pause13.active ? 'p13' : '') +
     ':' + (o.plannedMachineNo || '') +
-    ':' + (o.specType || '') + ':' + (o.difficultyFactor || '')
+    ':' + (o.specType || '') + ':' + (o.difficultyFactor || '') +
+    ':' + (o.changeScope || '')
   ).join(';');
   if (fingerprint === lastRenderHash) return; // 資料無變化，跳過重畫，畫面與 scroll 位置維持原狀
   lastRenderHash = fingerprint;
@@ -710,7 +711,7 @@ function renderContent() {
       html += `
         <div class="order-card${isActive ? ' active' : ''}">
           <div class="oc-header">
-            <div class="oc-no">${escapeHtml(o.orderNo)}${carryOverTag}</div>
+            <div class="oc-no">${escapeHtml(o.orderNo)}${o.changeScope ? `<span style="margin-left:8px;padding:2px 8px;background:#fff3cd;color:#b8860b;border:1.5px solid #f0ad4e;border-radius:6px;font-size:13px;font-weight:800;letter-spacing:1px;vertical-align:middle;">${escapeHtml(o.changeScope)}</span>` : ''}${carryOverTag}</div>
             <div class="oc-badge">${o.step11At ? '已完成' : (started ? '生產中' : '等待中')}</div>
           </div>
           <div id="rt-spec-${escapeHtml(o.orderNo)}" class="rt-spec-area"></div>

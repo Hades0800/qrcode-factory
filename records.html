@@ -762,7 +762,7 @@ function render() {
     return `
       <div class="rec-card${isComplete ? ' has-complete' : ''}">
         <div class="rc-header">
-          <div class="rc-no">${escapeHtml(o.orderNo)}</div>
+          <div class="rc-no">${escapeHtml(o.orderNo)}${o.changeScope ? `<span style="margin-left:10px;padding:2px 10px;background:#fff3cd;color:#b8860b;border:1.5px solid #f0ad4e;border-radius:6px;font-size:14px;font-weight:800;letter-spacing:1px;">${escapeHtml(o.changeScope)}</span>` : ''}</div>
           <div style="display:flex;align-items:center;gap:8px;">
             ${badge}
             ${isAdmin ? `<button class="btn-danger" data-del="${escapeHtml(o.orderNo)}" style="padding:4px 10px;font-size:11px;min-height:24px;" onclick="event.stopPropagation()">刪除</button>` : ''}
