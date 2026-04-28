@@ -107,6 +107,7 @@ function serializeOrder(o) {
     specType: o.specType || null,           // 'new' | 'mass' | null
     difficultyFactor: o.difficultyFactor || null,  // 新製規格才有
     changeScope: o.changeScope || null,      // '@' | '#' | '@#' | null
+    materialType: o.materialType || null,    // 'coil'(1.0) | 'plate'(1.2) | null
     productSpec: o.productSpec || '',
     moldSpec: o.moldSpec || '', material: o.material || '',
     dispatchQty: o.dispatchQty, bladeCount: o.bladeCount,
@@ -438,6 +439,35 @@ export default async function orderRoutes(fastify) {
       return { ok: true, changeScope };
     } catch (e) {
       request.log.error(e, 'change-scope failed');
+      return reply.code(500).send({
+        error: '設定失敗：' + (e.message || String(e)),
+        code: e.code || null,
+      });
+    }
+  });
+
+  // 設定原料類型（coil = 捲料 1.0 / plate = 板料 1.2 / null = 清除）
+  // 同 change-scope pattern：raw SQL + ALTER TABLE IF NOT EXISTS
+  fastify.post('/:orderNo/material-type', async (request, reply) => {
+    try {
+      const orderNo = String(request.params.orderNo || '').toUpperCase();
+      const { materialType } = request.body || {};
+      if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
+      if (materialType !== null && !['coil', 'plate'].includes(materialType)) {
+        return reply.code(400).send({ error: '無效的原料類型（需為 coil / plate / null）' });
+      }
+      await fastify.prisma.$executeRawUnsafe(
+        'ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "materialType" TEXT'
+      );
+      const result = await fastify.prisma.$executeRaw`
+        UPDATE "Order"
+        SET "materialType" = ${materialType}
+        WHERE "orderNo" = ${orderNo}
+      `;
+      if (result === 0) return reply.code(404).send({ error: '找不到工單' });
+      return { ok: true, materialType };
+    } catch (e) {
+      request.log.error(e, 'material-type failed');
       return reply.code(500).send({
         error: '設定失敗：' + (e.message || String(e)),
         code: e.code || null,

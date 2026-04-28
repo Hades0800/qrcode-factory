@@ -576,7 +576,7 @@ function renderContent() {
     ':' + (o.pause13 && o.pause13.active ? 'p13' : '') +
     ':' + (o.plannedMachineNo || '') +
     ':' + (o.specType || '') + ':' + (o.difficultyFactor || '') +
-    ':' + (o.changeScope || '')
+    ':' + (o.changeScope || '') + ':' + (o.materialType || '')
   ).join(';');
   if (fingerprint === lastRenderHash) return; // 資料無變化，跳過重畫，畫面與 scroll 位置維持原狀
   lastRenderHash = fingerprint;
@@ -727,6 +727,7 @@ function renderContent() {
           <div class="order-info" style="margin-bottom:12px;">
             <span class="oi-label">小組長</span><span class="oi-value">${escapeHtml(o.leaderName)}</span>
             ${o.specType ? `<span class="oi-label" style="margin-left:14px;">規格</span><span class="oi-value">${o.specType === 'new' ? '🆕 新製' : '📦 量產'}${o.specType === 'new' && o.difficultyFactor ? ` <span style="color:var(--brand);font-size:12px;">×${o.difficultyFactor}</span>` : ''}</span>` : ''}
+            ${o.materialType ? `<span class="oi-label" style="margin-left:14px;">原料</span><span class="oi-value">${o.materialType === 'coil' ? '捲料' : '板料'} <span style="color:var(--brand);font-size:12px;">×${o.materialType === 'coil' ? '1.0' : '1.2'}</span></span>` : ''}
           </div>
           <h3 style="margin:0 0 8px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;">生產實態</h3>
           <ul class="timeline">${timeline}</ul>
