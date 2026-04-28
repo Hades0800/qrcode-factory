@@ -715,8 +715,9 @@ function renderContent() {
           </div>
           <div id="rt-spec-${escapeHtml(o.orderNo)}" class="rt-spec-area"></div>
           ${o.plannedMachineNo && o.plannedMachineNo !== o.machineNo ? `
-          <div style="margin-bottom:8px;padding:6px 10px;background:#fff3cd;border-left:3px solid #f0ad4e;border-radius:4px;font-size:12px;color:#8a6d3b;">
-            <strong>原計劃生產機台：</strong>${escapeHtml(o.plannedMachineNo)}
+          <div style="margin-bottom:8px;padding:6px 10px;background:#fff3cd;border-left:3px solid #f0ad4e;border-radius:4px;font-size:12px;color:#8a6d3b;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+            <span><strong>原計劃生產機台：</strong>${escapeHtml(o.plannedMachineNo)}</span>
+            <button data-move-planned="${escapeHtml(o.orderNo)}" data-target="${escapeHtml(o.plannedMachineNo)}" style="padding:4px 10px;font-size:11px;background:#f0ad4e;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">移到 ${escapeHtml(o.plannedMachineNo)}</button>
           </div>` : ''}
           ${o.actualStartDate && o.plannedDate && String(o.actualStartDate).slice(0,10) !== String(o.plannedDate).slice(0,10) ? `
           <div style="margin-bottom:8px;padding:6px 10px;background:#fff3cd;border-left:3px solid #f0ad4e;border-radius:4px;font-size:12px;color:#8a6d3b;">
@@ -738,6 +739,10 @@ function renderContent() {
   // 刪除單筆實態按鈕事件
   content.querySelectorAll('[data-del-entry]').forEach(b => {
     b.onclick = () => deleteEntry(b.getAttribute('data-del-entry'), b.getAttribute('data-order'));
+  });
+  // 移到原計劃機台
+  content.querySelectorAll('[data-move-planned]').forEach(b => {
+    b.onclick = () => moveToPlannedMachine(b.getAttribute('data-move-planned'), b.getAttribute('data-target'));
   });
 
   // 載入多規格卡片
@@ -805,6 +810,17 @@ async function loadSpecCards(o) {
         }).join('')}
       </div></div>`;
   }
+}
+
+async function moveToPlannedMachine(orderNo, target) {
+  if (!confirm('確定將工單「' + orderNo + '」改到原計劃機台「' + target + '」？\n\n此操作會把目前機台改為 ' + target + '，並把此單從現在這個分頁移走。')) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/machine', {
+    method: 'POST',
+    body: { machineNo: target },
+  });
+  if (!r.ok) { toast(r.error || '改機台失敗', 'error'); return; }
+  toast('已將 ' + orderNo + ' 改到 ' + target, 'success');
+  loadOrders();
 }
 
 async function deleteEntry(entryId, orderNo) {
