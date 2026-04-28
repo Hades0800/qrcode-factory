@@ -1114,15 +1114,25 @@ async function setOrder(no) {
   if (mr.ok) order = mr.data.order;
   $('orderEmpty').style.display = 'none';
   $('orderShow').style.display = 'block';
-  $('scopeCard').style.display = 'block';
-  $('materialCard').style.display = 'block';
   $('orderNoText').textContent = no;
   $('orderUpdated').textContent = order.updatedAt ? ('最後更新：' + fmtTime(order.updatedAt)) : '尚未開始';
   renderSpecType();
   renderChangeScope();
   renderMaterialType();
+  updateStepGates();
   saveState();
   renderSteps();
+}
+
+// 第二～四步的可見性瀑布：前一步沒完成，後面全部關掉
+function updateStepGates() {
+  const ok2 = !!(order && order.specType);                    // Step 2 完成 = 規格類型已設
+  const ok3 = ok2 && !!(order && order.changeScope);          // Step 3 完成 = 符號已選
+  const ok4 = ok3 && !!(order && order.materialType);         // Step 4 完成 = 原料類型已選
+  $('scopeCard').style.display    = ok2 ? 'block' : 'none';
+  $('materialCard').style.display = ok3 ? 'block' : 'none';
+  $('stepsArea').style.display    = ok4 ? 'block' : 'none';
+  if (!ok4) $('bottomBar').classList.remove('show');
 }
 
 function renderSpecType() {
@@ -1166,6 +1176,7 @@ document.querySelectorAll('.scope-choice').forEach(b => {
     if (!r.ok) { toast(r.error || '設定失敗', 'error'); return; }
     order.changeScope = r.data.changeScope;
     renderChangeScope();
+    updateStepGates();
     toast(val ? ('已設定為 ' + val) : '已清除', 'success');
   };
 });
@@ -1196,6 +1207,7 @@ document.querySelectorAll('.mat-choice').forEach(b => {
     if (!r.ok) { toast(r.error || '設定失敗', 'error'); return; }
     order.materialType = r.data.materialType;
     renderMaterialType();
+    updateStepGates();
     const label = val === 'coil' ? '捲料 (1.0)' : (val === 'plate' ? '板料 (1.2)' : '');
     toast(label ? ('已設定為 ' + label) : '已清除', 'success');
   };
@@ -1284,6 +1296,7 @@ $('specTypeConfirm').onclick = async () => {
     order.difficultyFactor = r.data.difficultyFactor;
   }
   renderSpecType();
+  updateStepGates();
   saveState();
   closeSpecTypeModal();
   toast('已設定規格類型', 'success');
@@ -1321,7 +1334,7 @@ $('changeOrderBtn').onclick = () => {
 // ====== 步驟渲染 ======
 function renderSteps() {
   const area = $('stepsArea');
-  area.style.display = 'block';
+  // 顯示由 updateStepGates() 統一管理；renderSteps 只負責內容
   area.innerHTML = '';
   const wrap = document.createElement('div');
   wrap.className = 'card';
