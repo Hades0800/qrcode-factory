@@ -630,14 +630,18 @@ function renderContent() {
   const doneWeight = machineOrders.filter(o => o.step11At).reduce((s, o) => s + (Number(o.totalWeight) || 0), 0);
   const capacityRate = std.capacityKg > 0 ? (doneWeight / std.capacityKg * 100).toFixed(1) : null;
 
-  // 標準工時（分鐘）= 設定數字(刀數) / 每片秒數(SPM) × 數量(派工數)
+  // 標準工時（分鐘）= 刀數 / SPM × 派工數 × 規格係數 × 原料係數
+  // - 規格係數（第二步）：specType='new' 時用 difficultyFactor（1.1~1.6），其他為 1
+  // - 原料係數（第四步）：materialType='plate' 為 1.2，'coil' 為 1.0，未設定為 1
   // 累計今日該機台所有工單的標準工時
   const stdMinutes = machineOrders.reduce((s, o) => {
     const blades = Number(o.bladeCount) || 0;
     const spm = Number(o.machineSPM) || 0;
     const qty = Number(o.dispatchQty) || 0;
     if (blades > 0 && spm > 0 && qty > 0) {
-      return s + (blades / spm * qty);
+      const specFactor = (o.specType === 'new' && o.difficultyFactor) ? Number(o.difficultyFactor) : 1;
+      const matFactor = o.materialType === 'plate' ? 1.2 : 1.0;
+      return s + (blades / spm * qty * specFactor * matFactor);
     }
     return s;
   }, 0);
