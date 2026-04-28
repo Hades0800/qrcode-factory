@@ -81,10 +81,11 @@
   .dropdown-menu .menu-sep { height: 1px; background: var(--border); margin: 4px 8px; }
   .dropdown-menu a.menu-logout { color: var(--muted); }
 
-  /* Machine tabs (horizontal scroll) */
+  /* Machine tabs — chip 列，可橫向滑動 */
   .machine-tabs {
     display: flex;
-    gap: 0;
+    gap: 8px;
+    padding: 10px 12px;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     flex-shrink: 0;
@@ -95,34 +96,34 @@
   .machine-tabs::-webkit-scrollbar { display: none; }
   .machine-tab {
     flex: 0 0 auto;
-    padding: 12px 20px;
+    padding: 8px 16px;
     text-align: center;
     cursor: pointer;
-    border-bottom: 3px solid transparent;
-    transition: all .15s;
-    min-width: 80px;
+    border: 1.5px solid transparent;
+    border-radius: 999px;
+    transition: background .15s, color .15s, transform .1s;
+    min-width: 64px;
     font-family: inherit;
-    background: none;
-    border-left: none;
-    border-right: none;
-    border-top: none;
-    font-size: 14px;
-    color: var(--muted);
+    background: #f0f0f3;
+    font-size: 13px;
+    color: #8e8e93;
   }
-  .machine-tab:active { background: #f5f5f7; }
-  .machine-tab .mt-num { font-size: 16px; font-weight: 800; }
-  .machine-tab .mt-spec { font-size: 10px; }
+  .machine-tab:active { transform: scale(0.96); }
+  .machine-tab .mt-num { font-size: 15px; font-weight: 800; line-height: 1.1; }
+  .machine-tab .mt-spec { font-size: 10px; opacity: .85; line-height: 1.2; margin-top: 1px; }
   .machine-tab.active {
-    color: var(--brand);
-    border-bottom-color: var(--brand);
-    background: var(--brand-soft);
+    background: var(--brand);
+    color: #fff;
+    border-color: var(--brand);
+    box-shadow: 0 2px 8px rgba(232, 65, 51, .28);
   }
   .machine-tab.idle {
-    opacity: .4;
+    opacity: .45;
   }
   .machine-tab.idle .mt-spec::after {
     content: " 無工令";
-    color: #8e8e93;
+    color: inherit;
+    opacity: .75;
   }
 
   /* Content area */
@@ -408,7 +409,8 @@
     header .brand img { height: 24px; }
     header .brand-text .title { font-size: 12px; }
     header .right a { font-size: 11px; padding: 5px 6px; }
-    .machine-tab { padding: 10px 14px; min-width: 65px; }
+    .machine-tabs { padding: 8px 10px; gap: 6px; }
+    .machine-tab { padding: 7px 12px; min-width: 56px; }
     .machine-tab .mt-num { font-size: 14px; }
   }
 </style>
