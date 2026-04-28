@@ -18,6 +18,9 @@
 <link rel="dns-prefetch" href="https://shangkai-manu-record.zeabur.app">
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
+  /* 第三/四步 chip 按下去的瞬間反饋（視覺上立即有感） */
+  .scope-choice, .mat-choice { transition: transform .08s, background .15s, color .15s, border-color .15s; }
+  .scope-choice:active, .mat-choice:active { transform: scale(0.96); }
   :root {
     --brand: #d23535;
     --brand-dark: #a82828;
@@ -1169,15 +1172,23 @@ document.querySelectorAll('.scope-choice').forEach(b => {
   b.onclick = async () => {
     if (!order || !orderNo) { toast('請先載入工單', 'error'); return; }
     const val = b.getAttribute('data-scope') || null;
+    const old = order.changeScope || null;
+    if (val === old) return; // 點同一顆等同沒動，不發 request
+    // 樂觀更新：UI 先反應，背景送 API
+    order.changeScope = val;
+    renderChangeScope();
+    updateStepGates();
     const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/change-scope', {
       method: 'POST',
       body: { changeScope: val },
     });
-    if (!r.ok) { toast(r.error || '設定失敗', 'error'); return; }
-    order.changeScope = r.data.changeScope;
-    renderChangeScope();
-    updateStepGates();
-    toast(val ? ('已設定為 ' + val) : '已清除', 'success');
+    if (!r.ok) {
+      order.changeScope = old;
+      renderChangeScope();
+      updateStepGates();
+      toast(r.error || '設定失敗，已還原', 'error');
+      return;
+    }
   };
 });
 
@@ -1200,16 +1211,23 @@ document.querySelectorAll('.mat-choice').forEach(b => {
   b.onclick = async () => {
     if (!order || !orderNo) { toast('請先載入工單', 'error'); return; }
     const val = b.getAttribute('data-mat') || null;
+    const old = order.materialType || null;
+    if (val === old) return;
+    // 樂觀更新：UI 先反應，背景送 API
+    order.materialType = val;
+    renderMaterialType();
+    updateStepGates();
     const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/material-type', {
       method: 'POST',
       body: { materialType: val },
     });
-    if (!r.ok) { toast(r.error || '設定失敗', 'error'); return; }
-    order.materialType = r.data.materialType;
-    renderMaterialType();
-    updateStepGates();
-    const label = val === 'coil' ? '捲料 (1.0)' : (val === 'plate' ? '板料 (1.2)' : '');
-    toast(label ? ('已設定為 ' + label) : '已清除', 'success');
+    if (!r.ok) {
+      order.materialType = old;
+      renderMaterialType();
+      updateStepGates();
+      toast(r.error || '設定失敗，已還原', 'error');
+      return;
+    }
   };
 });
 
