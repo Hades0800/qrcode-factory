@@ -818,11 +818,10 @@
 const PRE_STEPS = [];
 
 // kind: 'simple' = 直接記錄（fixedNote 為固定備註）／ 'options' = 多選一（options 為選項清單）
+// 已停用步驟（6 後工程、7 其他作業）：歷史資料保留，新單不再顯示
 const STEPS = [
   { id: '40', kind: 'simple',  title: '01. 生產準備', hint: '含清理、料模刀與試模', fixedNote: '含清理、料模刀與試模' },
   { id: '41', kind: 'options', title: '02. 生產開始', hint: '點選對應的生產狀態', options: ['生產中斷參數調整', '多次任何中斷生產', '無論是否連續生產'] },
-  { id: '6',  kind: 'simple',  title: '03. 後工程接續生產', hint: '軋平、捲網、波浪網等', fixedNote: null },
-  { id: '7',  kind: 'simple',  title: '04. 其他作業',       hint: '清潔清運或包裝入庫等', fixedNote: null },
 ];
 
 const ACTIONS_FINISH = { id: '11', title: '工單完成與結束', hint: '開始新的製造工單', style: 'act-success', icon: '✓' };
