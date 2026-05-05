@@ -488,6 +488,7 @@
       </div>
       <button class="btn-secondary" id="refreshBtn">🔄 重新整理</button>
       <button class="btn-primary" id="exportBtn">📥 匯出 CSV</button>
+      <button class="btn-primary" id="summaryBtn" style="background:#1f6feb;">📊 當日匯總</button>
     </div>
   </div>
 
@@ -1167,6 +1168,72 @@ $('exportBtn').onclick = () => {
   a.click();
   URL.revokeObjectURL(url);
   toast('已下載 ' + filtered.length + ' 筆', 'success');
+};
+
+// 當日匯總 — 跟隨上方「日期區間」過濾器，沒填則用今天
+$('summaryBtn').onclick = () => {
+  const from = $('filterFrom').value || todayYmd();
+  const to = $('filterTo').value || from;
+  const fromDate = new Date(from + 'T00:00:00');
+  const toDate = new Date(to + 'T00:00:00');
+  if (isNaN(fromDate) || isNaN(toDate)) { toast('日期格式錯誤', 'error'); return; }
+  if (toDate < fromDate) { toast('結束日期不能早於開始日期', 'error'); return; }
+
+  const rows = [];
+  rows.push(['日期','機台','工單','準備(時:分)','穩定(時:分)','異常(時:分)','準備(分)','穩定(分)','異常(分)','準備目標(分)','穩定目標(分)','準備達成度','穩定達成度']);
+
+  for (let d = new Date(fromDate); d <= toDate; d.setDate(d.getDate() + 1)) {
+    const ymd = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    const dayOrders = (allOrders || []).filter(o => orderIsOnDate(o, ymd));
+    if (dayOrders.length === 0) continue;
+    // Group by machine
+    const byMachine = {};
+    dayOrders.forEach(o => {
+      const m = o.machineNo || '—';
+      (byMachine[m] = byMachine[m] || []).push(o);
+    });
+    Object.keys(byMachine).sort().forEach(m => {
+      const t = MACHINE_TARGETS[m] || { workMinutes: 0, prepMinutes: 0 };
+      let dayPrep = 0, dayProd = 0, dayAbn = 0;
+      byMachine[m].forEach(o => {
+        const p = computeOrderPhasesForDay(o, ymd);
+        rows.push([
+          ymd, m, o.orderNo,
+          fmtHHMM(p.prepSec), fmtHHMM(p.prodSec), fmtHHMM(p.abnSec),
+          Math.round(p.prepSec / 60), Math.round(p.prodSec / 60), Math.round(p.abnSec / 60),
+          '', '', '', ''
+        ]);
+        dayPrep += p.prepSec; dayProd += p.prodSec; dayAbn += p.abnSec;
+      });
+      const prepMin = Math.round(dayPrep / 60);
+      const prodMin = Math.round(dayProd / 60);
+      const abnMin = Math.round(dayAbn / 60);
+      const prepRate = t.prepMinutes > 0 ? (prepMin / t.prepMinutes * 100).toFixed(1) + '%' : '';
+      const prodRate = t.workMinutes > 0 ? (prodMin / t.workMinutes * 100).toFixed(1) + '%' : '';
+      rows.push([
+        ymd, m, '【合計】',
+        fmtHHMM(dayPrep), fmtHHMM(dayProd), fmtHHMM(dayAbn),
+        prepMin, prodMin, abnMin,
+        t.prepMinutes || '', t.workMinutes || '',
+        prepRate, prodRate,
+      ]);
+    });
+  }
+
+  if (rows.length === 1) { toast('區間內沒有資料', 'error'); return; }
+
+  const csv = rows.map(r => r.map(v => {
+    const s = String(v == null ? '' : v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = (from === to) ? from : `${from}_至_${to}`;
+  a.href = url; a.download = `當日匯總_${stamp}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('已下載匯總（' + (rows.length - 1) + ' 列）', 'success');
 };
 
 loadOrders();
