@@ -290,7 +290,7 @@ export default async function orderRoutes(fastify) {
     const orderNo = String(request.params.orderNo || '').toUpperCase();
     const { stepNo, recordedAt: manualTime, note: rawNote } = request.body || {};
     if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
-    const validSteps = ['1','2','3','4','5','6','7','8','21','22','23','12','13','30'];
+    const validSteps = ['1','2','3','4','5','6','7','8','21','22','23','12','13','30','40','41'];
     if (!validSteps.includes(stepNo)) {
       return reply.code(400).send({ error: '無效工序編號' });
     }

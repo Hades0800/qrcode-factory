@@ -660,8 +660,14 @@ function render() {
         allItems.push({ time: new Date(e.recordedAt), label: '📋 更換規格：' + escapeHtml(e.note || '') + manual, style: 'spec-change' });
         return;
       }
-      const name = entryLabels[e.stepNo] || ('工序'+e.stepNo);
       const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
+      // stepNo 40 / 41：統一顯示為「生產時態（選項）」
+      if (e.stepNo === '40' || e.stepNo === '41') {
+        const noteTxt = e.note ? `（${escapeHtml(e.note)}）` : '';
+        allItems.push({ time: new Date(e.recordedAt), label: '生產時態' + noteTxt + manual, style: 'done' });
+        return;
+      }
+      const name = entryLabels[e.stepNo] || ('工序'+e.stepNo);
       allItems.push({ time: new Date(e.recordedAt), label: name + manual, style: 'done' });
     });
     // 暫停事件
@@ -890,7 +896,9 @@ function stepCell(t) {
 }
 
 function countDone(o) {
-  return ['step1At','step2At','step3At','step4At','step5At','step6At','step7At'].filter(k => o[k]).length;
+  const oldCount = ['step1At','step2At','step3At','step4At','step5At','step6At','step7At'].filter(k => o[k]).length;
+  const newCount = (o.stepEntries || []).filter(e => ['1','2','3','4','5','6','7','8','40','41'].includes(e.stepNo)).length;
+  return oldCount + newCount;
 }
 function applyFilters(list) {
   const text = $('filterText').value.trim().toLowerCase();

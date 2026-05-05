@@ -834,15 +834,12 @@ const PRE_STEPS = [
   { id: '22', title: '22. 生產準備完成',   hint: '同前一工單模具與原料' },
 ];
 
+// kind: 'simple' = 直接記錄（fixedNote 為固定備註）／ 'options' = 多選一（options 為選項清單）
 const STEPS = [
-  { id: '1', title: '01. 原料準備與設置',          hint: '' },
-  { id: '2', title: '02. 模刀具準備與安裝',        hint: '' },
-  { id: '3', title: '03. 試模與規格品質確認',      hint: '' },
-  { id: '4', title: '04. 穩定連續生產-無中斷',     hint: '連續生產期間沒有任何中斷' },
-  { id: '5', title: '05. 穩定連續生產-中斷調整',   hint: '生產過程中有少量調整中斷' },
-  { id: '8', title: '06. 穩定連續生產-中斷多次',   hint: '生產過程中多次中斷' },
-  { id: '6', title: '07. 後工程接續生產',          hint: '軋平、捲網、波浪網等' },
-  { id: '7', title: '08. 其他作業',                hint: '清潔清運或包裝入庫等' },
+  { id: '40', kind: 'simple',  title: '01. 生產準備', hint: '含清理、料模刀與試模', fixedNote: '含清理、料模刀與試模' },
+  { id: '41', kind: 'options', title: '02. 生產開始', hint: '點選對應的生產狀態', options: ['生產中斷參數調整', '多次任何中斷生產', '無論是否連續生產'] },
+  { id: '6',  kind: 'simple',  title: '03. 後工程接續生產', hint: '軋平、捲網、波浪網等', fixedNote: null },
+  { id: '7',  kind: 'simple',  title: '04. 其他作業',       hint: '清潔清運或包裝入庫等', fixedNote: null },
 ];
 
 const ACTIONS_FINISH = { id: '11', title: '工單完成與結束', hint: '開始新的製造工單', style: 'act-success', icon: '✓' };
@@ -857,6 +854,8 @@ const STEP_FIELD = {
   '4':  { time: 'step4At',  note: null },
   '5':  { time: 'step5At',  note: null },
   '8':  { time: 'step8At',  note: null },
+  '40': { time: 'step40At', note: null },
+  '41': { time: 'step41At', note: null },
   '6':  { time: 'step6At',  note: null },
   '7':  { time: 'step7At',  note: null },
   '11': { time: 'step11At', note: null },
@@ -1427,7 +1426,6 @@ function renderSteps() {
   STEPS.forEach(s => {
     const entries = entriesByStep[s.id] || [];
     const hasEntries = entries.length > 0;
-    const numLabel = s.title.match(/^(\d+)\./)?.[1] || s.id;
     const titleText = s.title.replace(/^\d+\.\s*/, '');
 
     let body = `<div class="title">${escapeHtml(titleText)}` +
@@ -1435,33 +1433,59 @@ function renderSteps() {
       '</div>';
     if (s.hint) body += '<div class="hint">' + s.hint + '</div>';
 
-    // 每次紀錄
+    // 每次紀錄（如有 note 顯示在標籤後面）
     entries.forEach((e, i) => {
       const elapsed = now - new Date(e.recordedAt).getTime();
       const canCancel = elapsed < 5 * 60 * 1000;
       const manualTag = e.isManual ? '<span class="manual-tag">補登</span>' : '';
+      const noteTxt = e.note ? `（${escapeHtml(e.note)}）` : '';
       body += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${e.isManual ? '#fffbe6' : (canCancel ? 'var(--success-soft)' : '#f5f5f7')};border-radius:8px;">`;
-      body += `<span style="font-size:12px;color:var(--success);font-weight:600;flex:1;">✓ ${escapeHtml(titleText)} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
+      body += `<span style="font-size:12px;color:var(--success);font-weight:600;flex:1;">✓ ${escapeHtml(titleText)}${noteTxt} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
       if (canCancel && !isPaused) {
         body += `<button class="btn-danger" data-cancel-entry="${e.id}" style="padding:4px 10px;font-size:11px;min-height:28px;">取消</button>`;
       }
       body += '</div>';
     });
 
-    // 已完成 + 補登按鈕
-    if (isPaused) {
-      body += '<button class="btn-success btn-block" disabled>✓ 已完成</button>';
+    // 'options' kind = 多選一（生產開始）
+    if (s.kind === 'options') {
+      if (isPaused) {
+        body += '<button class="btn-success btn-block" disabled>✓ 暫停中</button>';
+      } else {
+        body += '<div style="display:flex;flex-direction:column;gap:6px;">';
+        s.options.forEach(opt => {
+          body += `<button class="btn-success step-opt" data-step="${s.id}" data-note="${escapeHtml(opt)}" style="text-align:center;padding:12px;font-size:14px;">${escapeHtml(opt)}</button>`;
+        });
+        body += '</div>';
+        // 補登：選原因 + 時間
+        body += `<button class="btn-secondary" data-backfill="${s.id}" style="width:100%;margin-top:6px;padding:10px 14px;font-size:13px;color:#b8860b;">📝 補登</button>`;
+        body += `<div class="backfill-form" id="backfill-${s.id}" style="display:none;flex-direction:column;gap:6px;">`;
+        body += `<select id="bf-opt-${s.id}" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;">`;
+        body += `<option value="">-- 選擇選項 --</option>`;
+        s.options.forEach(opt => {
+          body += `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`;
+        });
+        body += `</select>`;
+        body += `<div style="display:flex;gap:6px;"><input type="date" id="bf-date-${s.id}" value="${todayYmd()}" style="flex:1;"><input type="time" id="bf-time-${s.id}" step="60" value="" style="flex:1;"></div>`;
+        body += `<div style="display:flex;gap:6px;"><button class="btn-primary" data-backfill-submit="${s.id}" style="flex:1;">確認補登</button><button class="btn-secondary" data-backfill-cancel="${s.id}" style="flex:0 0 auto;">取消</button></div>`;
+        body += `</div>`;
+      }
     } else {
-      body += `<div style="display:flex;gap:8px;">`;
-      body += `<button class="btn-success" style="flex:1;" data-record-step="${s.id}">✓ 已完成</button>`;
-      body += `<button class="btn-secondary" data-backfill="${s.id}" style="flex:0 0 auto;padding:10px 14px;font-size:13px;color:#b8860b;">📝 補登</button>`;
-      body += `</div>`;
-      body += `<div class="backfill-form" id="backfill-${s.id}" style="display:none;">`;
-      body += `<input type="date" id="bf-date-${s.id}" value="${todayYmd()}">`;
-      body += `<input type="time" id="bf-time-${s.id}" step="60" value="">`;
-      body += `<button class="btn-primary" data-backfill-submit="${s.id}">確認補登</button>`;
-      body += `<button class="btn-secondary" data-backfill-cancel="${s.id}">取消</button>`;
-      body += `</div>`;
+      // 'simple' kind = 一般步驟（含 fixedNote 自動帶入）
+      if (isPaused) {
+        body += '<button class="btn-success btn-block" disabled>✓ 已完成</button>';
+      } else {
+        body += `<div style="display:flex;gap:8px;">`;
+        body += `<button class="btn-success" style="flex:1;" data-record-step="${s.id}"${s.fixedNote ? ` data-note="${escapeHtml(s.fixedNote)}"` : ''}>✓ 已完成</button>`;
+        body += `<button class="btn-secondary" data-backfill="${s.id}" style="flex:0 0 auto;padding:10px 14px;font-size:13px;color:#b8860b;">📝 補登</button>`;
+        body += `</div>`;
+        body += `<div class="backfill-form" id="backfill-${s.id}" style="display:none;">`;
+        body += `<input type="date" id="bf-date-${s.id}" value="${todayYmd()}">`;
+        body += `<input type="time" id="bf-time-${s.id}" step="60" value="">`;
+        body += `<button class="btn-primary" data-backfill-submit="${s.id}">確認補登</button>`;
+        body += `<button class="btn-secondary" data-backfill-cancel="${s.id}">取消</button>`;
+        body += `</div>`;
+      }
     }
 
     const div = document.createElement('div');
@@ -1620,9 +1644,17 @@ function renderSteps() {
   area.querySelectorAll('[data-clear]').forEach(b => {
     b.onclick = () => clearStep(b.getAttribute('data-clear'));
   });
-  // 01-07 的日誌式記錄
+  // 一般步驟記錄（含 simple kind 帶 fixedNote）
   area.querySelectorAll('[data-record-step]').forEach(b => {
-    b.onclick = () => recordStepEntry(b.getAttribute('data-record-step'));
+    b.onclick = () => recordStepEntry(b.getAttribute('data-record-step'), b.getAttribute('data-note') || null);
+  });
+  // options kind 多選一（生產開始）
+  area.querySelectorAll('[data-step].step-opt').forEach(b => {
+    b.onclick = () => {
+      const stepId = b.getAttribute('data-step');
+      const note = b.getAttribute('data-note');
+      recordStepEntry(stepId, note);
+    };
   });
   area.querySelectorAll('[data-cancel-entry]').forEach(b => {
     b.onclick = () => cancelStepEntry(b.getAttribute('data-cancel-entry'));
@@ -1672,8 +1704,19 @@ async function recordSpecChange(note) {
 
 function getCurrentStep() {
   let latest = null, latestTime = 0;
+  // 先從 stepEntries 找最近一筆（新流程）
+  (order.stepEntries || []).forEach(e => {
+    const t = new Date(e.recordedAt).getTime();
+    if (t > latestTime) {
+      const stepDef = STEPS.find(s => s.id === e.stepNo) || PRE_STEPS.find(s => s.id === e.stepNo);
+      if (stepDef) { latestTime = t; latest = stepDef; }
+    }
+  });
+  // fallback：舊 stepXAt 欄位（兼容歷史資料）
   STEPS.forEach(s => {
-    const t = order[STEP_FIELD[s.id].time];
+    const f = STEP_FIELD[s.id];
+    if (!f || !f.time) return;
+    const t = order[f.time];
     if (t && new Date(t).getTime() > latestTime) {
       latestTime = new Date(t).getTime();
       latest = s;
@@ -1689,10 +1732,19 @@ async function backfillStepEntry(stepNo) {
   if (!dateVal || !timeVal) { toast('請填寫日期和時間', 'error'); return; }
   const dt = new Date(dateVal + 'T' + timeVal);
   if (isNaN(dt)) { toast('日期時間格式錯誤', 'error'); return; }
-  if (!confirm('確認補登？\n時間：' + fmtTime(dt.toISOString()) + '\n將標記為「補登」')) return;
+  // options kind：補登要從下拉抓選項；simple kind：用 fixedNote
+  const stepDef = STEPS.find(s => s.id === stepNo);
+  let note = null;
+  if (stepDef && stepDef.kind === 'options') {
+    note = document.getElementById('bf-opt-' + stepNo)?.value || '';
+    if (!note) { toast('請選擇選項', 'error'); return; }
+  } else if (stepDef && stepDef.fixedNote) {
+    note = stepDef.fixedNote;
+  }
+  if (!confirm('確認補登？\n時間：' + fmtTime(dt.toISOString()) + (note ? '\n選項：' + note : '') + '\n將標記為「補登」')) return;
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/step-entries', {
     method: 'POST',
-    body: { stepNo, recordedAt: dt.toISOString() },
+    body: { stepNo, recordedAt: dt.toISOString(), note },
   });
   if (!r.ok) { toast(r.error, 'error'); return; }
   order = r.data.order;
@@ -1701,12 +1753,12 @@ async function backfillStepEntry(stepNo) {
 }
 
 // 記錄工序（日誌式，可重複）
-async function recordStepEntry(stepNo) {
+async function recordStepEntry(stepNo, note) {
   if (!orderNo) return;
   const stepDef = STEPS.find(s => s.id === stepNo) || PRE_STEPS.find(s => s.id === stepNo);
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/step-entries', {
     method: 'POST',
-    body: { stepNo },
+    body: { stepNo, note: note || null },
   });
   if (!r.ok) { toast(r.error, 'error'); return; }
   order = r.data.order;
