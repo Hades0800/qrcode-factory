@@ -814,10 +814,8 @@
 <script src="config.js"></script>
 <script src="utils.js"></script>
 <script>
-const PRE_STEPS = [
-  { id: '21', title: '21. 設備啓動準備',   hint: '系統冷熱機與試模測試等' },
-  { id: '22', title: '22. 生產準備完成',   hint: '同前一工單模具與原料' },
-];
+// 作業準備（21/22）已停用；保留空陣列給歷史資料 fallback lookup
+const PRE_STEPS = [];
 
 // kind: 'simple' = 直接記錄（fixedNote 為固定備註）／ 'options' = 多選一（options 為選項清單）
 const STEPS = [
@@ -1320,8 +1318,10 @@ function renderSteps() {
   const pauseNotice = isPaused ? '<div style="background:var(--brand);color:#fff;padding:10px 14px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;margin-bottom:12px;">' + icon('pause', 14) + ' 暫停中 — 請先恢復生產才能繼續操作</div>' : '';
   const now = Date.now();
 
-  // 21/22/23 作業準備（邏輯同工序進度）
-  let preHtml = '<h2>作業準備</h2>';
+  // 作業準備：PRE_STEPS 為空時整塊不渲染
+  let preHtml = '';
+  if (PRE_STEPS.length > 0) {
+  preHtml = '<h2>作業準備</h2>';
   const preEntriesByStep = {};
   (order.stepEntries || []).filter(e => ['21','22','23'].includes(e.stepNo)).forEach(e => {
     if (!preEntriesByStep[e.stepNo]) preEntriesByStep[e.stepNo] = [];
@@ -1364,6 +1364,7 @@ function renderSteps() {
 
     preHtml += `<div class="step${hasEntries ? ' done' : ''}"><div class="step-body">${body}</div></div>`;
   });
+  }
 
   // stepEntries 按 stepNo 分組
   const entriesByStep = {};
