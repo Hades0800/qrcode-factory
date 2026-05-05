@@ -653,7 +653,7 @@ function renderDailySummaryAll(orders) {
   const machineCards = machineIds.map(m => {
     const list = byMachine[m];
     const t = MACHINE_TARGETS[m] || { workMinutes: 0, prepMinutes: 0 };
-    const rows = list.map(o => ({ orderNo: o.orderNo, ...computeOrderPhases(o) }));
+    const rows = list.map(o => ({ orderNo: o.orderNo, ...computeOrderPhasesForDay(o, ymd) }));
     const sumPrep = rows.reduce((s, r) => s + r.prepSec, 0);
     const sumProd = rows.reduce((s, r) => s + r.prodSec, 0);
     const sumAbn  = rows.reduce((s, r) => s + r.abnSec,  0);

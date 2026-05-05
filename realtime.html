@@ -953,11 +953,12 @@ function renderAllMachinesSummary() {
 
 // 本日匯總（單一機台）
 function renderDailySummaryCard(machineId, machineOrders) {
-  const todayOrders = (machineOrders || []).filter(o => orderIsOnDate(o, todayYmd()));
+  const ymd = todayYmd();
+  const todayOrders = (machineOrders || []).filter(o => orderIsOnDate(o, ymd));
   if (todayOrders.length === 0) return '';
   const t = MACHINE_TARGETS[machineId] || { workMinutes: 0, prepMinutes: 0 };
   const rows = todayOrders.map(o => {
-    const p = computeOrderPhases(o);
+    const p = computeOrderPhasesForDay(o, ymd);
     return { orderNo: o.orderNo, ...p };
   });
   const sumPrep = rows.reduce((s, r) => s + r.prepSec, 0);

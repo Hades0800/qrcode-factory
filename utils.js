@@ -109,34 +109,57 @@ const MACHINE_TARGETS = {
   'No6-40':  { workMinutes: 420, prepMinutes:  60, capacityKg: 500   },
 };
 
-// 一張工單的工時分配（秒）
-// prep = 第一筆活動 → 第一筆 stepNo='40' 之間（生產準備）
-// prod = 第一筆 stepNo='41' → step11At 或現在（穩定生產，扣除暫停與異常）
-// abn  = 異常停線總秒數（pause13）
-function computeOrderPhases(o) {
+// 一張工單在「特定一天」內的工時分配（秒）— 跨日工單會被切片
+// ymd = 'YYYY-MM-DD'（瀏覽器本地時區）
+// prep = 第一筆活動 → 第一筆 stepNo='40' 之間，與當日重疊的部分
+// prod = 第一筆 stepNo='41' → step11At 或現在，與當日重疊，再扣與當日重疊的暫停秒數
+// abn  = pause13 history 與當日重疊的總秒數
+function computeOrderPhasesForDay(o, ymd) {
+  const dayStart = new Date(ymd + 'T00:00:00').getTime();
+  const dayEnd = dayStart + 86400000; // 24h
+  // 把 [start, end] 跟當日交集後換算成秒
+  function clip(start, end) {
+    if (start == null || end == null || end <= start) return 0;
+    const a = Math.max(start, dayStart);
+    const b = Math.min(end, dayEnd);
+    return b > a ? Math.max(0, Math.round((b - a) / 1000)) : 0;
+  }
+
   const entries = o.stepEntries || [];
-  const all = entries.map(e => new Date(e.recordedAt).getTime()).sort((a, b) => a - b);
-  const firstActivity = all.length > 0
-    ? all[0]
+  const allTimes = entries.map(e => new Date(e.recordedAt).getTime()).sort((a, b) => a - b);
+  const firstActivity = allTimes.length > 0
+    ? allTimes[0]
     : (o.actualStartDate ? new Date(o.actualStartDate).getTime() : null);
   const prepFirst = entries.filter(e => e.stepNo === '40')
     .map(e => new Date(e.recordedAt).getTime()).sort((a, b) => a - b)[0];
   const prodFirst = entries.filter(e => e.stepNo === '41')
     .map(e => new Date(e.recordedAt).getTime()).sort((a, b) => a - b)[0];
 
-  let prepSec = 0;
-  if (firstActivity != null && prepFirst != null) {
-    prepSec = Math.max(0, Math.round((prepFirst - firstActivity) / 1000));
-  }
+  const prepSec = (firstActivity != null && prepFirst != null) ? clip(firstActivity, prepFirst) : 0;
 
   let prodSec = 0;
   if (prodFirst != null) {
     const prodEnd = o.step11At ? new Date(o.step11At).getTime() : Date.now();
-    const pauseSec = ((o.pause12 && o.pause12.totalSec) || 0) + ((o.pause13 && o.pause13.totalSec) || 0);
-    prodSec = Math.max(0, Math.round((prodEnd - prodFirst) / 1000) - pauseSec);
+    const grossProd = clip(prodFirst, prodEnd);
+    // 扣掉與當日重疊的暫停（pause12 + pause13 history）
+    let pauseInDay = 0;
+    [...((o.pause12 && o.pause12.history) || []), ...((o.pause13 && o.pause13.history) || [])].forEach(p => {
+      if (!p.startAt) return;
+      const ps = new Date(p.startAt).getTime();
+      const pe = p.endAt ? new Date(p.endAt).getTime() : Date.now();
+      pauseInDay += clip(ps, pe);
+    });
+    prodSec = Math.max(0, grossProd - pauseInDay);
   }
 
-  const abnSec = (o.pause13 && o.pause13.totalSec) || 0;
+  let abnSec = 0;
+  ((o.pause13 && o.pause13.history) || []).forEach(p => {
+    if (!p.startAt) return;
+    const ps = new Date(p.startAt).getTime();
+    const pe = p.endAt ? new Date(p.endAt).getTime() : Date.now();
+    abnSec += clip(ps, pe);
+  });
+
   return { prepSec, prodSec, abnSec };
 }
 
@@ -147,11 +170,25 @@ function fmtHHMM(sec) {
   return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
 }
 
-// 工單是否屬於指定日期（YYYY-MM-DD，台灣時區）
+// 工單在指定日期當天「有活動」？ = 工單實際時間區間與當日重疊
+// 跨日工單（昨天開始今天還在跑）今天 / 昨天的匯總都會包含它
 function orderIsOnDate(o, ymd) {
-  const d = o.actualStartDate || o.plannedDate || o.productionDate;
-  if (!d) return false;
-  return String(d).slice(0, 10) === ymd;
+  const dayStart = new Date(ymd + 'T00:00:00').getTime();
+  const dayEnd = dayStart + 86400000;
+  // 找 order 的第一個事件時刻（actualStartDate 或第一筆 stepEntry 或第一筆 pause）
+  const candidates = [];
+  if (o.actualStartDate) candidates.push(new Date(o.actualStartDate).getTime());
+  (o.stepEntries || []).forEach(e => { if (e.recordedAt) candidates.push(new Date(e.recordedAt).getTime()); });
+  ((o.pause12 && o.pause12.history) || []).forEach(p => { if (p.startAt) candidates.push(new Date(p.startAt).getTime()); });
+  ((o.pause13 && o.pause13.history) || []).forEach(p => { if (p.startAt) candidates.push(new Date(p.startAt).getTime()); });
+  if (candidates.length === 0) {
+    // 無活動，回退到 plannedDate / productionDate 字串比對
+    const d = o.plannedDate || o.productionDate;
+    return d ? String(d).slice(0, 10) === ymd : false;
+  }
+  const start = Math.min(...candidates);
+  const end = o.step11At ? new Date(o.step11At).getTime() : Math.max(Date.now(), Math.max(...candidates));
+  return start < dayEnd && end > dayStart;
 }
 
 function isToday(iso) {
