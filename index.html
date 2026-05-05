@@ -1415,15 +1415,15 @@ function renderSteps() {
           body += `<button class="btn-success step-opt" data-step="${s.id}" data-note="${escapeHtml(opt)}" style="text-align:center;padding:12px;font-size:14px;">${escapeHtml(opt)}</button>`;
         });
         body += '</div>';
-        // 補登：選原因 + 時間
+        // 補登：選狀態（同主 UI 三顆按鈕）+ 時間
         body += `<button class="btn-secondary" data-backfill="${s.id}" style="width:100%;margin-top:6px;padding:10px 14px;font-size:13px;color:#b8860b;">${icon('edit', 14)} 補登</button>`;
-        body += `<div class="backfill-form" id="backfill-${s.id}" style="display:none;flex-direction:column;gap:6px;">`;
-        body += `<select id="bf-opt-${s.id}" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;">`;
-        body += `<option value="">-- 選擇選項 --</option>`;
+        body += `<div class="backfill-form" id="backfill-${s.id}" style="display:none;flex-direction:column;gap:8px;">`;
+        body += `<div style="font-size:11px;color:var(--muted);">選擇狀態</div>`;
+        body += `<div style="display:flex;flex-direction:column;gap:6px;">`;
         s.options.forEach(opt => {
-          body += `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`;
+          body += `<button type="button" class="bf-opt-pick" data-step="${s.id}" data-val="${escapeHtml(opt)}" style="padding:10px;border:1.5px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-weight:600;font-size:13px;text-align:center;transition:background .15s,color .15s,border-color .15s;">${escapeHtml(opt)}</button>`;
         });
-        body += `</select>`;
+        body += `</div>`;
         body += `<div style="display:flex;gap:6px;"><input type="date" id="bf-date-${s.id}" value="${todayYmd()}" style="flex:1;"><input type="time" id="bf-time-${s.id}" step="60" value="" style="flex:1;"></div>`;
         body += `<div style="display:flex;gap:6px;"><button class="btn-primary" data-backfill-submit="${s.id}" style="flex:1;">確認補登</button><button class="btn-secondary" data-backfill-cancel="${s.id}" style="flex:0 0 auto;">取消</button></div>`;
         body += `</div>`;
@@ -1633,6 +1633,22 @@ function renderSteps() {
   area.querySelectorAll('[data-backfill-submit]').forEach(b => {
     b.onclick = () => backfillStepEntry(b.getAttribute('data-backfill-submit'));
   });
+  // 補登狀態三選一（options-kind step）
+  area.querySelectorAll('.bf-opt-pick').forEach(b => {
+    b.onclick = () => {
+      const stepId = b.dataset.step;
+      area.querySelectorAll(`.bf-opt-pick[data-step="${stepId}"]`).forEach(other => {
+        other.style.background = '#fff';
+        other.style.color = 'var(--ink)';
+        other.style.borderColor = 'var(--border)';
+        other.dataset.selected = '';
+      });
+      b.style.background = 'var(--brand)';
+      b.style.color = '#fff';
+      b.style.borderColor = 'var(--brand)';
+      b.dataset.selected = '1';
+    };
+  });
   // 更換規格（不綁 Enter，避免行動裝置誤觸；只能按按鈕）
   const specBtn = document.getElementById('specChangeBtn');
   if (specBtn) {
@@ -1694,8 +1710,9 @@ async function backfillStepEntry(stepNo) {
   const stepDef = STEPS.find(s => s.id === stepNo);
   let note = null;
   if (stepDef && stepDef.kind === 'options') {
-    note = document.getElementById('bf-opt-' + stepNo)?.value || '';
-    if (!note) { toast('請選擇選項', 'error'); return; }
+    const picked = document.querySelector(`.bf-opt-pick[data-step="${stepNo}"][data-selected="1"]`);
+    note = picked ? picked.dataset.val : '';
+    if (!note) { toast('請選擇狀態', 'error'); return; }
   } else if (stepDef && stepDef.fixedNote) {
     note = stepDef.fixedNote;
   }
