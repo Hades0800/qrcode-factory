@@ -98,6 +98,62 @@ function todayYmd() {
   return t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0');
 }
 
+// 各機台每日工時目標（分鐘）— 本日匯總用
+// workMinutes = 穩定生產目標、prepMinutes = 生產準備目標、capacityKg = 產能目標
+const MACHINE_TARGETS = {
+  'No1-350': { workMinutes: 280, prepMinutes: 200, capacityKg: 10000 },
+  'No2-250': { workMinutes: 210, prepMinutes: 270, capacityKg: 1800  },
+  'No3-60':  { workMinutes: 320, prepMinutes: 160, capacityKg: 1200  },
+  'No4-90':  { workMinutes: 320, prepMinutes: 160, capacityKg: 1200  },
+  'No5-40':  { workMinutes: 420, prepMinutes:  60, capacityKg: 500   },
+  'No6-40':  { workMinutes: 420, prepMinutes:  60, capacityKg: 500   },
+};
+
+// 一張工單的工時分配（秒）
+// prep = 第一筆活動 → 第一筆 stepNo='40' 之間（生產準備）
+// prod = 第一筆 stepNo='41' → step11At 或現在（穩定生產，扣除暫停與異常）
+// abn  = 異常停線總秒數（pause13）
+function computeOrderPhases(o) {
+  const entries = o.stepEntries || [];
+  const all = entries.map(e => new Date(e.recordedAt).getTime()).sort((a, b) => a - b);
+  const firstActivity = all.length > 0
+    ? all[0]
+    : (o.actualStartDate ? new Date(o.actualStartDate).getTime() : null);
+  const prepFirst = entries.filter(e => e.stepNo === '40')
+    .map(e => new Date(e.recordedAt).getTime()).sort((a, b) => a - b)[0];
+  const prodFirst = entries.filter(e => e.stepNo === '41')
+    .map(e => new Date(e.recordedAt).getTime()).sort((a, b) => a - b)[0];
+
+  let prepSec = 0;
+  if (firstActivity != null && prepFirst != null) {
+    prepSec = Math.max(0, Math.round((prepFirst - firstActivity) / 1000));
+  }
+
+  let prodSec = 0;
+  if (prodFirst != null) {
+    const prodEnd = o.step11At ? new Date(o.step11At).getTime() : Date.now();
+    const pauseSec = ((o.pause12 && o.pause12.totalSec) || 0) + ((o.pause13 && o.pause13.totalSec) || 0);
+    prodSec = Math.max(0, Math.round((prodEnd - prodFirst) / 1000) - pauseSec);
+  }
+
+  const abnSec = (o.pause13 && o.pause13.totalSec) || 0;
+  return { prepSec, prodSec, abnSec };
+}
+
+function fmtHHMM(sec) {
+  if (!sec || sec < 0) return '00:00';
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+}
+
+// 工單是否屬於指定日期（YYYY-MM-DD，台灣時區）
+function orderIsOnDate(o, ymd) {
+  const d = o.actualStartDate || o.plannedDate || o.productionDate;
+  if (!d) return false;
+  return String(d).slice(0, 10) === ymd;
+}
+
 function isToday(iso) {
   if (!iso) return false;
   const d = new Date(iso);

@@ -461,6 +461,8 @@
 
   <div class="stats" id="stats"></div>
 
+  <div id="dailySummary"></div>
+
   <div class="card">
     <div class="toolbar">
       <div class="field">
@@ -622,6 +624,124 @@ function isExcludedPause(e) {
   return false;
 }
 
+// 本日匯總（全部機台分組）
+function renderDailySummaryAll(orders) {
+  const ymd = todayYmd();
+  const todayOrders = (orders || []).filter(o => orderIsOnDate(o, ymd));
+  if (todayOrders.length === 0) return '';
+  // 依機台分組
+  const byMachine = {};
+  todayOrders.forEach(o => {
+    const m = o.machineNo || '—';
+    (byMachine[m] = byMachine[m] || []).push(o);
+  });
+  // 依機台 ID 排序（No1 → No6）
+  const machineIds = Object.keys(byMachine).sort();
+
+  // 機台目標小總表
+  const targetsRows = machineIds.map(m => {
+    const t = MACHINE_TARGETS[m] || { workMinutes: 0, prepMinutes: 0 };
+    const ratio = t.prepMinutes > 0 ? (t.workMinutes / t.prepMinutes).toFixed(2) : '—';
+    return `<tr>
+      <td style="padding:6px 8px;font-weight:700;">${escapeHtml(m)}</td>
+      <td style="padding:6px 8px;text-align:center;">${t.workMinutes || '—'}</td>
+      <td style="padding:6px 8px;text-align:center;">${t.prepMinutes || '—'}</td>
+      <td style="padding:6px 8px;text-align:center;color:var(--brand);font-weight:700;">${ratio}</td>
+    </tr>`;
+  }).join('');
+
+  const machineCards = machineIds.map(m => {
+    const list = byMachine[m];
+    const t = MACHINE_TARGETS[m] || { workMinutes: 0, prepMinutes: 0 };
+    const rows = list.map(o => ({ orderNo: o.orderNo, ...computeOrderPhases(o) }));
+    const sumPrep = rows.reduce((s, r) => s + r.prepSec, 0);
+    const sumProd = rows.reduce((s, r) => s + r.prodSec, 0);
+    const sumAbn  = rows.reduce((s, r) => s + r.abnSec,  0);
+    const prepMin = Math.round(sumPrep / 60);
+    const prodMin = Math.round(sumProd / 60);
+    const abnMin  = Math.round(sumAbn  / 60);
+    const prepRate = t.prepMinutes > 0 ? (prepMin / t.prepMinutes * 100).toFixed(1) : '—';
+    const prodRate = t.workMinutes > 0 ? (prodMin / t.workMinutes * 100).toFixed(1) : '—';
+
+    const rowsHtml = rows.map(r => `
+      <tr>
+        <td style="padding:6px 8px;font-weight:700;font-size:12px;">${escapeHtml(r.orderNo)}</td>
+        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${fmtHHMM(r.prepSec)}</td>
+        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${fmtHHMM(r.prodSec)}</td>
+        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${fmtHHMM(r.abnSec)}</td>
+      </tr>
+    `).join('');
+
+    return `
+      <div style="margin-top:14px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+          <strong style="font-size:14px;">${escapeHtml(m)}</strong>
+          <span style="font-size:11px;color:var(--muted);">目標 — 準備 ${t.prepMinutes || '—'} / 穩定 ${t.workMinutes || '—'} 分</span>
+        </div>
+        <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:420px;">
+          <thead style="background:#f5f5f7;">
+            <tr>
+              <th style="padding:8px;text-align:left;font-weight:700;">工單</th>
+              <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">生產準備</th>
+              <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">穩定生產</th>
+              <th style="padding:8px;text-align:center;font-weight:700;color:var(--brand);">異常停線</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+          <tfoot style="background:#fafafb;">
+            <tr style="border-top:1.5px solid var(--border);">
+              <td style="padding:6px 8px;font-weight:700;color:var(--muted);font-size:12px;">合計（時:分）</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;">${fmtHHMM(sumPrep)}</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;">${fmtHHMM(sumProd)}</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;">${fmtHHMM(sumAbn)}</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 8px;font-weight:700;color:var(--muted);font-size:12px;">合計（分鐘）</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${prepMin}</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${prodMin}</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${abnMin}</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 8px;font-weight:700;color:var(--muted);font-size:12px;">達成度</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;${prepRate !== '—' && parseFloat(prepRate) >= 100 ? 'color:var(--success);' : ''}">${prepRate}${prepRate !== '—' ? '%' : ''}</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;${prodRate !== '—' && parseFloat(prodRate) >= 100 ? 'color:var(--success);' : ''}">${prodRate}${prodRate !== '—' ? '%' : ''}</td>
+              <td style="padding:6px 8px;text-align:center;color:var(--muted);">—</td>
+            </tr>
+          </tfoot>
+        </table>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="card" style="margin-bottom:12px;">
+      <div onclick="document.getElementById('dailySummaryBody').classList.toggle('hidden')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="margin:0;">本日匯總 · ${ymd}</h3>
+        <span style="color:var(--muted);font-size:12px;">點此收合 / 展開</span>
+      </div>
+      <div id="dailySummaryBody" style="margin-top:12px;">
+        <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:380px;">
+          <thead style="background:#f5f5f7;">
+            <tr>
+              <th style="padding:8px;text-align:left;font-weight:700;">機台</th>
+              <th style="padding:8px;text-align:center;font-weight:700;">穩定生產(分)</th>
+              <th style="padding:8px;text-align:center;font-weight:700;">生產準備(分)</th>
+              <th style="padding:8px;text-align:center;font-weight:700;">效率比例</th>
+            </tr>
+          </thead>
+          <tbody>${targetsRows}</tbody>
+        </table>
+        </div>
+        ${machineCards}
+      </div>
+    </div>
+    <style>#dailySummaryBody.hidden { display: none; }</style>
+  `;
+}
+
 function render() {
   const filtered = applyFilters(allOrders);
 
@@ -634,6 +754,8 @@ function render() {
     <div class="stat-card"><div class="label">已完成</div><div class="value">${completed}</div></div>
     <div class="stat-card"><div class="label">進行中</div><div class="value">${ongoing}</div></div>
   `;
+
+  $('dailySummary').innerHTML = renderDailySummaryAll(allOrders);
 
   const area = $('ordersArea');
   if (filtered.length === 0) {
