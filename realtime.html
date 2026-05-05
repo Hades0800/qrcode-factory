@@ -772,8 +772,8 @@ function renderContent() {
           </div>` : ''}
           <div class="order-info">
             <span class="oi-item"><span class="oi-icon">${icon('user', 14)}</span><span class="oi-label">小組長</span><span class="oi-value">${escapeHtml(o.leaderName || '—')}</span></span>
-            ${o.specType ? `<span class="oi-item"><span class="oi-icon">${icon(o.specType === 'new' ? 'sparkles' : 'box', 14)}</span><span class="oi-label">規格</span><span class="oi-value">${o.specType === 'new' ? '新製' : '量產'}</span>${o.specType === 'new' && o.difficultyFactor ? `<span class="oi-factor">×${o.difficultyFactor}</span>` : ''}</span>` : ''}
-            ${o.materialType ? `<span class="oi-item"><span class="oi-icon">${icon('layers', 14)}</span><span class="oi-label">原料</span><span class="oi-value">${o.materialType === 'coil' ? '捲料' : '板料'}</span><span class="oi-factor">×${o.materialType === 'coil' ? '1.0' : '1.2'}</span></span>` : ''}
+            ${o.specType ? `<span class="oi-item"><span class="oi-icon">${icon(o.specType === 'new' ? 'sparkles' : 'box', 14)}</span><span class="oi-label">規格</span><span class="oi-value">${o.specType === 'new' ? '新製' : '量產'}</span></span>` : ''}
+            ${o.materialType ? `<span class="oi-item"><span class="oi-icon">${icon('layers', 14)}</span><span class="oi-label">原料</span><span class="oi-value">${o.materialType === 'coil' ? '捲料' : '板料'}</span></span>` : ''}
           </div>
           <h3 style="margin:0 0 8px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;">生產實態</h3>
           <ul class="timeline">${timeline}</ul>

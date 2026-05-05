@@ -380,34 +380,23 @@ export default async function orderRoutes(fastify) {
   fastify.post('/:orderNo/spec-type', async (request, reply) => {
     try {
       const orderNo = String(request.params.orderNo || '').toUpperCase();
-      const { specType, difficultyFactor } = request.body || {};
+      const { specType } = request.body || {};
       if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
       if (!['new', 'mass'].includes(specType)) {
         return reply.code(400).send({ error: '無效規格類型（需為 new 或 mass）' });
-      }
-      let factor = null;
-      if (specType === 'new') {
-        const allowed = [1.1, 1.2, 1.3, 1.4, 1.5, 1.6];
-        const f = Number(difficultyFactor);
-        const match = allowed.find(a => Math.abs(a - f) < 0.001);
-        if (!match) {
-          return reply.code(400).send({ error: '難易係數必須為 1.1 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6 之一' });
-        }
-        factor = match;
       }
       // 先確保欄位存在（idempotent，沒有就建、有就略過）—— 為了在 prisma client 沒 regenerate 的環境也能跑
       await fastify.prisma.$executeRawUnsafe(
         'ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "specType" TEXT, ADD COLUMN IF NOT EXISTS "difficultyFactor" DOUBLE PRECISION'
       );
-      // 寫入 raw SQL（繞過 Prisma client 是否認識新欄位的限制）
+      // 設 specType 並一併把 difficultyFactor 清空（係數已棄用）
       const result = await fastify.prisma.$executeRaw`
         UPDATE "Order"
-        SET "specType" = ${specType}, "difficultyFactor" = ${factor}
+        SET "specType" = ${specType}, "difficultyFactor" = NULL
         WHERE "orderNo" = ${orderNo}
       `;
       if (result === 0) return reply.code(404).send({ error: '找不到工單' });
-      // 不 include 完整 order（避免 select 撞到 client schema mismatch）
-      return { ok: true, specType, difficultyFactor: factor };
+      return { ok: true, specType, difficultyFactor: null };
     } catch (e) {
       request.log.error(e, 'spec-type failed');
       return reply.code(500).send({

@@ -800,8 +800,8 @@ function render() {
           <span>機台 <strong>${escapeHtml(o.machineNo || '—')}</strong>${o.plannedMachineNo && o.plannedMachineNo !== o.machineNo ? `<span style="color:#a98e44;font-size:11px;margin-left:4px;">（計畫 ${escapeHtml(o.plannedMachineNo)}）</span>` : ''}</span>
           <span>組長 <strong>${escapeHtml(o.leaderName || '—')}</strong></span>
           <span>日期 ${o.productionDate ? String(o.productionDate).slice(0,10) : '—'}${o.actualStartDate && o.plannedDate && String(o.actualStartDate).slice(0,10) !== String(o.plannedDate).slice(0,10) ? `<span style="color:#a98e44;font-size:11px;margin-left:4px;">（計畫 ${escapeHtml(String(o.plannedDate).slice(0,10))}）</span>` : ''}</span>
-          ${o.specType ? `<span>規格 <strong style="display:inline-flex;align-items:center;gap:4px;">${icon(o.specType === 'new' ? 'sparkles' : 'box', 13)}${o.specType === 'new' ? '新製' : '量產'}</strong>${o.specType === 'new' && o.difficultyFactor ? `<span style="color:var(--brand);font-size:11px;margin-left:4px;">×${o.difficultyFactor}</span>` : ''}</span>` : ''}
-          ${o.materialType ? `<span>原料 <strong>${o.materialType === 'coil' ? '捲料' : '板料'}</strong><span style="color:var(--brand);font-size:11px;margin-left:4px;">×${o.materialType === 'coil' ? '1.0' : '1.2'}</span></span>` : ''}
+          ${o.specType ? `<span>規格 <strong style="display:inline-flex;align-items:center;gap:4px;">${icon(o.specType === 'new' ? 'sparkles' : 'box', 13)}${o.specType === 'new' ? '新製' : '量產'}</strong></span>` : ''}
+          ${o.materialType ? `<span>原料 <strong>${o.materialType === 'coil' ? '捲料' : '板料'}</strong></span>` : ''}
         </div>
         <div class="rc-expand" style="margin-top:10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;" onclick="toggleDetail(${idx})"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>展開工單明細</div>
         <div class="rc-detail" id="detail-${idx}">
@@ -990,7 +990,7 @@ $('exportBtn').onclick = () => {
   if (filtered.length === 0) { toast('沒有資料可匯出', 'error'); return; }
   const headers = [
     '工單號','生產日期','機台','生產規格','模具','領料','數量','SPM','單重','總重量','刀數',
-    '規格類型','難易係數','原料類型','原料係數',
+    '規格類型','原料類型',
     '小組長',
     '21.設備啓動','22.準備完成','23.無工令',
     '01.原料準備','02.模刀具','03.試模確認','04.穩定生產-無中斷','05.穩定生產-中斷調整','06.穩定生產-中斷多次','07.後工程','08.其他作業','11.完成',
@@ -1015,9 +1015,7 @@ $('exportBtn').onclick = () => {
     o.machineNo, o.productSpec || '', o.moldSpec || '', o.material || '',
     o.dispatchQty || '', o.machineSPM || '', o.unitWeight || '', o.totalWeight || '', o.bladeCount || '',
     o.specType === 'new' ? '新製' : (o.specType === 'mass' ? '量產' : ''),
-    o.specType === 'new' && o.difficultyFactor ? o.difficultyFactor : '',
     o.materialType === 'coil' ? '捲料' : (o.materialType === 'plate' ? '板料' : ''),
-    o.materialType === 'coil' ? 1.0 : (o.materialType === 'plate' ? 1.2 : ''),
     o.leaderName,
     getAllStepTimes(o, '21', 'step21At'), getAllStepTimes(o, '22', 'step22At'), getAllStepTimes(o, '23', 'step23At'),
     getAllStepTimes(o, '1', 'step1At'), getAllStepTimes(o, '2', 'step2At'), getAllStepTimes(o, '3', 'step3At'), getAllStepTimes(o, '4', 'step4At'),
