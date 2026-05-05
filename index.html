@@ -655,7 +655,7 @@
       <div class="sub" id="leaderShow">未登入</div>
     </div>
   </div>
-  <button class="menu-toggle" id="menuBtn" style="display:none;" onclick="$('dropMenu').classList.toggle('show')">☰</button>
+  <button class="menu-toggle" id="menuBtn" style="display:none;" onclick="$('dropMenu').classList.toggle('show')"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="18" x2="20" y2="18"/></svg></button>
   <div class="dropdown-menu" id="dropMenu">
     <a href="index.html" class="nav-active">生產實態紀錄</a>
     <a href="records.html">📊 紀錄</a>
@@ -694,7 +694,7 @@
   <div class="card" id="orderCard" style="display:none;">
     <h2>工單號 <span class="required">第二步</span></h2>
     <div id="orderEmpty">
-      <button class="btn-primary btn-block" id="scanOrderBtn">📷 掃描工單條碼</button>
+      <button class="btn-primary btn-block" id="scanOrderBtn"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;margin-right:6px;"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>掃描工單條碼</button>
       <div class="or-divider">或</div>
       <div class="row">
         <input type="text" id="orderInput" placeholder="手動輸入工單號">
@@ -702,7 +702,7 @@
       </div>
       <div class="or-divider">或</div>
       <button class="btn-block" id="idleBtn" style="background:#6e6e73;color:#fff;box-shadow:0 2px 6px rgba(110,110,115,.25);">
-        🛑 生產無工令
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;margin-right:6px;"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>生產無工令
         <div style="font-size:11px;font-weight:500;margin-top:2px;opacity:.85;">設備無稼動</div>
       </button>
     </div>
@@ -784,7 +784,7 @@
 
 <!-- Sticky 完成送出 -->
 <div class="bottom-bar" id="bottomBar">
-  <button id="finishBtn">✓ 完成送出，掃下一張工單</button>
+  <button id="finishBtn"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;margin-right:6px;"><polyline points="20 6 9 17 4 12"/></svg>完成送出，掃下一張工單</button>
 </div>
 
 <!-- 掃描 Modal -->
@@ -792,7 +792,7 @@
   <div class="modal-title" id="scannerTitle">請掃描 QR Code</div>
   <div id="qr-reader"></div>
   <div id="cameraError" style="display:none;color:#fff;text-align:center;padding:20px;background:rgba(255,255,255,.08);border-radius:12px;max-width:480px;margin:0 auto;">
-    <div style="font-size:40px;margin-bottom:10px;">📷❌</div>
+    <div style="margin-bottom:10px;"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/><line x1="2" y1="2" x2="22" y2="22"/></svg></div>
     <div style="font-size:16px;font-weight:700;margin-bottom:8px;">無法開啟相機</div>
     <div id="cameraErrorMsg" style="font-size:13px;opacity:.85;margin-bottom:14px;line-height:1.5;"></div>
     <div style="font-size:12px;opacity:.7;text-align:left;background:rgba(0,0,0,.3);padding:12px;border-radius:8px;line-height:1.6;">
@@ -1143,9 +1143,9 @@ function renderSpecType() {
   }
   el.style.color = 'var(--ink)';
   if (order.specType === 'new') {
-    el.innerHTML = '🆕 新製規格 <span style="color:var(--brand);font-size:13px;margin-left:6px;">難易係數 ' + (order.difficultyFactor || '—') + '</span>';
+    el.innerHTML = icon('sparkles', 16) + ' 新製規格 <span style="color:var(--brand);font-size:13px;margin-left:6px;">難易係數 ' + (order.difficultyFactor || '—') + '</span>';
   } else if (order.specType === 'mass') {
-    el.innerHTML = '📦 量產規格';
+    el.innerHTML = icon('box', 16) + ' 量產規格';
   } else {
     el.textContent = order.specType;
   }
@@ -1359,7 +1359,7 @@ function renderSteps() {
     wrap.style.opacity = '0.5';
     wrap.style.pointerEvents = 'none';
   }
-  const pauseNotice = isPaused ? '<div style="background:var(--brand);color:#fff;padding:10px 14px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;margin-bottom:12px;">⏸ 暫停中 — 請先恢復生產才能繼續操作</div>' : '';
+  const pauseNotice = isPaused ? '<div style="background:var(--brand);color:#fff;padding:10px 14px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;margin-bottom:12px;">' + icon('pause', 14) + ' 暫停中 — 請先恢復生產才能繼續操作</div>' : '';
   const now = Date.now();
 
   // 21/22/23 作業準備（邏輯同工序進度）
@@ -1382,7 +1382,7 @@ function renderSteps() {
       const canCancel = elapsed < 5 * 60 * 1000;
       const manualTag = e.isManual ? '<span class="manual-tag">補登</span>' : '';
       body += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${e.isManual ? '#fffbe6' : (canCancel ? 'var(--success-soft)' : '#f5f5f7')};border-radius:8px;">`;
-      body += `<span style="font-size:12px;color:var(--success);font-weight:600;flex:1;">✓ ${escapeHtml(titleText)} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
+      body += `<span style="font-size:12px;color:var(--success);font-weight:600;flex:1;display:inline-flex;align-items:center;gap:4px;">${icon('check', 14)}${escapeHtml(titleText)} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
       if (canCancel && !isPaused) {
         body += `<button class="btn-danger" data-cancel-entry="${e.id}" style="padding:4px 10px;font-size:11px;min-height:28px;">取消</button>`;
       }
@@ -1390,11 +1390,11 @@ function renderSteps() {
     });
 
     if (isPaused) {
-      body += '<button class="btn-success btn-block" disabled>✓ 已完成</button>';
+      body += '<button class="btn-success btn-block" disabled>' + icon('check', 16) + ' 已完成</button>';
     } else {
       body += `<div style="display:flex;gap:8px;">`;
-      body += `<button class="btn-success" style="flex:1;" data-record-step="${s.id}">✓ 已完成</button>`;
-      body += `<button class="btn-secondary" data-backfill="${s.id}" style="flex:0 0 auto;padding:10px 14px;font-size:13px;color:#b8860b;">📝 補登</button>`;
+      body += `<button class="btn-success" style="flex:1;" data-record-step="${s.id}">${icon('check', 16)} 已完成</button>`;
+      body += `<button class="btn-secondary" data-backfill="${s.id}" style="flex:0 0 auto;padding:10px 14px;font-size:13px;color:#b8860b;">${icon('edit', 14)} 補登</button>`;
       body += `</div>`;
       body += `<div class="backfill-form" id="backfill-${s.id}" style="display:none;">`;
       body += `<input type="date" id="bf-date-${s.id}" value="${todayYmd()}">`;
@@ -1440,7 +1440,7 @@ function renderSteps() {
       const manualTag = e.isManual ? '<span class="manual-tag">補登</span>' : '';
       const noteTxt = e.note ? `（${escapeHtml(e.note)}）` : '';
       body += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${e.isManual ? '#fffbe6' : (canCancel ? 'var(--success-soft)' : '#f5f5f7')};border-radius:8px;">`;
-      body += `<span style="font-size:12px;color:var(--success);font-weight:600;flex:1;">✓ ${escapeHtml(titleText)}${noteTxt} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
+      body += `<span style="font-size:12px;color:var(--success);font-weight:600;flex:1;display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;">${icon('check', 14)}${escapeHtml(titleText)}${noteTxt} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
       if (canCancel && !isPaused) {
         body += `<button class="btn-danger" data-cancel-entry="${e.id}" style="padding:4px 10px;font-size:11px;min-height:28px;">取消</button>`;
       }
@@ -1450,7 +1450,7 @@ function renderSteps() {
     // 'options' kind = 多選一（生產開始）
     if (s.kind === 'options') {
       if (isPaused) {
-        body += '<button class="btn-success btn-block" disabled>✓ 暫停中</button>';
+        body += '<button class="btn-success btn-block" disabled>' + icon('pause', 16) + ' 暫停中</button>';
       } else {
         body += '<div style="display:flex;flex-direction:column;gap:6px;">';
         s.options.forEach(opt => {
@@ -1458,7 +1458,7 @@ function renderSteps() {
         });
         body += '</div>';
         // 補登：選原因 + 時間
-        body += `<button class="btn-secondary" data-backfill="${s.id}" style="width:100%;margin-top:6px;padding:10px 14px;font-size:13px;color:#b8860b;">📝 補登</button>`;
+        body += `<button class="btn-secondary" data-backfill="${s.id}" style="width:100%;margin-top:6px;padding:10px 14px;font-size:13px;color:#b8860b;">${icon('edit', 14)} 補登</button>`;
         body += `<div class="backfill-form" id="backfill-${s.id}" style="display:none;flex-direction:column;gap:6px;">`;
         body += `<select id="bf-opt-${s.id}" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;">`;
         body += `<option value="">-- 選擇選項 --</option>`;
@@ -1473,11 +1473,11 @@ function renderSteps() {
     } else {
       // 'simple' kind = 一般步驟（含 fixedNote 自動帶入）
       if (isPaused) {
-        body += '<button class="btn-success btn-block" disabled>✓ 已完成</button>';
+        body += '<button class="btn-success btn-block" disabled>' + icon('check', 16) + ' 已完成</button>';
       } else {
         body += `<div style="display:flex;gap:8px;">`;
-        body += `<button class="btn-success" style="flex:1;" data-record-step="${s.id}"${s.fixedNote ? ` data-note="${escapeHtml(s.fixedNote)}"` : ''}>✓ 已完成</button>`;
-        body += `<button class="btn-secondary" data-backfill="${s.id}" style="flex:0 0 auto;padding:10px 14px;font-size:13px;color:#b8860b;">📝 補登</button>`;
+        body += `<button class="btn-success" style="flex:1;" data-record-step="${s.id}"${s.fixedNote ? ` data-note="${escapeHtml(s.fixedNote)}"` : ''}>${icon('check', 16)} 已完成</button>`;
+        body += `<button class="btn-secondary" data-backfill="${s.id}" style="flex:0 0 auto;padding:10px 14px;font-size:13px;color:#b8860b;">${icon('edit', 14)} 補登</button>`;
         body += `</div>`;
         body += `<div class="backfill-form" id="backfill-${s.id}" style="display:none;">`;
         body += `<input type="date" id="bf-date-${s.id}" value="${todayYmd()}">`;
@@ -1508,18 +1508,18 @@ function renderSteps() {
     const canCancel = elapsed < 5 * 60 * 1000;
     const manualTag = e.isManual ? '<span class="manual-tag">補登</span>' : '';
     specBody += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${canCancel ? '#fff4d6' : '#fff8e8'};border-radius:8px;border-left:3px solid #f0ad4e;">`;
-    specBody += `<span style="font-size:12px;color:#b8860b;font-weight:600;flex:1;">📋 ${escapeHtml(e.note || '')} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
+    specBody += `<span style="font-size:12px;color:#b8860b;font-weight:600;flex:1;display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;">${icon('clipboard', 14)}${escapeHtml(e.note || '')} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
     if (canCancel && !isPaused) {
       specBody += `<button class="btn-danger" data-cancel-entry="${e.id}" style="padding:4px 10px;font-size:11px;min-height:28px;">取消</button>`;
     }
     specBody += '</div>';
   });
   if (isPaused) {
-    specBody += '<button class="btn-success btn-block" disabled style="background:#f0ad4e;">📋 記錄更換</button>';
+    specBody += '<button class="btn-success btn-block" disabled style="background:#f0ad4e;">' + icon('clipboard', 16) + ' 記錄更換</button>';
   } else {
     specBody += `<div style="display:flex;gap:6px;">`;
     specBody += `<input type="text" id="specChangeInput" placeholder="新規格描述（例：規格 2）" maxlength="200" style="flex:1;padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">`;
-    specBody += `<button id="specChangeBtn" style="flex:0 0 auto;padding:10px 18px;background:#f0ad4e;color:#fff;border:none;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;">📋 記錄</button>`;
+    specBody += `<button id="specChangeBtn" style="flex:0 0 auto;padding:10px 18px;background:#f0ad4e;color:#fff;border:none;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;">${icon('clipboard', 14)} 記錄</button>`;
     specBody += `</div>`;
   }
   specDiv.innerHTML = `<div class="step-body">${specBody}</div>`;
@@ -1549,7 +1549,7 @@ function renderSteps() {
     intBtn.style.animation = 'pulse 1.5s infinite';
     const note = activePause.info.active.note ? `（${escapeHtml(activePause.info.active.note)}）` : '';
     intBtn.innerHTML = `
-      <div class="act-icon">▶</div>
+      <div class="act-icon">${icon('play', 24)}</div>
       <div class="act-body">
         <div class="act-title">恢復生產</div>
         <div class="act-hint">生產中斷中…${note} <span class="live-timer" data-start="${activePause.info.active.startAt}"></span></div>
@@ -1561,7 +1561,7 @@ function renderSteps() {
     let subtitle = '設備異常 ／ 長時間停機 ／ 中午下班';
     if (totalCount > 0) subtitle = `累計 ${totalCount} 次，共 ${fmtDuration(totalSec)}`;
     intBtn.innerHTML = `
-      <div class="act-icon">⏸</div>
+      <div class="act-icon">${icon('pause', 24)}</div>
       <div class="act-body">
         <div class="act-title">生產中斷</div>
         <div class="act-hint">${subtitle}</div>
@@ -1576,7 +1576,7 @@ function renderSteps() {
     const bfBtn = document.createElement('button');
     bfBtn.className = 'btn-secondary';
     bfBtn.style.cssText = 'width:100%;margin-top:-4px;margin-bottom:8px;padding:10px;font-size:13px;color:#b8860b;';
-    bfBtn.textContent = '📝 補登中斷';
+    bfBtn.innerHTML = icon('edit', 14) + ' 補登中斷';
     bfBtn.onclick = () => {
       const form = document.getElementById('interrupt-bf');
       form.style.display = form.style.display === 'none' ? '' : 'none';
@@ -1591,9 +1591,9 @@ function renderSteps() {
     bfForm.innerHTML = `
       <select id="ibf-reason" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:6px;">
         <option value="">-- 選擇中斷原因 --</option>
-        <option value="設備異常停機|13">⚠️ 設備異常停機</option>
-        <option value="超過1小時以上的停機|12">⏰ 超過1小時以上的停機</option>
-        <option value="中午休息或下班時間|12">☕ 中午休息或下班時間</option>
+        <option value="設備異常停機|13">設備異常停機</option>
+        <option value="超過1小時以上的停機|12">超過1小時以上的停機</option>
+        <option value="中午休息或下班時間|12">中午休息或下班時間</option>
       </select>
       <input type="text" id="ibf-note" placeholder="補充說明（選填）" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:6px;box-sizing:border-box;">
       <div style="display:flex;gap:6px;">
@@ -1617,7 +1617,7 @@ function renderSteps() {
     finBtn.style.opacity = '0.5';
   }
   finBtn.innerHTML = `
-    <div class="act-icon">${a.icon}</div>
+    <div class="act-icon">${icon('check', 24)}</div>
     <div class="act-body">
       <div class="act-title">${escapeHtml(a.title)}</div>
       <div class="act-hint">${isPaused ? '暫停中，請先恢復' : escapeHtml(a.hint)}</div>
@@ -1788,9 +1788,9 @@ function showInterruptModal() {
     <div style="background:#fff;border-radius:16px;padding:24px;width:100%;max-width:340px;box-shadow:0 10px 40px rgba(0,0,0,.2);">
       <h3 style="margin:0 0 16px;font-size:17px;color:var(--ink);">生產中斷</h3>
       <div style="display:flex;flex-direction:column;gap:10px;" id="intOptList">
-        <button class="btn-secondary int-opt" data-opt="abnormal" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;">⚠️ 設備異常停機</button>
-        <button class="btn-secondary int-opt" data-opt="long" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;">⏰ 超過1小時以上的停機</button>
-        <button class="btn-secondary int-opt" data-opt="break" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;">☕ 中午休息或下班時間</button>
+        <button class="btn-secondary int-opt" data-opt="abnormal" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('alert', 18)}<span>設備異常停機</span></button>
+        <button class="btn-secondary int-opt" data-opt="long" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('clock', 18)}<span>超過1小時以上的停機</span></button>
+        <button class="btn-secondary int-opt" data-opt="break" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('coffee', 18)}<span>中午休息或下班時間</span></button>
       </div>
       <div id="intNoteWrap" style="display:none;margin-top:10px;">
         <input type="text" id="intNoteInput" placeholder="" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;box-sizing:border-box;">
@@ -1877,10 +1877,10 @@ function showCompleteModal() {
       <h3 style="margin:0 0 6px;font-size:17px;color:var(--ink);">本工單完成生產</h3>
       <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">請選擇是否含附屬設備：</div>
       <div style="display:flex;flex-direction:column;gap:10px;">
-        <button class="btn-secondary cmp-opt" data-note="含附屬設備" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;">⚙️ 含附屬設備</button>
-        <button class="btn-secondary cmp-opt" data-note="不含附屬設備" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;">⊘ 不含附屬設備</button>
+        <button class="btn-secondary cmp-opt" data-note="含附屬設備" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('gear', 18)}<span>含附屬設備</span></button>
+        <button class="btn-secondary cmp-opt" data-note="不含附屬設備" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('ban', 18)}<span>不含附屬設備</span></button>
       </div>
-      <button id="cmpBackfillToggle" style="width:100%;margin-top:12px;padding:10px;background:none;border:1.5px dashed var(--border);border-radius:10px;color:#b8860b;font-size:13px;cursor:pointer;">📝 補登時間（不填用現在）</button>
+      <button id="cmpBackfillToggle" style="width:100%;margin-top:12px;padding:10px;background:none;border:1.5px dashed var(--border);border-radius:10px;color:#b8860b;font-size:13px;cursor:pointer;">${icon('edit', 14)} 補登時間（不填用現在）</button>
       <div id="cmpBackfillWrap" style="display:none;margin-top:8px;">
         <input type="datetime-local" id="cmpBackfillTime" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;box-sizing:border-box;">
       </div>

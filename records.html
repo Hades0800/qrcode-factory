@@ -426,7 +426,7 @@
       <div class="sub" id="meShow"></div>
     </div>
   </div>
-  <button class="menu-toggle" id="menuBtn" onclick="document.getElementById('dropMenu').classList.toggle('show')">☰</button>
+  <button class="menu-toggle" id="menuBtn" onclick="document.getElementById('dropMenu').classList.toggle('show')"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="18" x2="20" y2="18"/></svg></button>
   <div class="dropdown-menu" id="dropMenu">
     <a href="index.html">生產實態紀錄</a>
     <a href="records.html" class="nav-active">📊 紀錄</a>
@@ -472,7 +472,7 @@
 
   <div class="card" id="idleCard" style="display:none;">
     <h2 style="display:flex;justify-content:space-between;align-items:center;margin:0 0 10px;">
-      <span>🛑 生產無工令紀錄</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>生產無工令紀錄</span>
       <span id="idleCount" style="font-size:12px;color:var(--muted);"></span>
     </h2>
     <div class="table-wrap">
@@ -657,7 +657,7 @@ function render() {
     (o.stepEntries || []).forEach(e => {
       if (e.stepNo === '30') {
         const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
-        allItems.push({ time: new Date(e.recordedAt), label: '📋 更換規格：' + escapeHtml(e.note || '') + manual, style: 'spec-change' });
+        allItems.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + manual, style: 'spec-change' });
         return;
       }
       const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
@@ -673,19 +673,19 @@ function render() {
     // 暫停事件
     ((o.pause12 && o.pause12.history) || []).forEach((e, i) => {
       const isLunch = (e.note || '').includes('中午') || (e.note || '').includes('午休') || (e.note || '').includes('午餐');
-      allItems.push({ time: new Date(e.startAt), label: '⏸ 暫停' + (e.note ? '（'+escapeHtml(e.note)+'）' : ''), style: 'pause' });
+      allItems.push({ time: new Date(e.startAt), label: icon('pause', 13) + ' 暫停' + (e.note ? '（'+escapeHtml(e.note)+'）' : ''), style: 'pause' });
       if (e.endAt) {
         const dur = e.duration ? fmtDur(e.duration) : '';
-        const resumeLabel = isLunch ? '▶ 午後恢復生產' : '▶ 恢復生產' + (dur ? '（暫停 ' + dur + '）' : '');
+        const resumeLabel = isLunch ? icon('play', 13) + ' 午後恢復生產' : icon('play', 13) + ' 恢復生產' + (dur ? '（暫停 ' + dur + '）' : '');
         allItems.push({ time: new Date(e.endAt), label: resumeLabel, style: 'resume' });
       }
     });
     // 異常事件
     ((o.pause13 && o.pause13.history) || []).forEach((e, i) => {
-      allItems.push({ time: new Date(e.startAt), label: '⚠ 異常' + (e.note ? '（'+escapeHtml(e.note)+'）' : ''), style: 'abnormal' });
+      allItems.push({ time: new Date(e.startAt), label: icon('alert', 13) + ' 異常' + (e.note ? '（'+escapeHtml(e.note)+'）' : ''), style: 'abnormal' });
       if (e.endAt) {
         const dur = e.duration ? fmtDur(e.duration) : '';
-        allItems.push({ time: new Date(e.endAt), label: '▶ 恢復生產' + (dur ? '（異常 ' + dur + '）' : ''), style: 'resume' });
+        allItems.push({ time: new Date(e.endAt), label: icon('play', 13) + ' 恢復生產' + (dur ? '（異常 ' + dur + '）' : ''), style: 'resume' });
       }
     });
     // 按時間排序
@@ -730,7 +730,7 @@ function render() {
         let displayLabel = it.label;
         if (isNextDay) {
           diffStr = '';
-          if (it.style === 'resume') displayLabel = '▶ 隔日恢復生產';
+          if (it.style === 'resume') displayLabel = icon('play', 13) + ' 隔日恢復生產';
         }
 
         return dayDivider + `<li class="${cls}">
@@ -778,10 +778,10 @@ function render() {
           <span>機台 <strong>${escapeHtml(o.machineNo || '—')}</strong>${o.plannedMachineNo && o.plannedMachineNo !== o.machineNo ? `<span style="color:#a98e44;font-size:11px;margin-left:4px;">（計畫 ${escapeHtml(o.plannedMachineNo)}）</span>` : ''}</span>
           <span>組長 <strong>${escapeHtml(o.leaderName || '—')}</strong></span>
           <span>日期 ${o.productionDate ? String(o.productionDate).slice(0,10) : '—'}${o.actualStartDate && o.plannedDate && String(o.actualStartDate).slice(0,10) !== String(o.plannedDate).slice(0,10) ? `<span style="color:#a98e44;font-size:11px;margin-left:4px;">（計畫 ${escapeHtml(String(o.plannedDate).slice(0,10))}）</span>` : ''}</span>
-          ${o.specType ? `<span>規格 <strong>${o.specType === 'new' ? '🆕 新製' : '📦 量產'}</strong>${o.specType === 'new' && o.difficultyFactor ? `<span style="color:var(--brand);font-size:11px;margin-left:4px;">×${o.difficultyFactor}</span>` : ''}</span>` : ''}
+          ${o.specType ? `<span>規格 <strong style="display:inline-flex;align-items:center;gap:4px;">${icon(o.specType === 'new' ? 'sparkles' : 'box', 13)}${o.specType === 'new' ? '新製' : '量產'}</strong>${o.specType === 'new' && o.difficultyFactor ? `<span style="color:var(--brand);font-size:11px;margin-left:4px;">×${o.difficultyFactor}</span>` : ''}</span>` : ''}
           ${o.materialType ? `<span>原料 <strong>${o.materialType === 'coil' ? '捲料' : '板料'}</strong><span style="color:var(--brand);font-size:11px;margin-left:4px;">×${o.materialType === 'coil' ? '1.0' : '1.2'}</span></span>` : ''}
         </div>
-        <div class="rc-expand" style="margin-top:10px;cursor:pointer;" onclick="toggleDetail(${idx})">▶ 展開工單明細</div>
+        <div class="rc-expand" style="margin-top:10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;" onclick="toggleDetail(${idx})"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>展開工單明細</div>
         <div class="rc-detail" id="detail-${idx}">
           ${infoHtml}
           ${eventsHtml}
@@ -831,7 +831,7 @@ async function toggleDetail(idx) {
         ${dateCard}
         <div class="spec-card wide"><div class="sc-label">🔧 生產規格</div><div class="sc-value">${s.productSpec ? escapeHtml(s.productSpec) : '<span class="info-empty">—</span>'}</div></div>
         <div class="spec-card"><div class="sc-label">⚙ 模具</div><div class="sc-value">${s.moldSpec ? escapeHtml(s.moldSpec) : '<span class="info-empty">—</span>'}</div></div>
-        <div class="spec-card"><div class="sc-label">📦 領料</div><div class="sc-value">${s.material ? escapeHtml(s.material) : '<span class="info-empty">—</span>'}</div></div>
+        <div class="spec-card"><div class="sc-label" style="display:inline-flex;align-items:center;gap:4px;">${icon('box', 12)}領料</div><div class="sc-value">${s.material ? escapeHtml(s.material) : '<span class="info-empty">—</span>'}</div></div>
       </div></div>
       <div class="spec-cards-wrap"><div class="spec-stats">
         <div class="spec-stat"><div class="ss-label">派工數</div><div class="ss-value">${s.dispatchQty || '—'}${s.dispatchQty ? '<span class="ss-unit">片</span>' : ''}</div></div>
@@ -892,7 +892,7 @@ async function deleteOrder(orderNo) {
 
 function stepCell(t) {
   if (!t) return '<td class="step-time empty">—</td>';
-  return '<td class="step-time">✓ ' + escapeHtml(fmtTimeShort(t)) + '</td>';
+  return '<td class="step-time"><span style="display:inline-flex;align-items:center;gap:3px;">' + icon('check', 12) + escapeHtml(fmtTimeShort(t)) + '</span></td>';
 }
 
 function countDone(o) {

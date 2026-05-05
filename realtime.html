@@ -438,7 +438,7 @@
       <div class="sub" id="meShow"></div>
     </div>
   </div>
-  <button class="menu-toggle" id="menuBtn" onclick="document.getElementById('dropMenu').classList.toggle('show')">☰</button>
+  <button class="menu-toggle" id="menuBtn" onclick="document.getElementById('dropMenu').classList.toggle('show')"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="18" x2="20" y2="18"/></svg></button>
   <div class="dropdown-menu" id="dropMenu">
     <a href="index.html">生產實態紀錄</a>
     <a href="records.html">📊 紀錄</a>
@@ -740,9 +740,9 @@ function renderContent() {
             <strong>計畫日期：</strong>${escapeHtml(String(o.plannedDate).slice(0,10))} <span style="color:#a98e44;">（實際開始 ${escapeHtml(String(o.actualStartDate).slice(0,10))}）</span>
           </div>` : ''}
           <div class="order-info">
-            <span class="oi-item"><span class="oi-icon">👤</span><span class="oi-label">小組長</span><span class="oi-value">${escapeHtml(o.leaderName || '—')}</span></span>
-            ${o.specType ? `<span class="oi-item"><span class="oi-icon">${o.specType === 'new' ? '🆕' : '📦'}</span><span class="oi-label">規格</span><span class="oi-value">${o.specType === 'new' ? '新製' : '量產'}</span>${o.specType === 'new' && o.difficultyFactor ? `<span class="oi-factor">×${o.difficultyFactor}</span>` : ''}</span>` : ''}
-            ${o.materialType ? `<span class="oi-item"><span class="oi-icon">🧱</span><span class="oi-label">原料</span><span class="oi-value">${o.materialType === 'coil' ? '捲料' : '板料'}</span><span class="oi-factor">×${o.materialType === 'coil' ? '1.0' : '1.2'}</span></span>` : ''}
+            <span class="oi-item"><span class="oi-icon">${icon('user', 14)}</span><span class="oi-label">小組長</span><span class="oi-value">${escapeHtml(o.leaderName || '—')}</span></span>
+            ${o.specType ? `<span class="oi-item"><span class="oi-icon">${icon(o.specType === 'new' ? 'sparkles' : 'box', 14)}</span><span class="oi-label">規格</span><span class="oi-value">${o.specType === 'new' ? '新製' : '量產'}</span>${o.specType === 'new' && o.difficultyFactor ? `<span class="oi-factor">×${o.difficultyFactor}</span>` : ''}</span>` : ''}
+            ${o.materialType ? `<span class="oi-item"><span class="oi-icon">${icon('layers', 14)}</span><span class="oi-label">原料</span><span class="oi-value">${o.materialType === 'coil' ? '捲料' : '板料'}</span><span class="oi-factor">×${o.materialType === 'coil' ? '1.0' : '1.2'}</span></span>` : ''}
           </div>
           <h3 style="margin:0 0 8px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;">生產實態</h3>
           <ul class="timeline">${timeline}</ul>
@@ -784,7 +784,7 @@ async function loadSpecCards(o) {
       <div class="spec-cards-wrap"><div class="spec-cards">
         <div class="spec-card wide"><div class="sc-label">🔧 生產規格</div><div class="sc-value">${s.productSpec ? escapeHtml(s.productSpec) : '—'}</div></div>
         <div class="spec-card"><div class="sc-label">⚙ 模具</div><div class="sc-value">${s.moldSpec ? escapeHtml(s.moldSpec) : '—'}</div></div>
-        <div class="spec-card"><div class="sc-label">📦 領料</div><div class="sc-value">${s.material ? escapeHtml(s.material) : '—'}</div></div>
+        <div class="spec-card"><div class="sc-label" style="display:inline-flex;align-items:center;gap:4px;">${icon('box', 12)}領料</div><div class="sc-value">${s.material ? escapeHtml(s.material) : '—'}</div></div>
       </div></div>
       <div class="spec-cards-wrap"><div class="spec-stats">
         <div class="spec-stat"><div class="ss-label">派工數</div><div class="ss-value">${s.dispatchQty || '—'}${s.dispatchQty ? '<span class="ss-unit">片</span>' : ''}</div></div>
@@ -878,7 +878,7 @@ function buildTimeline(o, isAdmin) {
   (o.stepEntries || []).forEach(e => {
     if (e.stepNo === '30') {
       const suffix = (e.isManual ? '（補登）' : '');
-      items.push({ time: new Date(e.recordedAt), label: '📋 更換規格：' + (e.note || '') + suffix, type: 'spec-change', entryId: e.id });
+      items.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + suffix, type: 'spec-change', entryId: e.id });
       return;
     }
     const suffix = (e.isManual ? '（補登）' : '');
@@ -899,17 +899,18 @@ function buildTimeline(o, isAdmin) {
     ...((o.pause13 && o.pause13.history) || []).map(e => Object.assign({}, e, { pauseType: '13', pauseLabel: '異常停止' })),
   ];
   pauseEvents.forEach(e => {
-    const note = e.note ? '（' + e.note + '）' : '';
+    const note = e.note ? '（' + escapeHtml(e.note) + '）' : '';
+    const ico = e.pauseType === '13' ? icon('alert', 13) : icon('pause', 13);
     items.push({
       time: new Date(e.startAt),
-      label: e.pauseLabel + note,
+      label: ico + ' ' + e.pauseLabel + note,
       type: e.pauseType === '13' ? 'abnormal' : 'pause',
     });
     if (e.endAt) {
       const dur = e.duration ? fmtDur(e.duration) : '';
       items.push({
         time: new Date(e.endAt),
-        label: '恢復生產' + (dur ? '（暫停 ' + dur + '）' : ''),
+        label: icon('play', 13) + ' 恢復生產' + (dur ? '（暫停 ' + dur + '）' : ''),
         type: 'resume',
       });
     }
@@ -967,7 +968,7 @@ function buildTimeline(o, isAdmin) {
       <li class="${cls}">
         <div class="tl-dot"></div>
         <div class="tl-time">${dateStr}<span style="font-size:10px;color:var(--muted);font-weight:500;">${diffStr}</span></div>
-        <div class="tl-label">${escapeHtml(displayLabel)}${delBtn}</div>
+        <div class="tl-label">${displayLabel}${delBtn}</div>
       </li>
     `;
   }).join('');
