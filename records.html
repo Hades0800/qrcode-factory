@@ -461,6 +461,8 @@
 
   <div class="stats" id="stats"></div>
 
+  <div id="summaryPanel" style="display:none;"></div>
+
   <div class="card">
     <div class="toolbar">
       <div class="field">
@@ -1048,23 +1050,17 @@ $('exportBtn').onclick = () => {
   toast('已下載 ' + filtered.length + ' 筆', 'success');
 };
 
-// 當日匯總 — 跟隨上方「日期區間」過濾器，沒填則用今天
-$('summaryBtn').onclick = () => {
-  const from = $('filterFrom').value || todayYmd();
-  const to = $('filterTo').value || from;
+// 當日匯總 — 點按鈕展開 panel 看資訊；panel 內含下載 CSV 按鈕
+// 收集區間資料：[{ ymd, machineId, target, orderRows, totals }, ...]
+function buildSummaryGroups(from, to) {
   const fromDate = new Date(from + 'T00:00:00');
   const toDate = new Date(to + 'T00:00:00');
-  if (isNaN(fromDate) || isNaN(toDate)) { toast('日期格式錯誤', 'error'); return; }
-  if (toDate < fromDate) { toast('結束日期不能早於開始日期', 'error'); return; }
-
-  const rows = [];
-  rows.push(['日期','機台','工單','準備(時:分)','穩定(時:分)','異常(時:分)','準備(分)','穩定(分)','異常(分)','準備目標(分)','穩定目標(分)','準備達成度','穩定達成度']);
-
+  if (isNaN(fromDate) || isNaN(toDate) || toDate < fromDate) return null;
+  const out = [];
   for (let d = new Date(fromDate); d <= toDate; d.setDate(d.getDate() + 1)) {
     const ymd = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
     const dayOrders = (allOrders || []).filter(o => orderIsOnDate(o, ymd));
     if (dayOrders.length === 0) continue;
-    // Group by machine
     const byMachine = {};
     dayOrders.forEach(o => {
       const m = o.machineNo || '—';
@@ -1072,34 +1068,115 @@ $('summaryBtn').onclick = () => {
     });
     Object.keys(byMachine).sort().forEach(m => {
       const t = MACHINE_TARGETS[m] || { workMinutes: 0, prepMinutes: 0 };
-      let dayPrep = 0, dayProd = 0, dayAbn = 0;
-      byMachine[m].forEach(o => {
-        const p = computeOrderPhasesForDay(o, ymd);
-        rows.push([
-          ymd, m, o.orderNo,
-          fmtHHMM(p.prepSec), fmtHHMM(p.prodSec), fmtHHMM(p.abnSec),
-          Math.round(p.prepSec / 60), Math.round(p.prodSec / 60), Math.round(p.abnSec / 60),
-          '', '', '', ''
-        ]);
-        dayPrep += p.prepSec; dayProd += p.prodSec; dayAbn += p.abnSec;
-      });
-      const prepMin = Math.round(dayPrep / 60);
-      const prodMin = Math.round(dayProd / 60);
-      const abnMin = Math.round(dayAbn / 60);
-      const prepRate = t.prepMinutes > 0 ? (prepMin / t.prepMinutes * 100).toFixed(1) + '%' : '';
-      const prodRate = t.workMinutes > 0 ? (prodMin / t.workMinutes * 100).toFixed(1) + '%' : '';
-      rows.push([
-        ymd, m, '【合計】',
-        fmtHHMM(dayPrep), fmtHHMM(dayProd), fmtHHMM(dayAbn),
-        prepMin, prodMin, abnMin,
-        t.prepMinutes || '', t.workMinutes || '',
-        prepRate, prodRate,
-      ]);
+      const orderRows = byMachine[m].map(o => ({ orderNo: o.orderNo, ...computeOrderPhasesForDay(o, ymd) }));
+      const sumPrep = orderRows.reduce((s, r) => s + r.prepSec, 0);
+      const sumProd = orderRows.reduce((s, r) => s + r.prodSec, 0);
+      const sumAbn  = orderRows.reduce((s, r) => s + r.abnSec,  0);
+      out.push({ ymd, machineId: m, target: t, orderRows, totals: { sumPrep, sumProd, sumAbn } });
     });
   }
+  return out;
+}
 
-  if (rows.length === 1) { toast('區間內沒有資料', 'error'); return; }
+function renderSummaryPanel(from, to) {
+  const groups = buildSummaryGroups(from, to);
+  const dateLabel = from === to ? from : `${from} 至 ${to}`;
+  const header = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <h3 style="margin:0;">當日匯總 · ${escapeHtml(dateLabel)}</h3>
+      <div style="display:flex;gap:8px;">
+        <button id="summaryDownloadBtn" class="btn-primary" style="padding:6px 14px;font-size:13px;">📥 下載 CSV</button>
+        <button id="summaryCloseBtn" class="btn-secondary" style="padding:6px 14px;font-size:13px;">收合</button>
+      </div>
+    </div>
+  `;
+  if (!groups || groups.length === 0) {
+    return `<div class="card" style="margin-bottom:12px;">${header}<div style="color:var(--muted);text-align:center;padding:20px;">區間內沒有資料</div></div>`;
+  }
+  const cards = groups.map(g => {
+    const t = g.target;
+    const prepMin = Math.round(g.totals.sumPrep / 60);
+    const prodMin = Math.round(g.totals.sumProd / 60);
+    const abnMin  = Math.round(g.totals.sumAbn  / 60);
+    const prepRate = t.prepMinutes > 0 ? (prepMin / t.prepMinutes * 100).toFixed(1) : '—';
+    const prodRate = t.workMinutes > 0 ? (prodMin / t.workMinutes * 100).toFixed(1) : '—';
+    const rowsHtml = g.orderRows.map(r => `
+      <tr>
+        <td style="padding:6px 8px;font-weight:700;font-size:12px;">${escapeHtml(r.orderNo)}</td>
+        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${fmtHHMM(r.prepSec)}</td>
+        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${fmtHHMM(r.prodSec)}</td>
+        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${fmtHHMM(r.abnSec)}</td>
+      </tr>
+    `).join('');
+    return `
+      <div style="margin-top:14px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
+          <strong style="font-size:14px;">${escapeHtml(g.ymd)} · ${escapeHtml(g.machineId)}</strong>
+          <span style="font-size:11px;color:var(--muted);">目標 — 準備 ${t.prepMinutes || '—'} / 穩定 ${t.workMinutes || '—'} 分</span>
+        </div>
+        <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:420px;">
+          <thead style="background:#f5f5f7;">
+            <tr>
+              <th style="padding:8px;text-align:left;font-weight:700;">工單</th>
+              <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">生產準備</th>
+              <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">穩定生產</th>
+              <th style="padding:8px;text-align:center;font-weight:700;color:var(--brand);">異常停線</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+          <tfoot style="background:#fafafb;">
+            <tr style="border-top:1.5px solid var(--border);">
+              <td style="padding:6px 8px;font-weight:700;color:var(--muted);font-size:12px;">合計（時:分）</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;">${fmtHHMM(g.totals.sumPrep)}</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;">${fmtHHMM(g.totals.sumProd)}</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;">${fmtHHMM(g.totals.sumAbn)}</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 8px;font-weight:700;color:var(--muted);font-size:12px;">合計（分鐘）</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${prepMin}</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${prodMin}</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${abnMin}</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 8px;font-weight:700;color:var(--muted);font-size:12px;">達成度</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;${prepRate !== '—' && parseFloat(prepRate) >= 100 ? 'color:var(--success);' : ''}">${prepRate}${prepRate !== '—' ? '%' : ''}</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;${prodRate !== '—' && parseFloat(prodRate) >= 100 ? 'color:var(--success);' : ''}">${prodRate}${prodRate !== '—' ? '%' : ''}</td>
+              <td style="padding:6px 8px;text-align:center;color:var(--muted);">—</td>
+            </tr>
+          </tfoot>
+        </table>
+        </div>
+      </div>
+    `;
+  }).join('');
+  return `<div class="card" style="margin-bottom:12px;">${header}${cards}</div>`;
+}
 
+function downloadSummaryCsv(from, to) {
+  const groups = buildSummaryGroups(from, to);
+  if (!groups || groups.length === 0) { toast('區間內沒有資料', 'error'); return; }
+  const rows = [['日期','機台','工單','準備(時:分)','穩定(時:分)','異常(時:分)','準備(分)','穩定(分)','異常(分)','準備目標(分)','穩定目標(分)','準備達成度','穩定達成度']];
+  groups.forEach(g => {
+    const t = g.target;
+    g.orderRows.forEach(r => rows.push([
+      g.ymd, g.machineId, r.orderNo,
+      fmtHHMM(r.prepSec), fmtHHMM(r.prodSec), fmtHHMM(r.abnSec),
+      Math.round(r.prepSec / 60), Math.round(r.prodSec / 60), Math.round(r.abnSec / 60),
+      '', '', '', ''
+    ]));
+    const prepMin = Math.round(g.totals.sumPrep / 60);
+    const prodMin = Math.round(g.totals.sumProd / 60);
+    const abnMin  = Math.round(g.totals.sumAbn  / 60);
+    rows.push([
+      g.ymd, g.machineId, '【合計】',
+      fmtHHMM(g.totals.sumPrep), fmtHHMM(g.totals.sumProd), fmtHHMM(g.totals.sumAbn),
+      prepMin, prodMin, abnMin,
+      t.prepMinutes || '', t.workMinutes || '',
+      t.prepMinutes > 0 ? (prepMin / t.prepMinutes * 100).toFixed(1) + '%' : '',
+      t.workMinutes > 0 ? (prodMin / t.workMinutes * 100).toFixed(1) + '%' : '',
+    ]);
+  });
   const csv = rows.map(r => r.map(v => {
     const s = String(v == null ? '' : v);
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
@@ -1112,6 +1189,24 @@ $('summaryBtn').onclick = () => {
   a.click();
   URL.revokeObjectURL(url);
   toast('已下載匯總（' + (rows.length - 1) + ' 列）', 'success');
+}
+
+$('summaryBtn').onclick = () => {
+  const panel = $('summaryPanel');
+  if (panel.style.display !== 'none' && panel.innerHTML) {
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+    return;
+  }
+  const from = $('filterFrom').value || todayYmd();
+  const to = $('filterTo').value || from;
+  panel.innerHTML = renderSummaryPanel(from, to);
+  panel.style.display = 'block';
+  // 綁 panel 內按鈕事件
+  const dlBtn = panel.querySelector('#summaryDownloadBtn');
+  if (dlBtn) dlBtn.onclick = () => downloadSummaryCsv(from, to);
+  const closeBtn = panel.querySelector('#summaryCloseBtn');
+  if (closeBtn) closeBtn.onclick = () => { panel.style.display = 'none'; panel.innerHTML = ''; };
 };
 
 loadOrders();
