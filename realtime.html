@@ -183,27 +183,53 @@
   .order-card.active { border-left-color: var(--brand); }
   .order-card .oc-header {
     display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .order-card .oc-title {
+    display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 10px;
+    gap: 10px;
+    min-width: 0;
   }
   .order-card .oc-no {
     font-size: 18px;
     font-weight: 800;
     color: var(--ink);
+    min-width: 0;
+    word-break: break-all;
   }
   .order-card.active .oc-no { color: var(--brand); }
   .order-card .oc-badge {
     font-size: 10px;
     font-weight: 700;
-    padding: 3px 10px;
+    padding: 4px 12px;
     border-radius: 10px;
     background: var(--border);
     color: var(--muted);
     text-transform: uppercase;
     letter-spacing: .5px;
+    flex-shrink: 0;
   }
   .order-card.active .oc-badge { background: var(--brand); color: #fff; }
+  .order-card .oc-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .order-card .oc-pill {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 6px;
+    line-height: 1.4;
+    letter-spacing: .5px;
+    white-space: nowrap;
+  }
+  .order-card .oc-pill.scope { background: #fff3cd; color: #b8860b; border: 1.5px solid #f0ad4e; }
+  .order-card .oc-pill.carryover { background: #f0ad4e; color: #fff; }
 
   /* 工單摘要條 — 橫向 meta 條，跟訂單規格的卡片視覺刻意切開 */
   .order-info {
@@ -722,12 +748,17 @@ function renderContent() {
       const started = hasAnyActivity(o);
       const timeline = buildTimeline(o, me && me.isAdmin);
       const isCarryOver = o.productionDate && !isToday(o.productionDate);
-      const carryOverTag = isCarryOver ? '<span style="background:#f0ad4e;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;margin-left:8px;font-weight:700;">隔日生產</span>' : '';
+      const carryOverTag = isCarryOver ? '<span class="oc-pill carryover">隔日生產</span>' : '';
+      const scopeTag = o.changeScope ? `<span class="oc-pill scope">${escapeHtml(o.changeScope)}</span>` : '';
+      const hasTags = !!(carryOverTag || scopeTag);
       html += `
         <div class="order-card${isActive ? ' active' : ''}">
           <div class="oc-header">
-            <div class="oc-no">${escapeHtml(o.orderNo)}${o.changeScope ? `<span style="margin-left:8px;padding:2px 8px;background:#fff3cd;color:#b8860b;border:1.5px solid #f0ad4e;border-radius:6px;font-size:13px;font-weight:800;letter-spacing:1px;vertical-align:middle;">${escapeHtml(o.changeScope)}</span>` : ''}${carryOverTag}</div>
-            <div class="oc-badge">${o.step11At ? '已完成' : (started ? '生產中' : '等待中')}</div>
+            <div class="oc-title">
+              <span class="oc-no">${escapeHtml(o.orderNo)}</span>
+              <div class="oc-badge">${o.step11At ? '已完成' : (started ? '生產中' : '等待中')}</div>
+            </div>
+            ${hasTags ? `<div class="oc-tags">${scopeTag}${carryOverTag}</div>` : ''}
           </div>
           <div id="rt-spec-${escapeHtml(o.orderNo)}" class="rt-spec-area"></div>
           ${o.plannedMachineNo && o.plannedMachineNo !== o.machineNo ? `

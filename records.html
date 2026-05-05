@@ -177,17 +177,36 @@
   .rec-card.has-complete { border-left-color: var(--success); }
   .rec-card .rc-header {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    gap: 8px;
     margin-bottom: 12px;
   }
-  .rec-card .rc-no { font-size: 20px; font-weight: 800; color: var(--ink); }
+  .rec-card .rc-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  .rec-card .rc-no { font-size: 20px; font-weight: 800; color: var(--ink); min-width: 0; word-break: break-all; }
   .rec-card .rc-badge {
     font-size: 11px; font-weight: 700; padding: 4px 12px;
     border-radius: 10px; background: var(--border); color: var(--muted);
+    flex-shrink: 0;
   }
   .rec-card .rc-badge.done { background: var(--success); color: #fff; }
   .rec-card .rc-badge.active { background: var(--brand-soft); color: var(--brand); }
+  .rec-card .rc-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+  .rec-card .rc-pill {
+    font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 6px;
+    line-height: 1.4; white-space: nowrap;
+  }
+  .rec-card .rc-pill.scope { background: #fff3cd; color: #b8860b; border: 1.5px solid #f0ad4e; }
   .rec-card .rc-meta {
     display: flex; gap: 16px; flex-wrap: wrap;
     font-size: 14px; color: var(--muted); margin-bottom: 14px;
@@ -768,11 +787,14 @@ function render() {
     return `
       <div class="rec-card${isComplete ? ' has-complete' : ''}">
         <div class="rc-header">
-          <div class="rc-no">${escapeHtml(o.orderNo)}${o.changeScope ? `<span style="margin-left:10px;padding:2px 10px;background:#fff3cd;color:#b8860b;border:1.5px solid #f0ad4e;border-radius:6px;font-size:14px;font-weight:800;letter-spacing:1px;">${escapeHtml(o.changeScope)}</span>` : ''}</div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            ${badge}
-            ${isAdmin ? `<button class="btn-danger" data-del="${escapeHtml(o.orderNo)}" style="padding:4px 10px;font-size:11px;min-height:24px;" onclick="event.stopPropagation()">刪除</button>` : ''}
+          <div class="rc-title">
+            <span class="rc-no">${escapeHtml(o.orderNo)}</span>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+              ${badge}
+              ${isAdmin ? `<button class="btn-danger" data-del="${escapeHtml(o.orderNo)}" style="padding:4px 10px;font-size:11px;min-height:24px;" onclick="event.stopPropagation()">刪除</button>` : ''}
+            </div>
           </div>
+          ${o.changeScope ? `<div class="rc-tags"><span class="rc-pill scope">${escapeHtml(o.changeScope)}</span></div>` : ''}
         </div>
         <div class="rc-meta" style="margin-top:10px;">
           <span>機台 <strong>${escapeHtml(o.machineNo || '—')}</strong>${o.plannedMachineNo && o.plannedMachineNo !== o.machineNo ? `<span style="color:#a98e44;font-size:11px;margin-left:4px;">（計畫 ${escapeHtml(o.plannedMachineNo)}）</span>` : ''}</span>
