@@ -65,7 +65,7 @@ const STEP_COLS = {
   '5':  { time: 'step5At',  note: null },
   '6':  { time: 'step6At',  note: null },
   '7':  { time: 'step7At',  note: null },
-  '11': { time: 'step11At', note: null },
+  '11': { time: 'step11At', note: 'step11Note' },
   '12': { time: 'step12At', note: 'step12Note' },
   '13': { time: 'step13At', note: 'step13Note' },
 };
@@ -96,7 +96,7 @@ function serializeOrder(o) {
     step21At: o.step21At, step22At: o.step22At, step23At: o.step23At,
     step1At: o.step1At, step2At: o.step2At, step3At: o.step3At,
     step4At: o.step4At, step5At: o.step5At, step6At: o.step6At,
-    step7At: o.step7At, step11At: o.step11At,
+    step7At: o.step7At, step11At: o.step11At, step11Note: o.step11Note || null,
     // 三個日期：
     //   plannedDate     = 上傳的計畫日（生管說「這張要 X 做」）
     //   actualStartDate = 第一筆活動的台灣日期（現場第一次掃 QR 那天）
@@ -475,11 +475,11 @@ export default async function orderRoutes(fastify) {
     }
   });
 
-  // 紀錄某步驟
+  // 紀錄某步驟（recordedAt 可選；填了表示補登）
   fastify.post('/:orderNo/steps/:step', async (request, reply) => {
     const orderNo = String(request.params.orderNo || '').toUpperCase();
     const { step } = request.params;
-    const { note } = request.body || {};
+    const { note, recordedAt: manualTime } = request.body || {};
     if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
     const cols = STEP_COLS[step];
     if (!cols) return reply.code(400).send({ error: '無效步驟' });
@@ -502,7 +502,17 @@ export default async function orderRoutes(fastify) {
       });
     }
 
-    const stepTime = new Date();
+    let stepTime = new Date();
+    if (manualTime) {
+      const parsed = new Date(manualTime);
+      if (isNaN(parsed) || parsed.getFullYear() < 2000 || parsed.getFullYear() > 2100) {
+        return reply.code(400).send({ error: '補登時間格式錯誤' });
+      }
+      if (parsed > new Date()) {
+        return reply.code(400).send({ error: '補登時間不能超過現在' });
+      }
+      stepTime = parsed;
+    }
     await setActualStartDate(fastify, order, stepTime);
 
     const updateData = {

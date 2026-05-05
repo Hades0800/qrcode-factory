@@ -74,6 +74,7 @@ model Order {
 
   // 完成/暫停/異常
   step11At   DateTime?
+  step11Note String?    // 完成備註：含附屬設備 / 不含附屬設備
   step12At   DateTime?  // 已棄用（改用 PauseEvent）
   step12Note String?    // 已棄用
   step13At   DateTime?  // 已棄用（改用 PauseEvent）

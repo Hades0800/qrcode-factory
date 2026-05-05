@@ -1599,11 +1599,9 @@ function renderSteps() {
       <div class="act-hint">${isPaused ? '暫停中，請先恢復' : escapeHtml(a.hint)}</div>
     </div>
   `;
-  finBtn.onclick = async () => {
+  finBtn.onclick = () => {
     if (isPaused) { toast('請先恢復生產', 'error'); return; }
-    if (!confirm('確定完成此工單？\n\n（資料已自動儲存）')) return;
-    try { await submitStep('11', ''); } catch(e) {}
-    finishOrder();
+    showCompleteModal();
   };
   actDiv.appendChild(finBtn);
 
@@ -1812,6 +1810,75 @@ async function submitInterruptBackfill() {
   order = r.data.order;
   renderSteps();
   toast('✓ 已補登中斷', 'success');
+}
+
+// 工單完成 modal（含/不含附屬設備 + 補登時間）
+function showCompleteModal() {
+  if (!orderNo) return;
+  const old = document.getElementById('completeModal');
+  if (old) old.remove();
+  const modal = document.createElement('div');
+  modal.id = 'completeModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:24px;width:100%;max-width:340px;box-shadow:0 10px 40px rgba(0,0,0,.2);">
+      <h3 style="margin:0 0 6px;font-size:17px;color:var(--ink);">本工單完成生產</h3>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">請選擇是否含附屬設備：</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button class="btn-secondary cmp-opt" data-note="含附屬設備" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;">⚙️ 含附屬設備</button>
+        <button class="btn-secondary cmp-opt" data-note="不含附屬設備" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;">⊘ 不含附屬設備</button>
+      </div>
+      <button id="cmpBackfillToggle" style="width:100%;margin-top:12px;padding:10px;background:none;border:1.5px dashed var(--border);border-radius:10px;color:#b8860b;font-size:13px;cursor:pointer;">📝 補登時間（不填用現在）</button>
+      <div id="cmpBackfillWrap" style="display:none;margin-top:8px;">
+        <input type="datetime-local" id="cmpBackfillTime" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;box-sizing:border-box;">
+      </div>
+      <button id="completeModalCancel" style="width:100%;margin-top:12px;padding:12px;font-size:14px;background:none;border:1.5px solid var(--border);border-radius:10px;color:var(--muted);cursor:pointer;">取消</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  document.getElementById('completeModalCancel').onclick = () => modal.remove();
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+  document.getElementById('cmpBackfillToggle').onclick = () => {
+    const wrap = document.getElementById('cmpBackfillWrap');
+    wrap.style.display = wrap.style.display === 'none' ? '' : 'none';
+  };
+
+  modal.querySelectorAll('.cmp-opt').forEach(btn => {
+    btn.onclick = async () => {
+      const note = btn.dataset.note;
+      const bfTime = document.getElementById('cmpBackfillTime').value;
+      let recordedAt = null;
+      if (bfTime) {
+        const dt = new Date(bfTime);
+        if (isNaN(dt)) { toast('補登時間格式錯誤', 'error'); return; }
+        if (dt > new Date()) { toast('補登時間不能超過現在', 'error'); return; }
+        recordedAt = dt.toISOString();
+      }
+      const summary = recordedAt ? `「${note}」\n補登時間：${bfTime.replace('T', ' ')}` : `「${note}」`;
+      if (!confirm('確定完成此工單？\n' + summary)) return;
+      modal.remove();
+      try { await submitStepWithBody('11', { note, recordedAt }); } catch (e) {}
+      finishOrder();
+    };
+  });
+}
+
+async function submitStepWithBody(stepId, body) {
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/steps/' + stepId, {
+    method: 'POST',
+    body,
+  });
+  if (!r.ok) {
+    toast(r.error, 'error');
+    if (r.data && r.data.order) { order = r.data.order; renderSteps(); }
+    return;
+  }
+  order = r.data.order;
+  $('orderUpdated').textContent = '最後更新：' + fmtTime(order.updatedAt);
+  renderSteps();
+  const stepDef = STEPS.find(s => s.id === stepId) || (stepId === '11' ? ACTIONS_FINISH : null);
+  toast('✓ 已記錄 ' + (stepDef ? stepDef.title : '步驟 ' + stepId), 'success');
 }
 
 async function executePause(p, note) {
