@@ -1452,36 +1452,8 @@ function renderSteps() {
     wrap.appendChild(div);
   });
 
-  // 更換規格（stepNo=30）— 多規格工單切換時技術員手動填入
+  // 更換規格（stepNo=30）— 收進 04 生產中斷裡顯示
   const specChangeEntries = (order.stepEntries || []).filter(e => e.stepNo === '30');
-  const specDiv = document.createElement('div');
-  specDiv.className = 'step' + (specChangeEntries.length ? ' done' : '');
-  specDiv.style.borderLeft = '4px solid #f0ad4e';
-  let specBody = '<div class="title">更換規格' +
-    (specChangeEntries.length ? `<span class="badge ok" style="background:#f0ad4e;">×${specChangeEntries.length}</span>` : '') +
-    '</div>';
-  specBody += '<div class="hint">多規格工單切換規格時填入（例：規格 2、規格 3）</div>';
-  specChangeEntries.forEach(e => {
-    const elapsed = now - new Date(e.recordedAt).getTime();
-    const canCancel = elapsed < 5 * 60 * 1000;
-    const manualTag = e.isManual ? '<span class="manual-tag">補登</span>' : '';
-    specBody += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${canCancel ? '#fff4d6' : '#fff8e8'};border-radius:8px;border-left:3px solid #f0ad4e;">`;
-    specBody += `<span style="font-size:12px;color:#b8860b;font-weight:600;flex:1;display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;">${icon('clipboard', 14)}${escapeHtml(e.note || '')} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
-    if (canCancel && !isPaused) {
-      specBody += `<button class="btn-danger" data-cancel-entry="${e.id}" style="padding:4px 10px;font-size:11px;min-height:28px;">取消</button>`;
-    }
-    specBody += '</div>';
-  });
-  if (isPaused) {
-    specBody += '<button class="btn-success btn-block" disabled style="background:#f0ad4e;">' + icon('clipboard', 16) + ' 記錄更換</button>';
-  } else {
-    specBody += `<div style="display:flex;gap:6px;">`;
-    specBody += `<input type="text" id="specChangeInput" placeholder="新規格描述（例：規格 2）" maxlength="200" style="flex:1;padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">`;
-    specBody += `<button id="specChangeBtn" style="flex:0 0 auto;padding:10px 18px;background:#f0ad4e;color:#fff;border:none;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;">${icon('clipboard', 14)} 記錄</button>`;
-    specBody += `</div>`;
-  }
-  specDiv.innerHTML = `<div class="step-body">${specBody}</div>`;
-  wrap.appendChild(specDiv);
 
   // 03. 生產結束（工單完成與結束 → 含/不含附屬設備 modal）
   const finishCard = document.createElement('div');
@@ -1547,6 +1519,33 @@ function renderSteps() {
       </div>
     </div>`;
   }
+
+  // — 04 內部分隔 + 更換規格 區段 —
+  intBody += `<div style="margin-top:14px;padding-top:14px;border-top:1.5px dashed #f0ad4e;">`;
+  intBody += '<div style="font-size:13px;font-weight:700;color:#b8860b;display:flex;align-items:center;gap:6px;">' + icon('clipboard', 14) + ' 更換規格' +
+    (specChangeEntries.length ? `<span class="badge ok" style="background:#f0ad4e;">×${specChangeEntries.length}</span>` : '') + '</div>';
+  intBody += '<div class="hint" style="margin-top:2px;">多規格工單切換規格時填入（例：規格 2、規格 3）</div>';
+  specChangeEntries.forEach(e => {
+    const elapsed = now - new Date(e.recordedAt).getTime();
+    const canCancel = elapsed < 5 * 60 * 1000;
+    const manualTag = e.isManual ? '<span class="manual-tag">補登</span>' : '';
+    intBody += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${canCancel ? '#fff4d6' : '#fff8e8'};border-radius:8px;border-left:3px solid #f0ad4e;">`;
+    intBody += `<span style="font-size:12px;color:#b8860b;font-weight:600;flex:1;display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;">${icon('clipboard', 14)}${escapeHtml(e.note || '')} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
+    if (canCancel && !isPaused) {
+      intBody += `<button class="btn-danger" data-cancel-entry="${e.id}" style="padding:4px 10px;font-size:11px;min-height:28px;">取消</button>`;
+    }
+    intBody += '</div>';
+  });
+  if (isPaused) {
+    intBody += '<button class="btn-success btn-block" disabled style="background:#f0ad4e;margin-top:8px;">' + icon('clipboard', 16) + ' 記錄更換</button>';
+  } else {
+    intBody += `<div style="display:flex;gap:6px;margin-top:8px;">`;
+    intBody += `<input type="text" id="specChangeInput" placeholder="新規格描述（例：規格 2）" maxlength="200" style="flex:1;padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">`;
+    intBody += `<button id="specChangeBtn" style="flex:0 0 auto;padding:10px 18px;background:#f0ad4e;color:#fff;border:none;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;">${icon('clipboard', 14)} 記錄</button>`;
+    intBody += `</div>`;
+  }
+  intBody += `</div>`;
+
   intCard.innerHTML = `<div class="step-body">${intBody}</div>`;
   wrap.appendChild(intCard);
 
