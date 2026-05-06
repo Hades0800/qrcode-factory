@@ -413,8 +413,8 @@ export default async function orderRoutes(fastify) {
       const orderNo = String(request.params.orderNo || '').toUpperCase();
       const { changeScope } = request.body || {};
       if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
-      if (changeScope !== null && !['@', '#', '@#'].includes(changeScope)) {
-        return reply.code(400).send({ error: '無效的更換範圍（需為 @ / # / @# / null）' });
+      if (changeScope !== null && !['@', '#', '@#', 'same'].includes(changeScope)) {
+        return reply.code(400).send({ error: '無效的更換範圍（需為 @ / # / @# / same / null）' });
       }
       await fastify.prisma.$executeRawUnsafe(
         'ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "changeScope" TEXT'

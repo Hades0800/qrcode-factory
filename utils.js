@@ -168,6 +168,7 @@ function scopeLabel(s) {
   if (s === '@') return '原料更換';
   if (s === '#') return '模刀具更換';
   if (s === '@#') return '原料與模刀具更換';
+  if (s === 'same') return '料模刀沿用前工單';
   return s || '';
 }
 

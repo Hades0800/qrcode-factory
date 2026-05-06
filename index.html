@@ -755,6 +755,10 @@
         <span class="scope-sym" style="display:inline-flex;align-items:center;justify-content:center;width:46px;height:36px;background:#fff3cd;color:#b8860b;border-radius:8px;font-weight:800;font-size:18px;flex-shrink:0;">@#</span>
         <span style="font-weight:700;font-size:15px;">原料與模刀具更換</span>
       </button>
+      <button class="scope-choice" data-scope="same" style="display:flex;align-items:center;gap:14px;padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:left;">
+        <span class="scope-sym" style="display:inline-flex;align-items:center;justify-content:center;width:46px;height:36px;background:#f0f0f3;color:var(--muted);border-radius:8px;font-weight:700;font-size:13px;flex-shrink:0;">同前</span>
+        <span style="font-weight:700;font-size:15px;">料模刀沿用前工單</span>
+      </button>
       <button class="scope-choice" data-scope="" style="padding:10px;border:1.5px solid var(--border);border-radius:10px;background:#f8f8fa;cursor:pointer;font-weight:600;font-size:13px;color:var(--muted);">清除</button>
     </div>
   </div>
@@ -1148,11 +1152,12 @@ function renderChangeScope() {
     b.style.background = isSelected ? 'var(--brand)' : (val === '' ? '#f8f8fa' : '#fff');
     b.style.color = isSelected ? '#fff' : (val === '' ? 'var(--muted)' : 'var(--ink)');
     b.style.borderColor = isSelected ? 'var(--brand)' : 'var(--border)';
-    // 內部符號 pill 跟著反白
+    // 內部符號 pill 跟著反白；"same" 用灰色預設
     const sym = b.querySelector('.scope-sym');
     if (sym) {
-      sym.style.background = isSelected ? 'rgba(255,255,255,.22)' : '#fff3cd';
-      sym.style.color = isSelected ? '#fff' : '#b8860b';
+      const isSame = val === 'same';
+      sym.style.background = isSelected ? 'rgba(255,255,255,.22)' : (isSame ? '#f0f0f3' : '#fff3cd');
+      sym.style.color = isSelected ? '#fff' : (isSame ? 'var(--muted)' : '#b8860b');
     }
   });
 }
