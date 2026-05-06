@@ -1563,17 +1563,9 @@ function renderSteps() {
   area.querySelectorAll('[data-clear]').forEach(b => {
     b.onclick = () => clearStep(b.getAttribute('data-clear'));
   });
-  // 一般步驟記錄（含 simple kind 帶 fixedNote）
+  // 一般步驟記錄（按 已完成 → 跳是否加備註 → 送出）
   area.querySelectorAll('[data-record-step]').forEach(b => {
-    b.onclick = () => recordStepEntry(b.getAttribute('data-record-step'), b.getAttribute('data-note') || null);
-  });
-  // options kind 多選一（生產開始）
-  area.querySelectorAll('[data-step].step-opt').forEach(b => {
-    b.onclick = () => {
-      const stepId = b.getAttribute('data-step');
-      const note = b.getAttribute('data-note');
-      recordStepEntry(stepId, note);
-    };
+    b.onclick = () => recordStepEntry(b.getAttribute('data-record-step'));
   });
   area.querySelectorAll('[data-cancel-entry]').forEach(b => {
     b.onclick = () => cancelStepEntry(b.getAttribute('data-cancel-entry'));
@@ -1686,17 +1678,14 @@ async function backfillStepEntry(stepNo) {
   if (!dateVal || !timeVal) { toast('請填寫日期和時間', 'error'); return; }
   const dt = new Date(dateVal + 'T' + timeVal);
   if (isNaN(dt)) { toast('日期時間格式錯誤', 'error'); return; }
-  // options kind：補登要從下拉抓選項；simple kind：用 fixedNote
-  const stepDef = STEPS.find(s => s.id === stepNo);
+  // 是否加文字備註？沒就沒
   let note = null;
-  if (stepDef && stepDef.kind === 'options') {
-    const picked = document.querySelector(`.bf-opt-pick[data-step="${stepNo}"][data-selected="1"]`);
-    note = picked ? picked.dataset.val : '';
-    if (!note) { toast('請選擇狀態', 'error'); return; }
-  } else if (stepDef && stepDef.fixedNote) {
-    note = stepDef.fixedNote;
+  if (confirm('要加文字備註嗎？')) {
+    const text = prompt('請輸入備註：', '');
+    if (text === null) return; // 取消整個動作
+    if (text.trim()) note = text.trim();
   }
-  if (!confirm('確認補登？\n時間：' + fmtTime(dt.toISOString()) + (note ? '\n選項：' + note : '') + '\n將標記為「補登」')) return;
+  if (!confirm('確認補登？\n時間：' + fmtTime(dt.toISOString()) + (note ? '\n備註：' + note : '') + '\n將標記為「補登」')) return;
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/step-entries', {
     method: 'POST',
     body: { stepNo, recordedAt: dt.toISOString(), note },
@@ -1708,12 +1697,19 @@ async function backfillStepEntry(stepNo) {
 }
 
 // 記錄工序（日誌式，可重複）
-async function recordStepEntry(stepNo, note) {
+async function recordStepEntry(stepNo) {
   if (!orderNo) return;
+  // 是否加文字備註？沒就沒
+  let note = null;
+  if (confirm('要加文字備註嗎？')) {
+    const text = prompt('請輸入備註：', '');
+    if (text === null) return; // 取消整個動作
+    if (text.trim()) note = text.trim();
+  }
   const stepDef = STEPS.find(s => s.id === stepNo) || PRE_STEPS.find(s => s.id === stepNo);
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/step-entries', {
     method: 'POST',
-    body: { stepNo, note: note || null },
+    body: { stepNo, note },
   });
   if (!r.ok) { toast(r.error, 'error'); return; }
   order = r.data.order;
