@@ -817,11 +817,11 @@
 // 作業準備（21/22）已停用；保留空陣列給歷史資料 fallback lookup
 const PRE_STEPS = [];
 
-// kind: 'simple' = 直接記錄（fixedNote 為固定備註）／ 'options' = 多選一（options 為選項清單）
+// kind: 'simple' = 直接記錄（fixedNote 為固定備註）
 // 已停用步驟（6 後工程、7 其他作業）：歷史資料保留，新單不再顯示
 const STEPS = [
-  { id: '40', kind: 'simple',  title: '01. 生產準備', hint: '含清理、料模刀與試模', fixedNote: '含清理、料模刀與試模' },
-  { id: '41', kind: 'options', title: '02. 生產開始', hint: '點選對應的生產狀態', options: ['生產中斷參數調整', '多次任何中斷生產', '無論是否連續生產'] },
+  { id: '40', kind: 'simple', title: '01. 生產準備', hint: '含清理、料模刀與試模', fixedNote: '含清理、料模刀與試模' },
+  { id: '41', kind: 'simple', title: '02. 生產開始', hint: '生產中斷參數調整／多次任何中斷生產／無論是否連續生產', fixedNote: null },
 ];
 
 const ACTIONS_FINISH = { id: '11', title: '工單完成與結束', hint: '開始新的製造工單', style: 'act-success', icon: '✓' };
@@ -1483,16 +1483,28 @@ function renderSteps() {
   specDiv.innerHTML = `<div class="step-body">${specBody}</div>`;
   wrap.appendChild(specDiv);
 
-  area.appendChild(wrap);
+  // 03. 生產結束（工單完成與結束 → 含/不含附屬設備 modal）
+  const finishCard = document.createElement('div');
+  const isFinished = !!order.step11At;
+  finishCard.className = 'step' + (isFinished ? ' done' : '');
+  let finishBody = '<div class="title">03. 生產結束' + (isFinished ? '<span class="badge ok">×1</span>' : '') + '</div>';
+  finishBody += '<div class="hint">工單完成與結束（含 / 不含附屬設備）</div>';
+  if (isFinished) {
+    const noteTxt = order.step11Note ? '（' + escapeHtml(order.step11Note) + '）' : '';
+    finishBody += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:var(--success-soft);border-radius:8px;">
+      <span style="font-size:12px;color:var(--success);font-weight:600;flex:1;display:inline-flex;align-items:center;gap:4px;">${icon('check', 14)}已完成${noteTxt} — ${fmtTime(order.step11At)}</span>
+    </div>`;
+    finishBody += '<button class="btn-success btn-block" disabled>' + icon('check', 16) + ' 已完成</button>';
+  } else if (isPaused) {
+    finishBody += '<button class="btn-success btn-block" disabled>' + icon('check', 16) + ' 暫停中，請先恢復</button>';
+  } else {
+    finishBody += `<button id="finishStepBtn" class="btn-success btn-block">${icon('check', 16)} 已完成</button>`;
+  }
+  finishCard.innerHTML = `<div class="step-body">${finishBody}</div>`;
+  wrap.appendChild(finishCard);
 
-  // 底部動作按鈕
-  const actWrap = document.createElement('div');
-  actWrap.className = 'card';
-  actWrap.innerHTML = '<h2>操作</h2>';
-  const actDiv = document.createElement('div');
-  actDiv.className = 'action-buttons';
-
-  // 統一的「生產中斷」按鈕（type 12/13 整合到單一入口）
+  // 04. 生產中斷（pause12/13 整合）
+  const intCard = document.createElement('div');
   const p12 = order.pause12 || {};
   const p13 = order.pause13 || {};
   const activePause = (p12.active) ? { type: '12', info: p12 }
@@ -1500,95 +1512,45 @@ function renderSteps() {
                     : null;
   const totalCount = (p12.count || 0) + (p13.count || 0);
   const totalSec   = (p12.totalSec || 0) + (p13.totalSec || 0);
-
-  const intBtn = document.createElement('button');
+  intCard.className = 'step' + (totalCount > 0 ? ' done' : '');
+  intCard.style.borderLeft = '4px solid #f0ad4e';
+  let intBody = '<div class="title">04. 生產中斷' + (totalCount > 0 ? `<span class="badge ok" style="background:#f0ad4e;">×${totalCount}</span>` : '') + '</div>';
+  intBody += '<div class="hint">設備異常停機 ／ 超過1小時以上的停機 ／ 中午休息或下班時間</div>';
   if (activePause) {
-    intBtn.className = 'action-btn ' + (activePause.type === '13' ? 'act-danger' : 'act-warning');
-    intBtn.style.animation = 'pulse 1.5s infinite';
-    const note = activePause.info.active.note ? `（${escapeHtml(activePause.info.active.note)}）` : '';
-    intBtn.innerHTML = `
-      <div class="act-icon">${icon('play', 24)}</div>
-      <div class="act-body">
-        <div class="act-title">恢復生產</div>
-        <div class="act-hint">生產中斷中…${note} <span class="live-timer" data-start="${activePause.info.active.startAt}"></span></div>
-      </div>
-    `;
-    intBtn.onclick = () => resumePause(activePause.type);
+    const noteTxt = activePause.info.active.note ? `（${escapeHtml(activePause.info.active.note)}）` : '';
+    const bg = activePause.type === '13' ? 'var(--brand)' : '#f0ad4e';
+    intBody += `<div style="margin-bottom:8px;padding:8px 10px;background:#fff3cd;border-left:3px solid #f0ad4e;border-radius:6px;font-size:13px;color:#8a6d3b;font-weight:600;">中斷中${noteTxt} <span class="live-timer" data-start="${activePause.info.active.startAt}"></span></div>`;
+    intBody += `<button id="resumeBtn" style="width:100%;background:${bg};color:#fff;border:none;border-radius:8px;padding:14px;font-weight:700;font-size:15px;cursor:pointer;animation:pulse 1.5s infinite;display:inline-flex;align-items:center;justify-content:center;gap:6px;">${icon('play', 18)}恢復生產</button>`;
   } else {
-    intBtn.className = 'action-btn act-warning';
-    let subtitle = '設備異常 ／ 長時間停機 ／ 中午下班';
-    if (totalCount > 0) subtitle = `累計 ${totalCount} 次，共 ${fmtDuration(totalSec)}`;
-    intBtn.innerHTML = `
-      <div class="act-icon">${icon('pause', 24)}</div>
-      <div class="act-body">
-        <div class="act-title">生產中斷</div>
-        <div class="act-hint">${subtitle}</div>
-      </div>
-    `;
-    intBtn.onclick = () => showInterruptModal();
-  }
-  actDiv.appendChild(intBtn);
-
-  // 補登中斷（只在沒有 active pause 時顯示）
-  if (!activePause) {
-    const bfBtn = document.createElement('button');
-    bfBtn.className = 'btn-secondary';
-    bfBtn.style.cssText = 'width:100%;margin-top:-4px;margin-bottom:8px;padding:10px;font-size:13px;color:#b8860b;';
-    bfBtn.innerHTML = icon('edit', 14) + ' 補登中斷';
-    bfBtn.onclick = () => {
-      const form = document.getElementById('interrupt-bf');
-      form.style.display = form.style.display === 'none' ? '' : 'none';
-    };
-    actDiv.appendChild(bfBtn);
-
-    const bfForm = document.createElement('div');
-    bfForm.id = 'interrupt-bf';
-    bfForm.className = 'backfill-form';
-    bfForm.style.display = 'none';
-    bfForm.style.marginBottom = '12px';
-    bfForm.innerHTML = `
-      <select id="ibf-reason" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:6px;">
+    if (totalCount > 0) {
+      intBody += `<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">累計 ${totalCount} 次，共 ${fmtDuration(totalSec)}</div>`;
+    }
+    intBody += `<div style="display:flex;gap:8px;">`;
+    intBody += `<button id="interruptBtn" style="flex:1;background:#f0ad4e;color:#fff;border:none;border-radius:8px;padding:14px;font-weight:700;font-size:15px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;">${icon('pause', 16)}生產中斷</button>`;
+    intBody += `<button id="interruptBfBtn" class="btn-secondary" style="flex:0 0 auto;padding:10px 14px;font-size:13px;color:#b8860b;">${icon('edit', 14)} 補登</button>`;
+    intBody += `</div>`;
+    intBody += `<div class="backfill-form" id="interrupt-bf" style="display:none;flex-direction:column;gap:6px;">
+      <select id="ibf-reason" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;">
         <option value="">-- 選擇中斷原因 --</option>
         <option value="設備異常停機|13">設備異常停機</option>
         <option value="超過1小時以上的停機|12">超過1小時以上的停機</option>
         <option value="中午休息或下班時間|12">中午休息或下班時間</option>
       </select>
-      <input type="text" id="ibf-note" placeholder="補充說明（選填）" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;margin-bottom:6px;box-sizing:border-box;">
+      <input type="text" id="ibf-note" placeholder="補充說明（選填）" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;box-sizing:border-box;">
       <div style="display:flex;gap:6px;">
         <div style="flex:1;"><label style="font-size:11px;color:var(--muted);">開始時間</label><input type="datetime-local" id="ibf-start" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></div>
         <div style="flex:1;"><label style="font-size:11px;color:var(--muted);">結束時間</label><input type="datetime-local" id="ibf-end" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></div>
       </div>
-      <div style="display:flex;gap:6px;margin-top:6px;">
+      <div style="display:flex;gap:6px;">
         <button class="btn-primary" style="flex:1;" onclick="submitInterruptBackfill()">確認補登</button>
         <button class="btn-secondary" style="flex:0 0 auto;" onclick="document.getElementById('interrupt-bf').style.display='none'">取消</button>
       </div>
-    `;
-    actDiv.appendChild(bfForm);
+    </div>`;
   }
+  intCard.innerHTML = `<div class="step-body">${intBody}</div>`;
+  wrap.appendChild(intCard);
 
-  // 完成按鈕
-  const a = ACTIONS_FINISH;
-  const finBtn = document.createElement('button');
-  finBtn.className = 'action-btn ' + a.style;
-  if (isPaused) {
-    finBtn.disabled = true;
-    finBtn.style.opacity = '0.5';
-  }
-  finBtn.innerHTML = `
-    <div class="act-icon">${icon('check', 24)}</div>
-    <div class="act-body">
-      <div class="act-title">${escapeHtml(a.title)}</div>
-      <div class="act-hint">${isPaused ? '暫停中，請先恢復' : escapeHtml(a.hint)}</div>
-    </div>
-  `;
-  finBtn.onclick = () => {
-    if (isPaused) { toast('請先恢復生產', 'error'); return; }
-    showCompleteModal();
-  };
-  actDiv.appendChild(finBtn);
-
-  actWrap.appendChild(actDiv);
-  area.appendChild(actWrap);
+  area.appendChild(wrap);
 
   startLiveTimers();
 
@@ -1660,6 +1622,25 @@ function renderSteps() {
       recordSpecChange(text);
     };
   }
+
+  // 03 生產結束
+  const finishStepBtn = document.getElementById('finishStepBtn');
+  if (finishStepBtn) {
+    finishStepBtn.onclick = () => {
+      if (isPaused) { toast('請先恢復生產', 'error'); return; }
+      showCompleteModal();
+    };
+  }
+  // 04 生產中斷
+  const interruptBtn = document.getElementById('interruptBtn');
+  if (interruptBtn) interruptBtn.onclick = () => showInterruptModal();
+  const interruptBfBtn = document.getElementById('interruptBfBtn');
+  if (interruptBfBtn) interruptBfBtn.onclick = () => {
+    const f = document.getElementById('interrupt-bf');
+    f.style.display = f.style.display === 'none' ? '' : 'none';
+  };
+  const resumeBtn = document.getElementById('resumeBtn');
+  if (resumeBtn && activePause) resumeBtn.onclick = () => resumePause(activePause.type);
 
   $('bottomBar').classList.remove('show');
 }
