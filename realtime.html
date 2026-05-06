@@ -940,9 +940,9 @@ function renderDailySummaryCard(machineId, machineOrders) {
   const rowsHtml = rows.map(r => `
     <tr>
       <td style="padding:6px 8px;font-weight:700;font-size:12px;">${escapeHtml(r.orderNo)}</td>
-      <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${fmtHHMM(r.prepSec)}</td>
-      <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${fmtHHMM(r.prodSec)}</td>
-      <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${fmtHHMM(r.abnSec)}</td>
+      <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${Math.round(r.prepSec / 60)}</td>
+      <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${Math.round(r.prodSec / 60)}</td>
+      <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${Math.round(r.abnSec / 60)}</td>
     </tr>
   `).join('');
 
@@ -957,21 +957,15 @@ function renderDailySummaryCard(machineId, machineOrders) {
         <thead style="background:#f5f5f7;">
           <tr>
             <th style="padding:8px;text-align:left;font-weight:700;">工單</th>
-            <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">生產準備</th>
-            <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">生產實績</th>
-            <th style="padding:8px;text-align:center;font-weight:700;color:var(--brand);">異常停線</th>
+            <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">生產準備(分)</th>
+            <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">生產實績(分)</th>
+            <th style="padding:8px;text-align:center;font-weight:700;color:var(--brand);">異常停線(分)</th>
           </tr>
         </thead>
         <tbody>${rowsHtml}</tbody>
         <tfoot style="background:#fafafb;">
           <tr style="border-top:1.5px solid var(--border);">
-            <td style="padding:6px 8px;font-weight:700;color:var(--muted);font-size:12px;">合計（時:分）</td>
-            <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;">${fmtHHMM(sumPrep)}</td>
-            <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;">${fmtHHMM(sumProd)}</td>
-            <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;">${fmtHHMM(sumAbn)}</td>
-          </tr>
-          <tr>
-            <td style="padding:6px 8px;font-weight:700;color:var(--muted);font-size:12px;">合計（分鐘）</td>
+            <td style="padding:6px 8px;font-weight:700;color:var(--muted);font-size:12px;">合計（分）</td>
             <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${prepMin}</td>
             <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${prodMin}</td>
             <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${abnMin}</td>

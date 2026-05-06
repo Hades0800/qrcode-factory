@@ -1103,9 +1103,9 @@ function renderSummaryPanel(from, to) {
     const rowsHtml = g.orderRows.map(r => `
       <tr>
         <td style="padding:6px 8px;font-weight:700;font-size:12px;">${escapeHtml(r.orderNo)}</td>
-        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${fmtHHMM(r.prepSec)}</td>
-        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${fmtHHMM(r.prodSec)}</td>
-        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${fmtHHMM(r.abnSec)}</td>
+        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${Math.round(r.prepSec / 60)}</td>
+        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${Math.round(r.prodSec / 60)}</td>
+        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${Math.round(r.abnSec / 60)}</td>
       </tr>
     `).join('');
     return `
@@ -1119,21 +1119,15 @@ function renderSummaryPanel(from, to) {
           <thead style="background:#f5f5f7;">
             <tr>
               <th style="padding:8px;text-align:left;font-weight:700;">工單</th>
-              <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">生產準備</th>
-              <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">生產實績</th>
-              <th style="padding:8px;text-align:center;font-weight:700;color:var(--brand);">異常停線</th>
+              <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">生產準備(分)</th>
+              <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">生產實績(分)</th>
+              <th style="padding:8px;text-align:center;font-weight:700;color:var(--brand);">異常停線(分)</th>
             </tr>
           </thead>
           <tbody>${rowsHtml}</tbody>
           <tfoot style="background:#fafafb;">
             <tr style="border-top:1.5px solid var(--border);">
-              <td style="padding:6px 8px;font-weight:700;color:var(--muted);font-size:12px;">合計（時:分）</td>
-              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;">${fmtHHMM(g.totals.sumPrep)}</td>
-              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;">${fmtHHMM(g.totals.sumProd)}</td>
-              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;">${fmtHHMM(g.totals.sumAbn)}</td>
-            </tr>
-            <tr>
-              <td style="padding:6px 8px;font-weight:700;color:var(--muted);font-size:12px;">合計（分鐘）</td>
+              <td style="padding:6px 8px;font-weight:700;color:var(--muted);font-size:12px;">合計（分）</td>
               <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${prepMin}</td>
               <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${prodMin}</td>
               <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${abnMin}</td>
@@ -1156,12 +1150,11 @@ function renderSummaryPanel(from, to) {
 function downloadSummaryCsv(from, to) {
   const groups = buildSummaryGroups(from, to);
   if (!groups || groups.length === 0) { toast('區間內沒有資料', 'error'); return; }
-  const rows = [['日期','機台','工單','準備(時:分)','實績(時:分)','異常(時:分)','準備(分)','實績(分)','異常(分)','準備目標(分)','實績目標(分)','準備達成度','實績達成度']];
+  const rows = [['日期','機台','工單','準備(分)','實績(分)','異常(分)','準備目標(分)','實績目標(分)','準備達成度','實績達成度']];
   groups.forEach(g => {
     const t = g.target;
     g.orderRows.forEach(r => rows.push([
       g.ymd, g.machineId, r.orderNo,
-      fmtHHMM(r.prepSec), fmtHHMM(r.prodSec), fmtHHMM(r.abnSec),
       Math.round(r.prepSec / 60), Math.round(r.prodSec / 60), Math.round(r.abnSec / 60),
       '', '', '', ''
     ]));
@@ -1170,7 +1163,6 @@ function downloadSummaryCsv(from, to) {
     const abnMin  = Math.round(g.totals.sumAbn  / 60);
     rows.push([
       g.ymd, g.machineId, '【合計】',
-      fmtHHMM(g.totals.sumPrep), fmtHHMM(g.totals.sumProd), fmtHHMM(g.totals.sumAbn),
       prepMin, prodMin, abnMin,
       t.prepMinutes || '', t.workMinutes || '',
       t.prepMinutes > 0 ? (prepMin / t.prepMinutes * 100).toFixed(1) + '%' : '',
