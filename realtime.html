@@ -950,7 +950,7 @@ function renderDailySummaryCard(machineId, machineOrders) {
     <div class="card" style="margin-bottom:12px;">
       <h3 style="margin:0 0 4px;">本日匯總 · ${escapeHtml(machineId)}</h3>
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">
-        目標 — 生產準備 ${t.prepMinutes} 分／穩定生產 ${t.workMinutes} 分
+        目標 — 生產準備 ${t.prepMinutes} 分／生產實績 ${t.workMinutes} 分
       </div>
       <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;">
       <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:420px;">
@@ -958,7 +958,7 @@ function renderDailySummaryCard(machineId, machineOrders) {
           <tr>
             <th style="padding:8px;text-align:left;font-weight:700;">工單</th>
             <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">生產準備</th>
-            <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">穩定生產</th>
+            <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">生產實績</th>
             <th style="padding:8px;text-align:center;font-weight:700;color:var(--brand);">異常停線</th>
           </tr>
         </thead>

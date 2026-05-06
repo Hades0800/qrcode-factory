@@ -1112,7 +1112,7 @@ function renderSummaryPanel(from, to) {
       <div style="margin-top:14px;">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
           <strong style="font-size:14px;">${escapeHtml(g.ymd)} · ${escapeHtml(g.machineId)}</strong>
-          <span style="font-size:11px;color:var(--muted);">目標 — 準備 ${t.prepMinutes || '—'} / 穩定 ${t.workMinutes || '—'} 分</span>
+          <span style="font-size:11px;color:var(--muted);">目標 — 準備 ${t.prepMinutes || '—'} / 實績 ${t.workMinutes || '—'} 分</span>
         </div>
         <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;">
         <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:420px;">
@@ -1120,7 +1120,7 @@ function renderSummaryPanel(from, to) {
             <tr>
               <th style="padding:8px;text-align:left;font-weight:700;">工單</th>
               <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">生產準備</th>
-              <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">穩定生產</th>
+              <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">生產實績</th>
               <th style="padding:8px;text-align:center;font-weight:700;color:var(--brand);">異常停線</th>
             </tr>
           </thead>
@@ -1156,7 +1156,7 @@ function renderSummaryPanel(from, to) {
 function downloadSummaryCsv(from, to) {
   const groups = buildSummaryGroups(from, to);
   if (!groups || groups.length === 0) { toast('區間內沒有資料', 'error'); return; }
-  const rows = [['日期','機台','工單','準備(時:分)','穩定(時:分)','異常(時:分)','準備(分)','穩定(分)','異常(分)','準備目標(分)','穩定目標(分)','準備達成度','穩定達成度']];
+  const rows = [['日期','機台','工單','準備(時:分)','實績(時:分)','異常(時:分)','準備(分)','實績(分)','異常(分)','準備目標(分)','實績目標(分)','準備達成度','實績達成度']];
   groups.forEach(g => {
     const t = g.target;
     g.orderRows.forEach(r => rows.push([
