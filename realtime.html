@@ -769,7 +769,7 @@ function renderContent() {
       const timeline = buildTimeline(o, me && me.isAdmin);
       const isCarryOver = o.productionDate && !isToday(o.productionDate);
       const carryOverTag = isCarryOver ? '<span class="oc-pill carryover">隔日生產</span>' : '';
-      const scopeTag = o.changeScope ? `<span class="oc-pill scope">${escapeHtml(o.changeScope)}</span>` : '';
+      const scopeTag = o.changeScope ? `<span class="oc-pill scope">${escapeHtml(scopeLabel(o.changeScope))}</span>` : '';
       const hasTags = !!(carryOverTag || scopeTag);
       html += `
         <div class="order-card${isActive ? ' active' : ''}">

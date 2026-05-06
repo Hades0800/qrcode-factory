@@ -797,7 +797,7 @@ function render() {
               ${isAdmin ? `<button class="btn-danger" data-del="${escapeHtml(o.orderNo)}" style="padding:4px 10px;font-size:11px;min-height:24px;" onclick="event.stopPropagation()">刪除</button>` : ''}
             </div>
           </div>
-          ${o.changeScope ? `<div class="rc-tags"><span class="rc-pill scope">${escapeHtml(o.changeScope)}</span></div>` : ''}
+          ${o.changeScope ? `<div class="rc-tags"><span class="rc-pill scope">${escapeHtml(scopeLabel(o.changeScope))}</span></div>` : ''}
         </div>
         <div class="rc-meta" style="margin-top:10px;">
           <span>機台 <strong>${escapeHtml(o.machineNo || '—')}</strong>${o.plannedMachineNo && o.plannedMachineNo !== o.machineNo ? `<span style="color:#a98e44;font-size:11px;margin-left:4px;">（計畫 ${escapeHtml(o.plannedMachineNo)}）</span>` : ''}</span>

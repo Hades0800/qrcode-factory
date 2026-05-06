@@ -163,6 +163,14 @@ function computeOrderPhasesForDay(o, ymd) {
   return { prepSec, prodSec, abnSec };
 }
 
+// 更換範圍符號 → 顯示文字
+function scopeLabel(s) {
+  if (s === '@') return '原料更換';
+  if (s === '#') return '模刀具更換';
+  if (s === '@#') return '原料與模刀具更換';
+  return s || '';
+}
+
 function fmtHHMM(sec) {
   if (!sec || sec < 0) return '00:00';
   const h = Math.floor(sec / 3600);
