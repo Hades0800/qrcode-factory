@@ -1459,7 +1459,7 @@ function renderSteps() {
   const finishCard = document.createElement('div');
   const isFinished = !!order.step11At;
   finishCard.className = 'step' + (isFinished ? ' done' : '');
-  let finishBody = '<div class="title">03. 生產結束' + (isFinished ? '<span class="badge ok">×1</span>' : '') + '</div>';
+  let finishBody = '<div class="title">生產結束' + (isFinished ? '<span class="badge ok">×1</span>' : '') + '</div>';
   finishBody += '<div class="hint">工單完成與結束（含 / 不含附屬設備）</div>';
   if (isFinished) {
     const noteTxt = order.step11Note ? '（' + escapeHtml(order.step11Note) + '）' : '';
@@ -1486,7 +1486,7 @@ function renderSteps() {
   const totalSec   = (p12.totalSec || 0) + (p13.totalSec || 0);
   intCard.className = 'step' + (totalCount > 0 ? ' done' : '');
   intCard.style.borderLeft = '4px solid #f0ad4e';
-  let intBody = '<div class="title">04. 生產中斷' + (totalCount > 0 ? `<span class="badge ok" style="background:#f0ad4e;">×${totalCount}</span>` : '') + '</div>';
+  let intBody = '<div class="title">生產中斷' + (totalCount > 0 ? `<span class="badge ok" style="background:#f0ad4e;">×${totalCount}</span>` : '') + '</div>';
   intBody += '<div class="hint">設備異常停機 ／ 超過1小時以上的停機 ／ 中午休息或下班時間</div>';
   if (activePause) {
     const noteTxt = activePause.info.active.note ? `（${escapeHtml(activePause.info.active.note)}）` : '';
