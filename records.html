@@ -1098,7 +1098,8 @@ function renderSummaryPanel(from, to) {
     const prepMin = Math.round(g.totals.sumPrep / 60);
     const prodMin = Math.round(g.totals.sumProd / 60);
     const abnMin  = Math.round(g.totals.sumAbn  / 60);
-    const prepRate = t.prepMinutes > 0 ? (prepMin / t.prepMinutes * 100).toFixed(1) : '—';
+    // 準備望小（越快越好）→ 用 target/actual；實績望大 → 用 actual/target
+    const prepRate = (t.prepMinutes > 0 && prepMin > 0) ? (t.prepMinutes / prepMin * 100).toFixed(1) : '—';
     const prodRate = t.workMinutes > 0 ? (prodMin / t.workMinutes * 100).toFixed(1) : '—';
     const rowsHtml = g.orderRows.map(r => `
       <tr>
@@ -1165,7 +1166,7 @@ function downloadSummaryCsv(from, to) {
       g.ymd, g.machineId, '【合計】',
       prepMin, prodMin, abnMin,
       t.prepMinutes || '', t.workMinutes || '',
-      t.prepMinutes > 0 ? (prepMin / t.prepMinutes * 100).toFixed(1) + '%' : '',
+      (t.prepMinutes > 0 && prepMin > 0) ? (t.prepMinutes / prepMin * 100).toFixed(1) + '%' : '',
       t.workMinutes > 0 ? (prodMin / t.workMinutes * 100).toFixed(1) + '%' : '',
     ]);
   });

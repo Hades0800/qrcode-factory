@@ -934,7 +934,8 @@ function renderDailySummaryCard(machineId, machineOrders) {
   const prepMin = Math.round(sumPrep / 60);
   const prodMin = Math.round(sumProd / 60);
   const abnMin  = Math.round(sumAbn  / 60);
-  const prepRate = t.prepMinutes > 0 ? (prepMin / t.prepMinutes * 100).toFixed(1) : '—';
+  // 準備望小（越快越好）→ 用 target/actual；實績望大 → 用 actual/target
+  const prepRate = (t.prepMinutes > 0 && prepMin > 0) ? (t.prepMinutes / prepMin * 100).toFixed(1) : '—';
   const prodRate = t.workMinutes > 0 ? (prodMin / t.workMinutes * 100).toFixed(1) : '—';
 
   const rowsHtml = rows.map(r => `
