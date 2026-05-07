@@ -741,24 +741,12 @@
 
   <!-- 更換範圍（第三步） -->
   <div class="card" id="scopeCard" style="display:none;">
-    <h2>選擇符號 <span class="required">第三步</span></h2>
+    <h2>設置準備 <span class="required">第三步</span></h2>
     <div style="display:flex;flex-direction:column;gap:8px;">
-      <button class="scope-choice" data-scope="@" style="display:flex;align-items:center;gap:14px;padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:left;">
-        <span class="scope-sym" style="display:inline-flex;align-items:center;justify-content:center;width:46px;height:36px;background:#fff3cd;color:#b8860b;border-radius:8px;font-weight:800;font-size:18px;flex-shrink:0;">@</span>
-        <span style="font-weight:700;font-size:15px;">原料更換</span>
-      </button>
-      <button class="scope-choice" data-scope="#" style="display:flex;align-items:center;gap:14px;padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:left;">
-        <span class="scope-sym" style="display:inline-flex;align-items:center;justify-content:center;width:46px;height:36px;background:#fff3cd;color:#b8860b;border-radius:8px;font-weight:800;font-size:18px;flex-shrink:0;">#</span>
-        <span style="font-weight:700;font-size:15px;">模刀具更換</span>
-      </button>
-      <button class="scope-choice" data-scope="@#" style="display:flex;align-items:center;gap:14px;padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:left;">
-        <span class="scope-sym" style="display:inline-flex;align-items:center;justify-content:center;width:46px;height:36px;background:#fff3cd;color:#b8860b;border-radius:8px;font-weight:800;font-size:18px;flex-shrink:0;">@#</span>
-        <span style="font-weight:700;font-size:15px;">原料與模刀具更換</span>
-      </button>
-      <button class="scope-choice" data-scope="same" style="display:flex;align-items:center;gap:14px;padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:left;">
-        <span class="scope-sym" style="display:inline-flex;align-items:center;justify-content:center;width:46px;height:36px;background:#f0f0f3;color:var(--muted);border-radius:8px;font-weight:700;font-size:13px;flex-shrink:0;">同前</span>
-        <span style="font-weight:700;font-size:15px;">料模刀沿用前工單</span>
-      </button>
+      <button class="scope-choice" data-scope="@" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:15px;">原料更換</button>
+      <button class="scope-choice" data-scope="#" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:15px;">模刀具更換</button>
+      <button class="scope-choice" data-scope="@#" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:15px;">原料與模刀具更換</button>
+      <button class="scope-choice" data-scope="same" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:15px;">料模刀沿用前工單</button>
       <button class="scope-choice" data-scope="" style="padding:10px;border:1.5px solid var(--border);border-radius:10px;background:#f8f8fa;cursor:pointer;font-weight:600;font-size:13px;color:var(--muted);">清除</button>
     </div>
   </div>
