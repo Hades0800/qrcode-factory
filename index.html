@@ -1475,7 +1475,10 @@ function renderSteps() {
   } else if (isPaused) {
     finishBody += '<button class="btn-success btn-block" disabled>' + icon('check', 16) + ' 暫停中，請先恢復</button>';
   } else {
-    finishBody += `<button id="finishStepBtn" class="btn-success btn-block">${icon('check', 16)} 已完成</button>`;
+    finishBody += `<div style="display:flex;gap:8px;">`;
+    finishBody += `<button id="finishStepBtn" class="btn-success" style="flex:1;">${icon('check', 16)} 已完成</button>`;
+    finishBody += `<button id="finishStepBfBtn" class="btn-secondary" style="flex:0 0 auto;padding:10px 14px;font-size:13px;color:#b8860b;">${icon('edit', 14)} 補登</button>`;
+    finishBody += `</div>`;
   }
   finishCard.innerHTML = `<div class="step-body">${finishBody}</div>`;
   wrap.appendChild(finishCard);
@@ -1641,6 +1644,13 @@ function renderSteps() {
     finishStepBtn.onclick = () => {
       if (isPaused) { toast('請先恢復生產', 'error'); return; }
       showCompleteModal();
+    };
+  }
+  const finishStepBfBtn = document.getElementById('finishStepBfBtn');
+  if (finishStepBfBtn) {
+    finishStepBfBtn.onclick = () => {
+      if (isPaused) { toast('請先恢復生產', 'error'); return; }
+      showCompleteModal(true);
     };
   }
   // 04 生產中斷
@@ -1837,7 +1847,8 @@ async function submitInterruptBackfill() {
 }
 
 // 工單完成 modal（含/不含附屬設備 + 補登時間）
-function showCompleteModal() {
+// prefillBackfill: 從「補登」按鈕進來的話，補登時間區塊預設展開
+function showCompleteModal(prefillBackfill = false) {
   if (!orderNo) return;
   const old = document.getElementById('completeModal');
   if (old) old.remove();
@@ -1853,7 +1864,7 @@ function showCompleteModal() {
         <button class="btn-secondary cmp-opt" data-note="不含附屬設備" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('ban', 18)}<span>不含附屬設備</span></button>
       </div>
       <button id="cmpBackfillToggle" style="width:100%;margin-top:12px;padding:10px;background:none;border:1.5px dashed var(--border);border-radius:10px;color:#b8860b;font-size:13px;cursor:pointer;">${icon('edit', 14)} 補登時間（不填用現在）</button>
-      <div id="cmpBackfillWrap" style="display:none;margin-top:8px;">
+      <div id="cmpBackfillWrap" style="display:${prefillBackfill ? '' : 'none'};margin-top:8px;">
         <input type="datetime-local" id="cmpBackfillTime" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;box-sizing:border-box;">
       </div>
       <button id="completeModalCancel" style="width:100%;margin-top:12px;padding:12px;font-size:14px;background:none;border:1.5px solid var(--border);border-radius:10px;color:var(--muted);cursor:pointer;">取消</button>
@@ -1867,6 +1878,7 @@ function showCompleteModal() {
     const wrap = document.getElementById('cmpBackfillWrap');
     wrap.style.display = wrap.style.display === 'none' ? '' : 'none';
   };
+  if (prefillBackfill) setTimeout(() => document.getElementById('cmpBackfillTime')?.focus(), 50);
 
   modal.querySelectorAll('.cmp-opt').forEach(btn => {
     btn.onclick = async () => {
