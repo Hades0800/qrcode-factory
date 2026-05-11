@@ -404,9 +404,9 @@ await test('bulk-cancel-upload：沒紀錄的工單也只清欄位、不軟刪�
   assert.equal(stored.productSpec, null, 'productSpec 應被清空');
 });
 
-await test('bulk-upload：已有活動的工單，上傳不覆蓋 machineNo（regression）', async () => {
+await test('bulk-upload：已有活動的工單，上傳覆蓋 machineNo（生管要能換機台）', async () => {
   // 情境：班長已在 No3-60 記錄工單 C1，生管重新上傳同一工單但 Excel 寫 No5-40
-  // 期望：machineNo 保持 No3-60（現場為準），plannedMachineNo 記錄 No5-40（原計劃）
+  // 期望：machineNo 跟著 Excel 改成 No5-40（生管的資料庫換機台），plannedMachineNo 同步
   const { fastify, state } = await buildApp(PLANNER);
   const order = await fastify.prisma.order.create({
     data: { orderNo: 'C0000000001', machineNo: 'No3-60', productSpec: 'SPEC-A', dispatchQty: 100 },
@@ -422,8 +422,8 @@ await test('bulk-upload：已有活動的工單，上傳不覆蓋 machineNo（re
   });
   assert.equal(res.statusCode, 200);
   const stored = state.orders.get('C0000000001');
-  assert.equal(stored.machineNo, 'No3-60', 'machineNo 應保持現場設定，不被 Excel 覆寫');
-  assert.equal(stored.plannedMachineNo, 'No5-40', 'plannedMachineNo 應記錄 Excel 上的排定機台');
+  assert.equal(stored.machineNo, 'No5-40', 'machineNo 應跟著 Excel 換成 No5-40');
+  assert.equal(stored.plannedMachineNo, 'No5-40', 'plannedMachineNo 同步改 No5-40');
   assert.equal(stored.dispatchQty, 200, '其他欄位應正常更新');
 });
 

@@ -11,16 +11,6 @@ function hasActivity(o) {
     o.step21At || o.step22At || o.step23At);
 }
 
-// 完整版：同時檢查新格式 stepEntries / pauseEvents（需要 DB 查詢）
-// 新格式紀錄只寫 stepEntry，不寫 stepXAt；只看 hasActivity 會誤判為「沒活動」
-async function hasAnyActivity(prisma, order) {
-  if (hasActivity(order)) return true;
-  const entryCount = await prisma.stepEntry.count({ where: { orderId: order.id } });
-  if (entryCount > 0) return true;
-  const pauseCount = await prisma.pauseEvent.count({ where: { orderId: order.id } });
-  return pauseCount > 0;
-}
-
 // 把任意時間轉成「台灣日期」（UTC 午夜，當作純日期標記）
 function toTaiwanDate(t) {
   const d = t instanceof Date ? t : new Date(t || Date.now());
@@ -738,17 +728,11 @@ export default async function orderRoutes(fastify) {
         if (existing) {
           const specMatch = !existing.productSpec || !data.productSpec || existing.productSpec === data.productSpec;
           if (specMatch) {
-            // 唯一鎖定欄位：machineNo（工單一旦有生產活動就鎖，現場為準）
-            // plannedDate 不鎖（生管修排程隨時都該被反映）；actualStartDate 跟上傳完全無關
-            const hasActivity = await hasAnyActivity(fastify.prisma, existing);
-            const lockMachine = hasActivity && existing.machineNo;
+            // 上傳有值就覆蓋；上傳沒值才保留舊值
+            // 包含 machineNo — 生管要能隨時換機台（即使工單已開工）
             const merged = {};
             for (const key of Object.keys(data)) {
-              if (key === 'machineNo' && lockMachine) {
-                merged[key] = existing.machineNo;
-              } else {
-                merged[key] = (data[key] != null && data[key] !== '') ? data[key] : existing[key];
-              }
+              merged[key] = (data[key] != null && data[key] !== '') ? data[key] : existing[key];
             }
             await fastify.prisma.order.update({ where: { orderNo }, data: merged });
             rawRow.status = 'updated';
