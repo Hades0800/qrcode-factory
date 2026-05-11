@@ -683,10 +683,11 @@ function render() {
         return;
       }
       const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
-      // stepNo 40 / 41：統一顯示為「生產時態（選項）」
+      // stepNo 40 / 41：顯示實際名稱
       if (e.stepNo === '40' || e.stepNo === '41') {
+        const stateName = e.stepNo === '40' ? '生產準備' : '生產開始';
         const noteTxt = e.note ? `（${escapeHtml(e.note)}）` : '';
-        allItems.push({ time: new Date(e.recordedAt), label: '生產時態' + noteTxt + manual, style: 'done' });
+        allItems.push({ time: new Date(e.recordedAt), label: stateName + noteTxt + manual, style: 'done' });
         return;
       }
       const name = entryLabels[e.stepNo] || ('工序'+e.stepNo);

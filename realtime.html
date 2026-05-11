@@ -1014,10 +1014,11 @@ function buildTimeline(o, isAdmin) {
       return;
     }
     const suffix = (e.isManual ? '（補登）' : '');
-    // stepNo 40 / 41：統一顯示為「生產時態（選項）」
+    // stepNo 40 / 41：顯示實際名稱
     if (e.stepNo === '40' || e.stepNo === '41') {
+      const stateName = e.stepNo === '40' ? '生產準備' : '生產開始';
       const noteTxt = e.note ? '（' + e.note + '）' : '';
-      items.push({ time: new Date(e.recordedAt), label: '生產時態' + noteTxt + suffix, type: 'step', entryId: e.id });
+      items.push({ time: new Date(e.recordedAt), label: stateName + noteTxt + suffix, type: 'step', entryId: e.id });
       return;
     }
     const labelMap = {'1':'原料準備與設置','2':'模刀具準備與安裝','3':'試模與規格品質確認','4':'穩定連續生產-無中斷','5':'穩定連續生產-中斷調整','8':'穩定連續生產-中斷多次','6':'後工程接續生產','7':'其他作業','21':'設備啓動準備','22':'生產準備完成','23':'生產無工令'};
