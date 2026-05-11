@@ -1386,6 +1386,17 @@ function renderSteps() {
     <h2 style="margin-top:16px;">工序進度</h2>
   `;
 
+  // 與上一張工單時間銜接：本單第一筆 40/41 必須是 prevMachineEndAt + 1 分鐘
+  const hasStableEntry = !!(entriesByStep['40']?.length || entriesByStep['41']?.length);
+  const prevEnd = order.prevMachineEndAt ? new Date(order.prevMachineEndAt) : null;
+  const lockStableTime = !hasStableEntry && !!prevEnd && !isNaN(prevEnd);
+  const forcedTime = prevEnd ? new Date(prevEnd.getTime() + 60000) : null;
+  const pad = n => String(n).padStart(2, '0');
+  const forcedYmd = forcedTime ? `${forcedTime.getFullYear()}-${pad(forcedTime.getMonth()+1)}-${pad(forcedTime.getDate())}` : '';
+  const forcedHM = forcedTime ? `${pad(forcedTime.getHours())}:${pad(forcedTime.getMinutes())}` : '';
+  const forcedDisplay = forcedTime ? `${pad(forcedTime.getMonth()+1)}/${pad(forcedTime.getDate())} ${pad(forcedTime.getHours())}:${pad(forcedTime.getMinutes())}` : '';
+  const prevEndDisplay = prevEnd ? `${pad(prevEnd.getMonth()+1)}/${pad(prevEnd.getDate())} ${pad(prevEnd.getHours())}:${pad(prevEnd.getMinutes())}` : '';
+
   STEPS.forEach(s => {
     const entries = entriesByStep[s.id] || [];
     const hasEntries = entries.length > 0;
@@ -1438,13 +1449,23 @@ function renderSteps() {
       if (isPaused) {
         body += '<button class="btn-success btn-block" disabled>' + icon('check', 16) + ' 已完成</button>';
       } else {
+        const isLockedStable = (s.id === '40' || s.id === '41') && lockStableTime;
+        if (isLockedStable) {
+          body += `<div style="background:#fff8e8;border:1.5px dashed #f0ad4e;border-radius:8px;padding:8px 10px;font-size:12px;color:#8a6d3b;margin-bottom:8px;line-height:1.5;">📌 與上一張工單時間銜接<br>上一張結束於 <b>${prevEndDisplay}</b>，本單第一筆「${escapeHtml(titleText)}」自動鎖定為 <b>${forcedDisplay}</b></div>`;
+        }
         body += `<div style="display:flex;gap:8px;">`;
         body += `<button class="btn-success" style="flex:1;" data-record-step="${s.id}"${s.fixedNote ? ` data-note="${escapeHtml(s.fixedNote)}"` : ''}>${icon('check', 16)} 已完成</button>`;
         body += `<button class="btn-secondary" data-backfill="${s.id}" style="flex:0 0 auto;padding:10px 14px;font-size:13px;color:#b8860b;">${icon('edit', 14)} 補登</button>`;
         body += `</div>`;
         body += `<div class="backfill-form" id="backfill-${s.id}" style="display:none;">`;
-        body += `<input type="date" id="bf-date-${s.id}" value="${todayYmd()}">`;
-        body += `<input type="time" id="bf-time-${s.id}" step="60" value="">`;
+        if (isLockedStable) {
+          body += `<input type="date" id="bf-date-${s.id}" value="${forcedYmd}" disabled style="background:#f5f5f7;color:#8a6d3b;">`;
+          body += `<input type="time" id="bf-time-${s.id}" step="60" value="${forcedHM}" disabled style="background:#f5f5f7;color:#8a6d3b;">`;
+          body += `<div style="font-size:11px;color:#8a6d3b;">⚓ 時間已鎖定（銜接上一張工單）</div>`;
+        } else {
+          body += `<input type="date" id="bf-date-${s.id}" value="${todayYmd()}">`;
+          body += `<input type="time" id="bf-time-${s.id}" step="60" value="">`;
+        }
         body += `<button class="btn-primary" data-backfill-submit="${s.id}">確認補登</button>`;
         body += `<button class="btn-secondary" data-backfill-cancel="${s.id}">取消</button>`;
         body += `</div>`;
@@ -1724,7 +1745,11 @@ async function backfillStepEntry(stepNo) {
   if (!r.ok) { toast(r.error, 'error'); return; }
   order = r.data.order;
   renderSteps();
-  toast('✓ 已補登（標記為補登）', 'success');
+  if (r.data.forcedFromPrev && r.data.entry) {
+    toast('⚓ 已自動銜接上一張工單時間：' + fmtTime(r.data.entry.recordedAt), 'success');
+  } else {
+    toast('✓ 已補登（標記為補登）', 'success');
+  }
 }
 
 // 記錄工序（日誌式，可重複）
@@ -1745,7 +1770,11 @@ async function recordStepEntry(stepNo) {
   if (!r.ok) { toast(r.error, 'error'); return; }
   order = r.data.order;
   renderSteps();
-  toast('✓ ' + (stepDef ? stepDef.title : '工序 ' + stepNo), 'success');
+  if (r.data.forcedFromPrev && r.data.entry) {
+    toast('⚓ 已自動銜接上一張工單時間：' + fmtTime(r.data.entry.recordedAt), 'success');
+  } else {
+    toast('✓ ' + (stepDef ? stepDef.title : '工序 ' + stepNo), 'success');
+  }
 }
 
 // 取消工序紀錄（5 分鐘內）

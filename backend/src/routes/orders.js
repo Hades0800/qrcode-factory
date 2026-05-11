@@ -39,6 +39,29 @@ async function setActualStartDate(fastify, order, eventTime) {
   });
 }
 
+// 找出同機台上一張已完成工單的結束時間（step11At）
+// 用途：強制下一張工單的第一筆生產時態接續在上一張結束的下一分鐘
+async function getPrevMachineEndAt(prisma, order) {
+  if (!order || !order.machineNo) return null;
+  const prev = await prisma.order.findFirst({
+    where: {
+      machineNo: order.machineNo,
+      step11At: { not: null },
+      id: { not: order.id },
+    },
+    orderBy: { step11At: 'desc' },
+    select: { step11At: true },
+  });
+  return prev?.step11At || null;
+}
+
+// 序列化工單並附上「上一張同機台完成時間」— 避免每個 endpoint 都要寫兩行
+async function serializeWithPrev(prisma, order) {
+  if (!order) return null;
+  order.prevMachineEndAt = await getPrevMachineEndAt(prisma, order);
+  return serializeOrder(order);
+}
+
 async function audit(prisma, request, action, target, detail) {
   try {
     await prisma.auditLog.create({
@@ -120,6 +143,8 @@ function serializeOrder(o) {
       note: e.note || null,
       leaderName: e.leaderName,
     })),
+    // 同機台上一張已完成工單的結束時間（強制接續用；由 caller 預先附上）
+    prevMachineEndAt: o.prevMachineEndAt || null,
     createdAt: o.createdAt,
     updatedAt: o.updatedAt,
   };
@@ -282,7 +307,7 @@ export default async function orderRoutes(fastify) {
         }
       }
     }
-    return { order: serializeOrder(order), wasCreated };
+    return { order: await serializeWithPrev(fastify.prisma, order), wasCreated };
   });
 
   // 記錄工序（可重複，日誌式；支援補登自訂時間）
@@ -316,6 +341,22 @@ export default async function orderRoutes(fastify) {
       }
       time = parsed;
     }
+    // 強制接續：本單第一筆生產時態（40/41）必須是上一張同機台已完成工單的下一分鐘
+    let forcedFromPrev = false;
+    let forcedPrevEnd = null;
+    if ((stepNo === '40' || stepNo === '41') && order.machineNo) {
+      const existingStable = await fastify.prisma.stepEntry.findFirst({
+        where: { orderId: order.id, stepNo: { in: ['40', '41'] } },
+      });
+      if (!existingStable) {
+        const prevEnd = await getPrevMachineEndAt(fastify.prisma, order);
+        if (prevEnd) {
+          time = new Date(new Date(prevEnd).getTime() + 60000);
+          forcedFromPrev = true;
+          forcedPrevEnd = prevEnd;
+        }
+      }
+    }
     await setActualStartDate(fastify, order, time);
     const entry = await fastify.prisma.stepEntry.create({
       data: {
@@ -323,14 +364,14 @@ export default async function orderRoutes(fastify) {
         stepNo,
         seq: prevCount + 1,
         recordedAt: time,
-        isManual,
+        isManual: isManual || forcedFromPrev,
         note,
         leaderId: request.user.id,
         leaderName: request.user.displayName || null,
       },
     });
     const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
-    return { entry, order: serializeOrder(updated) };
+    return { entry, order: await serializeWithPrev(fastify.prisma, updated), forcedFromPrev, forcedPrevEnd };
   });
 
   // 取消工序紀錄（5 分鐘內）
@@ -346,7 +387,7 @@ export default async function orderRoutes(fastify) {
     await fastify.prisma.stepEntry.delete({ where: { id } });
     const orderNo = String(request.params.orderNo || '').toUpperCase();
     const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
-    return { ok: true, order: updated ? serializeOrder(updated) : null };
+    return { ok: true, order: updated ? await serializeWithPrev(fastify.prisma, updated) : null };
   });
 
   // 設定機台號
@@ -371,7 +412,7 @@ export default async function orderRoutes(fastify) {
       data: { machineNo: clipStr(String(machineNo).trim(), 60), leaderId: request.user.id },
       include: ORDER_INCLUDE,
     });
-    return { order: serializeOrder(updated) };
+    return { order: await serializeWithPrev(fastify.prisma, updated) };
   });
 
   // 設定規格類型（現場技術員選擇）
@@ -487,7 +528,7 @@ export default async function orderRoutes(fastify) {
       });
       return reply.code(409).send({
         error: `此項目已記錄過：${order[cols.time].toISOString()}`,
-        order: serializeOrder(existing),
+        order: await serializeWithPrev(fastify.prisma, existing),
       });
     }
 
@@ -515,7 +556,7 @@ export default async function orderRoutes(fastify) {
       data: updateData,
       include: ORDER_INCLUDE,
     });
-    return { order: serializeOrder(updated) };
+    return { order: await serializeWithPrev(fastify.prisma, updated) };
   });
 
   // 取消某步驟
@@ -537,7 +578,7 @@ export default async function orderRoutes(fastify) {
       data: updateData,
       include: ORDER_INCLUDE,
     });
-    return { order: serializeOrder(updated) };
+    return { order: await serializeWithPrev(fastify.prisma, updated) };
   });
 
   // 開始暫停 / 異常
@@ -558,7 +599,7 @@ export default async function orderRoutes(fastify) {
       data: { orderId: order.id, type, note: clipStr(note, 500), activeStep: clipStr(activeStep, 100) },
     });
     const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
-    return { order: serializeOrder(updated) };
+    return { order: await serializeWithPrev(fastify.prisma, updated) };
   });
 
   // 恢復（結束暫停）
@@ -582,7 +623,7 @@ export default async function orderRoutes(fastify) {
       data: { endAt: now, duration },
     });
     const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
-    return { order: serializeOrder(updated), resumed: { type, duration } };
+    return { order: await serializeWithPrev(fastify.prisma, updated), resumed: { type, duration } };
   });
 
   // 補登暫停（已結束的暫停事件）
@@ -606,7 +647,7 @@ export default async function orderRoutes(fastify) {
       data: { orderId: order.id, type, note: clipStr(backfillNote, 500), startAt, endAt, duration },
     });
     const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
-    return { ok: true, order: serializeOrder(updated) };
+    return { ok: true, order: await serializeWithPrev(fastify.prisma, updated) };
   });
 
   // 批次上傳工單（生管 or 管理員）
