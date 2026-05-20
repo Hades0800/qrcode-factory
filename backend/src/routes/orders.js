@@ -127,6 +127,8 @@ function serializeOrder(o) {
     productionDate: o.actualStartDate || o.plannedDate || o.productionDate || null,
     specType: o.specType || null,           // 'new' | 'mass' | null
     difficultyFactor: o.difficultyFactor || null,  // 新製規格才有
+    // 新製規格的差異項目陣列：['raw','mold','dim'] 之子集合（由逗號字串解析）
+    newSpecAspects: o.newSpecAspects ? String(o.newSpecAspects).split(',').filter(Boolean) : [],
     changeScope: o.changeScope || null,      // '@' | '#' | '@#' | null
     materialType: o.materialType || null,    // 'coil'(1.0) | 'plate'(1.2) | null
     productSpec: o.productSpec || '',
@@ -423,27 +425,37 @@ export default async function orderRoutes(fastify) {
 
   // 設定規格類型（現場技術員選擇）
   // 用 raw SQL 寫入避免 Prisma client 沒 regenerate 時拋錯
-  // body: { specType: 'new' | 'mass', difficultyFactor?: 1.1~1.6 }
+  // body: {
+  //   specType: 'new' | 'mass',
+  //   aspects?: ['raw'|'mold'|'dim',...]   // 新製規格才有意義；存成逗號字串
+  // }
   fastify.post('/:orderNo/spec-type', async (request, reply) => {
     try {
       const orderNo = String(request.params.orderNo || '').toUpperCase();
-      const { specType } = request.body || {};
+      const { specType, aspects } = request.body || {};
       if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
       if (!['new', 'mass'].includes(specType)) {
         return reply.code(400).send({ error: '無效規格類型（需為 new 或 mass）' });
       }
-      // 先確保欄位存在（idempotent，沒有就建、有就略過）—— 為了在 prisma client 沒 regenerate 的環境也能跑
+      // 整理 aspects：只對「新製」有效；只接受 raw / mold / dim 三個 key
+      const ALLOWED_ASPECTS = ['raw', 'mold', 'dim'];
+      let aspectsStr = null;
+      if (specType === 'new' && Array.isArray(aspects)) {
+        const cleaned = aspects.filter(a => ALLOWED_ASPECTS.includes(a));
+        // 保持固定順序便於後續顯示
+        aspectsStr = ALLOWED_ASPECTS.filter(a => cleaned.includes(a)).join(',') || null;
+      }
+      // 確保欄位存在（idempotent）
       await fastify.prisma.$executeRawUnsafe(
-        'ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "specType" TEXT, ADD COLUMN IF NOT EXISTS "difficultyFactor" DOUBLE PRECISION'
+        'ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "specType" TEXT, ADD COLUMN IF NOT EXISTS "difficultyFactor" DOUBLE PRECISION, ADD COLUMN IF NOT EXISTS "newSpecAspects" TEXT'
       );
-      // 設 specType 並一併把 difficultyFactor 清空（係數已棄用）
       const result = await fastify.prisma.$executeRaw`
         UPDATE "Order"
-        SET "specType" = ${specType}, "difficultyFactor" = NULL
+        SET "specType" = ${specType}, "difficultyFactor" = NULL, "newSpecAspects" = ${aspectsStr}
         WHERE "orderNo" = ${orderNo}
       `;
       if (result === 0) return reply.code(404).send({ error: '找不到工單' });
-      return { ok: true, specType, difficultyFactor: null };
+      return { ok: true, specType, difficultyFactor: null, newSpecAspects: aspectsStr };
     } catch (e) {
       request.log.error(e, 'spec-type failed');
       return reply.code(500).send({

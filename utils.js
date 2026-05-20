@@ -230,6 +230,13 @@ function computeOrderPhasesForDay(o, ymd) {
   return { prepSec, prodSec, abnSec };
 }
 
+// 新製規格差異項目 key → 顯示文字
+const NEW_SPEC_ASPECT_LABELS = { raw: '原料不同', mold: '模具不同', dim: '長寬不同' };
+function formatNewSpecAspects(aspects) {
+  if (!Array.isArray(aspects) || aspects.length === 0) return '';
+  return aspects.map(k => NEW_SPEC_ASPECT_LABELS[k] || k).join('、');
+}
+
 // 更換範圍符號 → 顯示文字
 function scopeLabel(s) {
   if (s === '@') return '原料更換';
