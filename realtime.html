@@ -938,8 +938,10 @@ function renderDailySummaryCard(machineId, machineOrders) {
   const prepRate = (t.prepMinutes > 0 && prepMin > 0) ? (t.prepMinutes / prepMin * 100).toFixed(1) : '—';
   const prodRate = t.workMinutes > 0 ? (prodMin / t.workMinutes * 100).toFixed(1) : '—';
 
-  // 生產效益率 = 生產實績 / 生產準備（％）；準備為 0 時顯示 —
-  const effRate = (prepMin, prodMin) => prepMin > 0 ? (prodMin / prepMin * 100).toFixed(1) + '%' : '—';
+  // 生產效益率 = 生產實績 / 生產準備（比值，小數 2 位，例：1.40）
+  // 對照各機台目標：1.40 (No1) / 0.78 (No2) / 2.00 (No3, No4) / 7.00 (No5, No6)
+  const effRate = (prepMin, prodMin) => prepMin > 0 ? (prodMin / prepMin).toFixed(2) : '—';
+  const targetEff = (t.prepMinutes > 0 && t.workMinutes > 0) ? (t.workMinutes / t.prepMinutes).toFixed(2) : null;
   const rowsHtml = rows.map(r => {
     const rPrep = Math.round(r.prepSec / 60);
     const rProd = Math.round(r.prodSec / 60);
@@ -958,7 +960,7 @@ function renderDailySummaryCard(machineId, machineOrders) {
     <div class="card" style="margin-bottom:12px;">
       <h3 style="margin:0 0 4px;">本日匯總 · ${escapeHtml(machineId)}</h3>
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">
-        目標 — 生產準備 ${t.prepMinutes} 分／生產實績 ${t.workMinutes} 分
+        目標 — 生產準備 ${t.prepMinutes} 分／生產實績 ${t.workMinutes} 分${targetEff ? '／生產效益率 ' + targetEff : ''}
       </div>
       <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;">
       <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:500px;">
@@ -977,7 +979,7 @@ function renderDailySummaryCard(machineId, machineOrders) {
             <td style="padding:6px 8px;font-weight:700;color:var(--muted);font-size:12px;">合計（分）</td>
             <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${prepMin}</td>
             <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${prodMin}</td>
-            <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${effRate(prepMin, prodMin)}</td>
+            <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;${targetEff && effRate(prepMin, prodMin) !== '—' && parseFloat(effRate(prepMin, prodMin)) >= parseFloat(targetEff) ? 'color:var(--success);' : 'color:var(--brand);'}">${effRate(prepMin, prodMin)}${targetEff ? ' / ' + targetEff : ''}</td>
             <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${abnMin}</td>
           </tr>
           <tr>

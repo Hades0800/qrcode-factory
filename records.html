@@ -1102,8 +1102,10 @@ function renderSummaryPanel(from, to) {
     // 準備望小（越快越好）→ 用 target/actual；實績望大 → 用 actual/target
     const prepRate = (t.prepMinutes > 0 && prepMin > 0) ? (t.prepMinutes / prepMin * 100).toFixed(1) : '—';
     const prodRate = t.workMinutes > 0 ? (prodMin / t.workMinutes * 100).toFixed(1) : '—';
-    // 生產效益率 = 生產實績 / 生產準備（％）；準備為 0 時顯示 —
-    const effRate = (pPrep, pProd) => pPrep > 0 ? (pProd / pPrep * 100).toFixed(1) + '%' : '—';
+    // 生產效益率 = 生產實績 / 生產準備（比值，小數 2 位）
+    // 對照各機台目標：1.40 (No1) / 0.78 (No2) / 2.00 (No3, No4) / 7.00 (No5, No6)
+    const effRate = (pPrep, pProd) => pPrep > 0 ? (pProd / pPrep).toFixed(2) : '—';
+    const targetEff = (t.prepMinutes > 0 && t.workMinutes > 0) ? (t.workMinutes / t.prepMinutes).toFixed(2) : null;
     const rowsHtml = g.orderRows.map(r => {
       const rPrep = Math.round(r.prepSec / 60);
       const rProd = Math.round(r.prodSec / 60);
@@ -1121,7 +1123,7 @@ function renderSummaryPanel(from, to) {
       <div style="margin-top:14px;">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
           <strong style="font-size:14px;">${escapeHtml(g.ymd)} · ${escapeHtml(g.machineId)}</strong>
-          <span style="font-size:11px;color:var(--muted);">目標 — 準備 ${t.prepMinutes || '—'} / 實績 ${t.workMinutes || '—'} 分</span>
+          <span style="font-size:11px;color:var(--muted);">目標 — 準備 ${t.prepMinutes || '—'} / 實績 ${t.workMinutes || '—'} 分${targetEff ? ' / 效益率 ' + targetEff : ''}</span>
         </div>
         <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;">
         <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:500px;">
@@ -1140,7 +1142,7 @@ function renderSummaryPanel(from, to) {
               <td style="padding:6px 8px;font-weight:700;color:var(--muted);font-size:12px;">合計（分）</td>
               <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${prepMin}</td>
               <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${prodMin}</td>
-              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${effRate(prepMin, prodMin)}</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;${targetEff && effRate(prepMin, prodMin) !== '—' && parseFloat(effRate(prepMin, prodMin)) >= parseFloat(targetEff) ? 'color:var(--success);' : 'color:var(--brand);'}">${effRate(prepMin, prodMin)}${targetEff ? ' / ' + targetEff : ''}</td>
               <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${abnMin}</td>
             </tr>
             <tr>
@@ -1162,16 +1164,17 @@ function renderSummaryPanel(from, to) {
 function downloadSummaryCsv(from, to) {
   const groups = buildSummaryGroups(from, to);
   if (!groups || groups.length === 0) { toast('區間內沒有資料', 'error'); return; }
-  const rows = [['日期','機台','工單','準備(分)','實績(分)','生產效益率','異常(分)','準備目標(分)','實績目標(分)','準備達成度','實績達成度']];
-  const eff = (p, q) => p > 0 ? (q / p * 100).toFixed(1) + '%' : '';
+  const rows = [['日期','機台','工單','準備(分)','實績(分)','生產效益率','效益率目標','異常(分)','準備目標(分)','實績目標(分)','準備達成度','實績達成度']];
+  const eff = (p, q) => p > 0 ? (q / p).toFixed(2) : '';
   groups.forEach(g => {
     const t = g.target;
+    const targetEff = (t.prepMinutes > 0 && t.workMinutes > 0) ? (t.workMinutes / t.prepMinutes).toFixed(2) : '';
     g.orderRows.forEach(r => {
       const rPrep = Math.round(r.prepSec / 60);
       const rProd = Math.round(r.prodSec / 60);
       rows.push([
         g.ymd, g.machineId, r.orderNo,
-        rPrep, rProd, eff(rPrep, rProd), Math.round(r.abnSec / 60),
+        rPrep, rProd, eff(rPrep, rProd), targetEff, Math.round(r.abnSec / 60),
         '', '', '', ''
       ]);
     });
@@ -1180,7 +1183,7 @@ function downloadSummaryCsv(from, to) {
     const abnMin  = Math.round(g.totals.sumAbn  / 60);
     rows.push([
       g.ymd, g.machineId, '【合計】',
-      prepMin, prodMin, eff(prepMin, prodMin), abnMin,
+      prepMin, prodMin, eff(prepMin, prodMin), targetEff, abnMin,
       t.prepMinutes || '', t.workMinutes || '',
       (t.prepMinutes > 0 && prepMin > 0) ? (t.prepMinutes / prepMin * 100).toFixed(1) + '%' : '',
       t.workMinutes > 0 ? (prodMin / t.workMinutes * 100).toFixed(1) + '%' : '',
