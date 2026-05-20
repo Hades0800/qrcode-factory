@@ -111,7 +111,8 @@ const MACHINE_TARGETS = {
 
 // 一張工單在「特定一天」內的工時分配（秒）— 跨日工單會被切片
 // ymd = 'YYYY-MM-DD'（瀏覽器本地時區）
-// prep = 第一筆活動 → 第一筆 stepNo='40' 之間，與當日重疊的部分
+// prep = 第一筆活動（含 step 40）→ 第一筆 stepNo='41' 之間，與當日重疊
+//        (沒記 41 就用 step11At；都沒就用現在 — 表示還在準備中)
 // prod = 第一筆 stepNo='41' → step11At 或現在，與當日重疊，再扣與當日重疊的暫停秒數
 // abn  = pause13 history 與當日重疊的總秒數
 function computeOrderPhasesForDay(o, ymd) {
@@ -130,12 +131,14 @@ function computeOrderPhasesForDay(o, ymd) {
   const firstActivity = allTimes.length > 0
     ? allTimes[0]
     : (o.actualStartDate ? new Date(o.actualStartDate).getTime() : null);
-  const prepFirst = entries.filter(e => e.stepNo === '40')
-    .map(e => new Date(e.recordedAt).getTime()).sort((a, b) => a - b)[0];
   const prodFirst = entries.filter(e => e.stepNo === '41')
     .map(e => new Date(e.recordedAt).getTime()).sort((a, b) => a - b)[0];
 
-  const prepSec = (firstActivity != null && prepFirst != null) ? clip(firstActivity, prepFirst) : 0;
+  // prep 結束點：優先 step 41，其次 step 11（工單在 prep 階段就完成），最後是現在
+  const prepEnd = prodFirst != null
+    ? prodFirst
+    : (o.step11At ? new Date(o.step11At).getTime() : Date.now());
+  const prepSec = (firstActivity != null) ? clip(firstActivity, prepEnd) : 0;
 
   let prodSec = 0;
   if (prodFirst != null) {
