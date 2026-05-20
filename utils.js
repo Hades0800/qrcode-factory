@@ -110,53 +110,106 @@ const MACHINE_TARGETS = {
 };
 
 // 一張工單在「特定一天」內的工時分配（秒）
-// 計算原則：只看「今日範圍內的事件」當錨點，不從前一日的活動延伸進來。
-//   prep = 今日第一筆活動 → 今日第一筆 step 41（或今日 step 11、或今日最後活動）
-//   prod = 今日第一筆 step 41 → 今日 step 11（或今日最後活動），扣掉今日範圍重疊的暫停
-//   abn  = pause13 history 與當日重疊的總秒數
+// 規則（兼顧 1) 同日進出 2) 跨日繼續生產 3) 不要被閒置工單灌水）：
+//   prep:
+//     - step 41 已在更早日期記過 → 今日 prep = 0（前一日就結束 prep 階段）
+//     - 今日有 step 41 → prep = 今日第一筆活動 → 今日 step 41
+//     - 還沒記過 step 41 → prep = 今日第一筆活動 → (今日 step 11 / 今日最後活動)
+//   prod:
+//     - 今日有 step 41 → prod = 今日 step 41 → (今日 step 11 / 今日最後活動)
+//     - step 41 在更早日期、step 11 未記 → 今日仍在生產
+//         prod 起點 = 今日第一筆 pause endAt（恢復生產時間）／否則用 dayStart
+//         prod 終點 = (今日 step 11 / 今日最後活動 / Date.now()，取最後者)
+//     - step 41 在更早日期、step 11 在今日 → prod = dayStart → step 11
+//     扣掉今日範圍內的暫停秒數
+//   abn = pause13 history 與當日重疊
 function computeOrderPhasesForDay(o, ymd) {
   const dayStart = new Date(ymd + 'T00:00:00').getTime();
-  const dayEnd = dayStart + 86400000; // 24h
-  // 把 [start, end] 跟當日交集後換算成秒（給 pause 算重疊用）
+  const dayEnd = dayStart + 86400000;
   function clip(start, end) {
     if (start == null || end == null || end <= start) return 0;
     const a = Math.max(start, dayStart);
     const b = Math.min(end, dayEnd);
     return b > a ? Math.max(0, Math.round((b - a) / 1000)) : 0;
   }
+  const inToday = (t) => t != null && t >= dayStart && t < dayEnd;
 
   const entries = o.stepEntries || [];
-  // 只看「今日範圍內」的 stepEntries
-  const todayEntries = entries.filter(e => {
-    const t = new Date(e.recordedAt).getTime();
-    return t >= dayStart && t < dayEnd;
-  });
-  const todayTimes = todayEntries.map(e => new Date(e.recordedAt).getTime()).sort((a, b) => a - b);
-  const todayFirst = todayTimes.length > 0 ? todayTimes[0] : null;
-  const todayLast = todayTimes.length > 0 ? todayTimes[todayTimes.length - 1] : null;
-  const todayProdFirst = todayEntries.filter(e => e.stepNo === '41')
-    .map(e => new Date(e.recordedAt).getTime()).sort((a, b) => a - b)[0] || null;
-  // step 11 是否在今日範圍內
-  const step11Ms = o.step11At ? new Date(o.step11At).getTime() : null;
-  const todayStep11 = (step11Ms != null && step11Ms >= dayStart && step11Ms < dayEnd) ? step11Ms : null;
+  const allPauses = [
+    ...((o.pause12 && o.pause12.history) || []),
+    ...((o.pause13 && o.pause13.history) || []),
+  ];
 
-  // prep
-  let prepSec = 0;
-  if (todayFirst != null) {
-    const prepEnd = todayProdFirst != null
-      ? todayProdFirst
-      : (todayStep11 != null ? todayStep11 : todayLast);
-    prepSec = Math.max(0, Math.round((prepEnd - todayFirst) / 1000));
+  // 蒐集今日範圍內的事件（用來判斷今日是否有任何活動）
+  const todayEventTimes = [];
+  entries.forEach(e => { const t = new Date(e.recordedAt).getTime(); if (inToday(t)) todayEventTimes.push(t); });
+  allPauses.forEach(p => {
+    if (p.startAt && inToday(new Date(p.startAt).getTime())) todayEventTimes.push(new Date(p.startAt).getTime());
+    if (p.endAt && inToday(new Date(p.endAt).getTime())) todayEventTimes.push(new Date(p.endAt).getTime());
+  });
+  const step11Ms = o.step11At ? new Date(o.step11At).getTime() : null;
+  if (inToday(step11Ms)) todayEventTimes.push(step11Ms);
+
+  // 今日完全沒有任何實際事件 → 不算進今日匯總（避免閒置工單灌水）
+  if (todayEventTimes.length === 0) {
+    return { prepSec: 0, prodSec: 0, abnSec: 0 };
   }
 
-  // prod
+  // step 41 全域
+  const allStep41Times = entries.filter(e => e.stepNo === '41')
+    .map(e => new Date(e.recordedAt).getTime())
+    .sort((a, b) => a - b);
+  const firstStep41Any = allStep41Times[0] || null;
+  const todayStep41 = allStep41Times.find(t => inToday(t)) || null;
+  const step41WasBefore = firstStep41Any != null && firstStep41Any < dayStart;
+  const todayStep11 = inToday(step11Ms) ? step11Ms : null;
+
+  // 今日 stepEntries
+  const todayEntryTimes = entries
+    .map(e => new Date(e.recordedAt).getTime())
+    .filter(t => inToday(t))
+    .sort((a, b) => a - b);
+  const todayFirstEntry = todayEntryTimes[0] || null;
+  const todayLastEvent = todayEventTimes.length > 0 ? Math.max(...todayEventTimes) : null;
+
+  // ── PREP ──
+  let prepSec = 0;
+  if (!step41WasBefore && todayFirstEntry != null) {
+    const prepEnd = todayStep41 != null
+      ? todayStep41
+      : (todayStep11 != null ? todayStep11 : todayLastEvent);
+    if (prepEnd != null) {
+      prepSec = Math.max(0, Math.round((prepEnd - todayFirstEntry) / 1000));
+    }
+  }
+
+  // ── PROD ──
   let prodSec = 0;
-  if (todayProdFirst != null) {
-    const prodEnd = todayStep11 != null ? todayStep11 : todayLast;
-    const grossProd = Math.max(0, Math.round((prodEnd - todayProdFirst) / 1000));
-    // 扣掉與今日範圍重疊的暫停
+  let prodStart = null;
+  let prodEnd = null;
+  if (todayStep41 != null) {
+    prodStart = todayStep41;
+    prodEnd = todayStep11 != null ? todayStep11 : todayLastEvent;
+  } else if (step41WasBefore) {
+    // 跨日繼續生產 — 找今日第一筆 pause endAt（恢復生產）；沒有就用 dayStart
+    const todayResumes = allPauses
+      .filter(p => p.endAt && inToday(new Date(p.endAt).getTime()))
+      .map(p => new Date(p.endAt).getTime())
+      .sort((a, b) => a - b);
+    prodStart = todayResumes[0] != null ? todayResumes[0] : dayStart;
+    if (todayStep11 != null) {
+      prodEnd = todayStep11;
+    } else {
+      // 今日仍在生產中：用今日最後事件，但至少到 Date.now()（若今日有任何活動）
+      prodEnd = todayLastEvent != null
+        ? Math.max(todayLastEvent, Math.min(Date.now(), dayEnd))
+        : Math.min(Date.now(), dayEnd);
+    }
+  }
+  if (prodStart != null && prodEnd != null && prodEnd > prodStart) {
+    const grossProd = Math.round((prodEnd - prodStart) / 1000);
     let pauseInDay = 0;
-    [...((o.pause12 && o.pause12.history) || []), ...((o.pause13 && o.pause13.history) || [])].forEach(p => {
+    allPauses.forEach(p => {
       if (!p.startAt) return;
       const ps = new Date(p.startAt).getTime();
       const pe = p.endAt ? new Date(p.endAt).getTime() : Date.now();
@@ -165,7 +218,7 @@ function computeOrderPhasesForDay(o, ymd) {
     prodSec = Math.max(0, grossProd - pauseInDay);
   }
 
-  // abn — 異常停線（pause13）的當日重疊
+  // ── ABN（異常停線 pause13 與當日重疊）──
   let abnSec = 0;
   ((o.pause13 && o.pause13.history) || []).forEach(p => {
     if (!p.startAt) return;
