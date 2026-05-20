@@ -175,14 +175,28 @@ function computeOrderPhasesForDay(o, ymd) {
   // ── PREP ──
   // 規則：只要今日有 stepEntry，就算今日的 prep（從今日第一筆 → 今日 step 41/11/最後活動）。
   // 跨日繼續生產但今日又重新走一次 prep + step 41 流程的場景（換規格、補登）也能正確算到。
+  // 扣掉與 prep 區間重疊的暫停（午休等），跟 prod 的計算一致。
   let prepSec = 0;
+  let prepStart = null;
+  let prepEnd = null;
   if (todayFirstEntry != null) {
-    const prepEnd = todayStep41 != null
+    prepStart = todayFirstEntry;
+    prepEnd = todayStep41 != null
       ? todayStep41
       : (todayStep11 != null ? todayStep11 : todayLastEvent);
-    if (prepEnd != null) {
-      prepSec = Math.max(0, Math.round((prepEnd - todayFirstEntry) / 1000));
-    }
+  }
+  if (prepStart != null && prepEnd != null && prepEnd > prepStart) {
+    const grossPrep = Math.round((prepEnd - prepStart) / 1000);
+    let pauseInPrep = 0;
+    allPauses.forEach(p => {
+      if (!p.startAt) return;
+      const ps = new Date(p.startAt).getTime();
+      const pe = p.endAt ? new Date(p.endAt).getTime() : Date.now();
+      const a = Math.max(ps, prepStart);
+      const b = Math.min(pe, prepEnd);
+      if (b > a) pauseInPrep += Math.round((b - a) / 1000);
+    });
+    prepSec = Math.max(0, grossPrep - pauseInPrep);
   }
 
   // 「進行中」門檻：最後活動 1 小時內才視為現在還在做（延伸 prod 到當下）；
