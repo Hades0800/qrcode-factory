@@ -312,6 +312,18 @@ function fmtHHMM(sec) {
   return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
 }
 
+// 工單對指定日期而言是否為「隔日生產」 = 最早事件落在指定日期之前
+function isCrossDayOrder(o, ymd) {
+  const dayStart = new Date(ymd + 'T00:00:00').getTime();
+  const times = [];
+  if (o.actualStartDate) times.push(new Date(o.actualStartDate).getTime());
+  (o.stepEntries || []).forEach(e => { if (e.recordedAt) times.push(new Date(e.recordedAt).getTime()); });
+  ((o.pause12 && o.pause12.history) || []).forEach(p => { if (p.startAt) times.push(new Date(p.startAt).getTime()); });
+  ((o.pause13 && o.pause13.history) || []).forEach(p => { if (p.startAt) times.push(new Date(p.startAt).getTime()); });
+  if (times.length === 0) return false;
+  return Math.min(...times) < dayStart;
+}
+
 // 工單在指定日期當天「有活動」？ = 工單實際事件區間與當日重疊
 // 用「最後一筆實際事件」當區間結束點（不用 Date.now()），避免閒置未完成的工單
 // 一直被算進每一天的匯總

@@ -496,7 +496,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520k"></script>
+<script src="utils.js?v=20260520l"></script>
 <script>
 const MACHINES = [
   { id: 'No1-350', num: 'No1', spec: '350' },
@@ -926,8 +926,10 @@ function renderDailySummaryCard(machineId, machineOrders) {
   const t = MACHINE_TARGETS[machineId] || { workMinutes: 0, prepMinutes: 0 };
   const rows = todayOrders.map(o => {
     const p = computeOrderPhasesForDay(o, ymd);
-    return { orderNo: o.orderNo, ...p };
+    return { orderNo: o.orderNo, isCrossDay: isCrossDayOrder(o, ymd), ...p };
   });
+  // 隔日生產的工單排到最前面，其他維持原順序
+  rows.sort((a, b) => (a.isCrossDay === b.isCrossDay) ? 0 : (a.isCrossDay ? -1 : 1));
   const sumPrep = rows.reduce((s, r) => s + r.prepSec, 0);
   const sumProd = rows.reduce((s, r) => s + r.prodSec, 0);
   const sumAbn  = rows.reduce((s, r) => s + r.abnSec,  0);
@@ -953,7 +955,7 @@ function renderDailySummaryCard(machineId, machineOrders) {
     const rProd = Math.round(r.prodSec / 60);
     return `
     <tr>
-      <td style="padding:6px 8px;font-weight:700;font-size:12px;">${escapeHtml(r.orderNo)}${renderOrderStatusBadge(r.status)}</td>
+      <td style="padding:6px 8px;font-weight:700;font-size:12px;">${escapeHtml(r.orderNo)}${r.isCrossDay ? '<span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;background:#fff8e8;color:#b8860b;margin-left:4px;">隔日</span>' : ''}${renderOrderStatusBadge(r.status)}</td>
       <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${rPrep}</td>
       <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${rProd}</td>
       <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;font-weight:600;color:${effColor(rPrep, rProd)};">${effRate(rPrep, rProd)}</td>
