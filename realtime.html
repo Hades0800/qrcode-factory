@@ -496,7 +496,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520j"></script>
+<script src="utils.js?v=20260520k"></script>
 <script>
 const MACHINES = [
   { id: 'No1-350', num: 'No1', spec: '350' },
@@ -1017,10 +1017,14 @@ function buildTimeline(o, isAdmin) {
   const stepNameMap = {};
   STEP_LABELS.forEach(s => stepNameMap[s.key] = s.label);
 
-  // 舊格式 stepXAt
+  // 舊格式 stepXAt — step 11 帶上備註（含/不含附屬設備 + 主/附獨立運作）
   STEP_LABELS.forEach(s => {
     if (o[s.key]) {
-      items.push({ time: new Date(o[s.key]), label: s.label, type: 'step', entryId: null });
+      let label = s.label;
+      if (s.key === 'step11At' && o.step11Note) {
+        label += '（' + escapeHtml(o.step11Note) + '）';
+      }
+      items.push({ time: new Date(o[s.key]), label, type: 'step', entryId: null });
     }
   });
 

@@ -514,7 +514,7 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520j"></script>
+<script src="utils.js?v=20260520k"></script>
 <script>
 const me = getMe();
 let allOrders = [];
@@ -671,9 +671,15 @@ function render() {
     const allItems = [];
     const entryLabels = {'1':'原料準備','2':'模刀具','3':'試模確認','4':'穩定生產-無中斷','5':'穩定生產-中斷調整','8':'穩定生產-中斷多次','6':'後工程','7':'其他作業','21':'設備啓動','22':'準備完成','23':'無工令'};
 
-    // 舊格式 stepXAt
+    // 舊格式 stepXAt — step 11 帶上備註（含/不含附屬設備 + 主/附獨立運作）
     STEP_NAMES.forEach(s => {
-      if (o[s.key]) allItems.push({ time: new Date(o[s.key]), label: s.label, style: 'done' });
+      if (o[s.key]) {
+        let label = s.label;
+        if (s.key === 'step11At' && o.step11Note) {
+          label += '（' + escapeHtml(o.step11Note) + '）';
+        }
+        allItems.push({ time: new Date(o[s.key]), label, style: 'done' });
+      }
     });
     // 新日誌 stepEntries
     (o.stepEntries || []).forEach(e => {
