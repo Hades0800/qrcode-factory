@@ -823,7 +823,7 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520l"></script>
+<script src="utils.js?v=20260520m"></script>
 <script>
 // 作業準備（21/22）已停用；保留空陣列給歷史資料 fallback lookup
 const PRE_STEPS = [];
@@ -1430,6 +1430,14 @@ function renderSteps() {
   // 本單第一筆生產時態（40/41）強制規則：
   //   - 同日有上一張完成 → 上單結束 + 1 分鐘
   //   - 無上單 / 上單在前一日 → 當日 08:00
+  // 生產狀態機：step 41 後不能再按 step 40，直到 step 30（切換規格）或 pause 13（異常中斷）介入
+  const allEntries = order.stepEntries || [];
+  const lastStep41Ms = allEntries.filter(e => e.stepNo === '41').map(e => new Date(e.recordedAt).getTime()).sort((a,b)=>b-a)[0] || 0;
+  const lastStep30Ms = allEntries.filter(e => e.stepNo === '30').map(e => new Date(e.recordedAt).getTime()).sort((a,b)=>b-a)[0] || 0;
+  const lastPause13Ms = ((order.pause13 && order.pause13.history) || []).map(p => new Date(p.startAt).getTime()).sort((a,b)=>b-a)[0] || 0;
+  const lastReleaseMs = Math.max(lastStep30Ms, lastPause13Ms);
+  const prepAllowed = lastStep41Ms === 0 || lastReleaseMs > lastStep41Ms;
+
   const hasStableEntry = !!(entriesByStep['40']?.length || entriesByStep['41']?.length);
   const prevEnd = order.prevMachineEndAt ? new Date(order.prevMachineEndAt) : null;
   const lockStableTime = !hasStableEntry;
@@ -1497,8 +1505,11 @@ function renderSteps() {
       }
     } else {
       // 'simple' kind = 一般步驟（含 fixedNote 自動帶入）
+      const isPrepBlocked = s.id === '40' && !prepAllowed;
       if (isPaused) {
         body += '<button class="btn-success btn-block" disabled>' + icon('check', 16) + ' 已完成</button>';
+      } else if (isPrepBlocked) {
+        body += `<div style="background:#f5f5f7;border:1.5px dashed var(--border);border-radius:8px;padding:10px;font-size:12px;color:var(--muted);line-height:1.5;text-align:center;">🔒 已按生產開始<br>須先「切換規格」或「異常中斷」才能再按生產準備</div>`;
       } else {
         const isLockedStable = (s.id === '40' || s.id === '41') && lockStableTime;
         if (isLockedStable) {

@@ -326,6 +326,34 @@ export default async function orderRoutes(fastify) {
     }
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) return reply.code(404).send({ error: '找不到工單' });
+    // 規則：step 41（生產開始）之後不能再按 step 40（生產準備），
+    // 除非有 step 30（切換規格）或 pause 13（異常中斷）介入。
+    if (stepNo === '40') {
+      const lastStep41 = await fastify.prisma.stepEntry.findFirst({
+        where: { orderId: order.id, stepNo: '41' },
+        orderBy: { recordedAt: 'desc' },
+      });
+      if (lastStep41) {
+        const lastStep30 = await fastify.prisma.stepEntry.findFirst({
+          where: { orderId: order.id, stepNo: '30' },
+          orderBy: { recordedAt: 'desc' },
+        });
+        const lastAbn = await fastify.prisma.pauseEvent.findFirst({
+          where: { orderId: order.id, type: '13' },
+          orderBy: { startAt: 'desc' },
+        });
+        const lastStep41Ms = new Date(lastStep41.recordedAt).getTime();
+        const lastReleaseMs = Math.max(
+          lastStep30 ? new Date(lastStep30.recordedAt).getTime() : 0,
+          lastAbn ? new Date(lastAbn.startAt).getTime() : 0,
+        );
+        if (lastStep41Ms >= lastReleaseMs) {
+          return reply.code(400).send({
+            error: '生產開始後不能再按生產準備（需先「切換規格」或「異常中斷」才能重新準備）',
+          });
+        }
+      }
+    }
     const prevCount = await fastify.prisma.stepEntry.count({
       where: { orderId: order.id, stepNo },
     });
