@@ -185,6 +185,12 @@ function computeOrderPhasesForDay(o, ymd) {
     }
   }
 
+  // 「進行中」門檻：最後活動 1 小時內才視為現在還在做（延伸 prod 到當下）；
+  // 超過 1 小時沒事件 → 視為被換到別張單，prod 凍結在最後事件，不要灌水。
+  const ACTIVE_THRESHOLD_MS = 60 * 60 * 1000;
+  const isRecentlyActive = todayLastEvent != null && (Date.now() - todayLastEvent) < ACTIVE_THRESHOLD_MS;
+  const nowCapped = Math.min(Date.now(), dayEnd);
+
   // ── PROD ──
   let prodSec = 0;
   let prodStart = null;
@@ -194,24 +200,25 @@ function computeOrderPhasesForDay(o, ymd) {
     if (todayStep11 != null) {
       prodEnd = todayStep11;
     } else {
-      // 今日按了 step 41 但還沒按 step 11 → 仍在生產中，延伸到「現在」(cap 在 dayEnd)
-      const nowCapped = Math.min(Date.now(), dayEnd);
-      prodEnd = todayLastEvent != null ? Math.max(todayLastEvent, nowCapped) : nowCapped;
+      // 今日按了 step 41 但還沒按 step 11
+      prodEnd = isRecentlyActive
+        ? Math.max(todayLastEvent, nowCapped)
+        : (todayLastEvent != null ? todayLastEvent : nowCapped);
     }
   } else if (step41WasBefore) {
-    // 跨日繼續生產 — 找今日第一筆 pause endAt（恢復生產）；沒有就用 dayStart
+    // 跨日繼續生產 — 找今日第一筆 pause endAt（恢復生產）；沒有就用今日 08:00（工作日開始）
     const todayResumes = allPauses
       .filter(p => p.endAt && inToday(new Date(p.endAt).getTime()))
       .map(p => new Date(p.endAt).getTime())
       .sort((a, b) => a - b);
-    prodStart = todayResumes[0] != null ? todayResumes[0] : dayStart;
+    const shiftStart = dayStart + 8 * 3600 * 1000; // 今日 08:00
+    prodStart = todayResumes[0] != null ? todayResumes[0] : shiftStart;
     if (todayStep11 != null) {
       prodEnd = todayStep11;
     } else {
-      // 今日仍在生產中：用今日最後事件，但至少到 Date.now()（若今日有任何活動）
-      prodEnd = todayLastEvent != null
-        ? Math.max(todayLastEvent, Math.min(Date.now(), dayEnd))
-        : Math.min(Date.now(), dayEnd);
+      prodEnd = isRecentlyActive
+        ? Math.max(todayLastEvent, nowCapped)
+        : (todayLastEvent != null ? todayLastEvent : prodStart);
     }
   }
   if (prodStart != null && prodEnd != null && prodEnd > prodStart) {
