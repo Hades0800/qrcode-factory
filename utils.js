@@ -109,16 +109,15 @@ const MACHINE_TARGETS = {
   'No6-40':  { workMinutes: 420, prepMinutes:  60, capacityKg: 500   },
 };
 
-// 一張工單在「特定一天」內的工時分配（秒）— 跨日工單會被切片
-// ymd = 'YYYY-MM-DD'（瀏覽器本地時區）
-// prep = 第一筆活動（含 step 40）→ 第一筆 stepNo='41' 之間，與當日重疊
-//        (沒記 41 就用 step11At；都沒就用現在 — 表示還在準備中)
-// prod = 第一筆 stepNo='41' → step11At 或現在，與當日重疊，再扣與當日重疊的暫停秒數
-// abn  = pause13 history 與當日重疊的總秒數
+// 一張工單在「特定一天」內的工時分配（秒）
+// 計算原則：只看「今日範圍內的事件」當錨點，不從前一日的活動延伸進來。
+//   prep = 今日第一筆活動 → 今日第一筆 step 41（或今日 step 11、或今日最後活動）
+//   prod = 今日第一筆 step 41 → 今日 step 11（或今日最後活動），扣掉今日範圍重疊的暫停
+//   abn  = pause13 history 與當日重疊的總秒數
 function computeOrderPhasesForDay(o, ymd) {
   const dayStart = new Date(ymd + 'T00:00:00').getTime();
   const dayEnd = dayStart + 86400000; // 24h
-  // 把 [start, end] 跟當日交集後換算成秒
+  // 把 [start, end] 跟當日交集後換算成秒（給 pause 算重疊用）
   function clip(start, end) {
     if (start == null || end == null || end <= start) return 0;
     const a = Math.max(start, dayStart);
@@ -127,29 +126,35 @@ function computeOrderPhasesForDay(o, ymd) {
   }
 
   const entries = o.stepEntries || [];
-  const allTimes = entries.map(e => new Date(e.recordedAt).getTime()).sort((a, b) => a - b);
-  const firstActivity = allTimes.length > 0
-    ? allTimes[0]
-    : (o.actualStartDate ? new Date(o.actualStartDate).getTime() : null);
-  const prodFirst = entries.filter(e => e.stepNo === '41')
-    .map(e => new Date(e.recordedAt).getTime()).sort((a, b) => a - b)[0];
+  // 只看「今日範圍內」的 stepEntries
+  const todayEntries = entries.filter(e => {
+    const t = new Date(e.recordedAt).getTime();
+    return t >= dayStart && t < dayEnd;
+  });
+  const todayTimes = todayEntries.map(e => new Date(e.recordedAt).getTime()).sort((a, b) => a - b);
+  const todayFirst = todayTimes.length > 0 ? todayTimes[0] : null;
+  const todayLast = todayTimes.length > 0 ? todayTimes[todayTimes.length - 1] : null;
+  const todayProdFirst = todayEntries.filter(e => e.stepNo === '41')
+    .map(e => new Date(e.recordedAt).getTime()).sort((a, b) => a - b)[0] || null;
+  // step 11 是否在今日範圍內
+  const step11Ms = o.step11At ? new Date(o.step11At).getTime() : null;
+  const todayStep11 = (step11Ms != null && step11Ms >= dayStart && step11Ms < dayEnd) ? step11Ms : null;
 
-  // 「最後一筆實際紀錄」當作開放階段的結束點 — 用 Date.now() 會讓閒置工單
-  // 在每一天都累積整日工時（昨天開始今天還沒按 41/11 → 今天 prep 從 00:00 一直長）
-  const lastActivityTime = allTimes.length > 0 ? allTimes[allTimes.length - 1] : null;
-  const openEnd = lastActivityTime != null ? lastActivityTime : Date.now();
+  // prep
+  let prepSec = 0;
+  if (todayFirst != null) {
+    const prepEnd = todayProdFirst != null
+      ? todayProdFirst
+      : (todayStep11 != null ? todayStep11 : todayLast);
+    prepSec = Math.max(0, Math.round((prepEnd - todayFirst) / 1000));
+  }
 
-  // prep 結束點：優先 step 41，其次 step 11（工單在 prep 階段就完成），最後是最後活動
-  const prepEnd = prodFirst != null
-    ? prodFirst
-    : (o.step11At ? new Date(o.step11At).getTime() : openEnd);
-  const prepSec = (firstActivity != null) ? clip(firstActivity, prepEnd) : 0;
-
+  // prod
   let prodSec = 0;
-  if (prodFirst != null) {
-    const prodEnd = o.step11At ? new Date(o.step11At).getTime() : openEnd;
-    const grossProd = clip(prodFirst, prodEnd);
-    // 扣掉與當日重疊的暫停（pause12 + pause13 history）
+  if (todayProdFirst != null) {
+    const prodEnd = todayStep11 != null ? todayStep11 : todayLast;
+    const grossProd = Math.max(0, Math.round((prodEnd - todayProdFirst) / 1000));
+    // 扣掉與今日範圍重疊的暫停
     let pauseInDay = 0;
     [...((o.pause12 && o.pause12.history) || []), ...((o.pause13 && o.pause13.history) || [])].forEach(p => {
       if (!p.startAt) return;
@@ -160,6 +165,7 @@ function computeOrderPhasesForDay(o, ymd) {
     prodSec = Math.max(0, grossProd - pauseInDay);
   }
 
+  // abn — 異常停線（pause13）的當日重疊
   let abnSec = 0;
   ((o.pause13 && o.pause13.history) || []).forEach(p => {
     if (!p.startAt) return;
