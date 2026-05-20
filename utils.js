@@ -173,8 +173,10 @@ function computeOrderPhasesForDay(o, ymd) {
   const todayLastEvent = todayEventTimes.length > 0 ? Math.max(...todayEventTimes) : null;
 
   // ── PREP ──
+  // 規則：只要今日有 stepEntry，就算今日的 prep（從今日第一筆 → 今日 step 41/11/最後活動）。
+  // 跨日繼續生產但今日又重新走一次 prep + step 41 流程的場景（換規格、補登）也能正確算到。
   let prepSec = 0;
-  if (!step41WasBefore && todayFirstEntry != null) {
+  if (todayFirstEntry != null) {
     const prepEnd = todayStep41 != null
       ? todayStep41
       : (todayStep11 != null ? todayStep11 : todayLastEvent);
@@ -214,14 +216,18 @@ function computeOrderPhasesForDay(o, ymd) {
   }
   if (prodStart != null && prodEnd != null && prodEnd > prodStart) {
     const grossProd = Math.round((prodEnd - prodStart) / 1000);
-    let pauseInDay = 0;
+    // 扣暫停：與「prod 區間」重疊的部分，而不是整個今日。
+    // 例：跨日休息 17:00→隔日 08:00 落在 prod 區間 (08:20→10:57) 之前，不該被扣。
+    let pauseInProd = 0;
     allPauses.forEach(p => {
       if (!p.startAt) return;
       const ps = new Date(p.startAt).getTime();
       const pe = p.endAt ? new Date(p.endAt).getTime() : Date.now();
-      pauseInDay += clip(ps, pe);
+      const a = Math.max(ps, prodStart);
+      const b = Math.min(pe, prodEnd);
+      if (b > a) pauseInProd += Math.round((b - a) / 1000);
     });
-    prodSec = Math.max(0, grossProd - pauseInDay);
+    prodSec = Math.max(0, grossProd - pauseInProd);
   }
 
   // ── ABN（異常停線 pause13 與當日重疊）──
