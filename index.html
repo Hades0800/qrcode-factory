@@ -823,7 +823,7 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520e"></script>
+<script src="utils.js?v=20260520f"></script>
 <script>
 // 作業準備（21/22）已停用；保留空陣列給歷史資料 fallback lookup
 const PRE_STEPS = [];
@@ -1136,8 +1136,7 @@ function renderSpecType() {
   }
   el.style.color = 'var(--ink)';
   if (order.specType === 'new') {
-    const aspectsTxt = formatNewSpecAspects(order.newSpecAspects);
-    el.innerHTML = icon('sparkles', 16) + ' 新製規格' + (aspectsTxt ? `<span style="font-size:12px;color:var(--brand);font-weight:500;margin-left:4px;">（${escapeHtml(aspectsTxt)}）</span>` : '');
+    el.innerHTML = icon('sparkles', 16) + ' ' + escapeHtml(formatNewSpecLabel(order.newSpecAspects));
   } else if (order.specType === 'mass') {
     el.innerHTML = icon('box', 16) + ' 量產規格';
   } else {

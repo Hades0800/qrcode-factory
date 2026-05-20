@@ -230,11 +230,17 @@ function computeOrderPhasesForDay(o, ymd) {
   return { prepSec, prodSec, abnSec };
 }
 
-// 新製規格差異項目 key → 顯示文字
-const NEW_SPEC_ASPECT_LABELS = { raw: '原料不同', mold: '模具不同', dim: '長寬不同' };
+// 新製規格差異項目 key → 簡短顯示
+const NEW_SPEC_ASPECT_LABELS = { raw: '原料', mold: '模具', dim: '總長寬' };
+// 回傳簡短串接，無項目回空字串；例：['raw','mold'] → '原料、模具'
 function formatNewSpecAspects(aspects) {
   if (!Array.isArray(aspects) || aspects.length === 0) return '';
   return aspects.map(k => NEW_SPEC_ASPECT_LABELS[k] || k).join('、');
+}
+// 完整顯示串：「新製規格-X、Y不同」；無 aspects 就顯示「新製規格」
+function formatNewSpecLabel(aspects) {
+  const s = formatNewSpecAspects(aspects);
+  return s ? '新製規格-' + s + '不同' : '新製規格';
 }
 
 // 更換範圍符號 → 顯示文字
