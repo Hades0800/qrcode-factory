@@ -134,15 +134,20 @@ function computeOrderPhasesForDay(o, ymd) {
   const prodFirst = entries.filter(e => e.stepNo === '41')
     .map(e => new Date(e.recordedAt).getTime()).sort((a, b) => a - b)[0];
 
-  // prep 結束點：優先 step 41，其次 step 11（工單在 prep 階段就完成），最後是現在
+  // 「最後一筆實際紀錄」當作開放階段的結束點 — 用 Date.now() 會讓閒置工單
+  // 在每一天都累積整日工時（昨天開始今天還沒按 41/11 → 今天 prep 從 00:00 一直長）
+  const lastActivityTime = allTimes.length > 0 ? allTimes[allTimes.length - 1] : null;
+  const openEnd = lastActivityTime != null ? lastActivityTime : Date.now();
+
+  // prep 結束點：優先 step 41，其次 step 11（工單在 prep 階段就完成），最後是最後活動
   const prepEnd = prodFirst != null
     ? prodFirst
-    : (o.step11At ? new Date(o.step11At).getTime() : Date.now());
+    : (o.step11At ? new Date(o.step11At).getTime() : openEnd);
   const prepSec = (firstActivity != null) ? clip(firstActivity, prepEnd) : 0;
 
   let prodSec = 0;
   if (prodFirst != null) {
-    const prodEnd = o.step11At ? new Date(o.step11At).getTime() : Date.now();
+    const prodEnd = o.step11At ? new Date(o.step11At).getTime() : openEnd;
     const grossProd = clip(prodFirst, prodEnd);
     // 扣掉與當日重疊的暫停（pause12 + pause13 history）
     let pauseInDay = 0;
@@ -182,25 +187,32 @@ function fmtHHMM(sec) {
   return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
 }
 
-// 工單在指定日期當天「有活動」？ = 工單實際時間區間與當日重疊
-// 跨日工單（昨天開始今天還在跑）今天 / 昨天的匯總都會包含它
+// 工單在指定日期當天「有活動」？ = 工單實際事件區間與當日重疊
+// 用「最後一筆實際事件」當區間結束點（不用 Date.now()），避免閒置未完成的工單
+// 一直被算進每一天的匯總
 function orderIsOnDate(o, ymd) {
   const dayStart = new Date(ymd + 'T00:00:00').getTime();
   const dayEnd = dayStart + 86400000;
-  // 找 order 的第一個事件時刻（actualStartDate 或第一筆 stepEntry 或第一筆 pause）
   const candidates = [];
   if (o.actualStartDate) candidates.push(new Date(o.actualStartDate).getTime());
   (o.stepEntries || []).forEach(e => { if (e.recordedAt) candidates.push(new Date(e.recordedAt).getTime()); });
-  ((o.pause12 && o.pause12.history) || []).forEach(p => { if (p.startAt) candidates.push(new Date(p.startAt).getTime()); });
-  ((o.pause13 && o.pause13.history) || []).forEach(p => { if (p.startAt) candidates.push(new Date(p.startAt).getTime()); });
+  ((o.pause12 && o.pause12.history) || []).forEach(p => {
+    if (p.startAt) candidates.push(new Date(p.startAt).getTime());
+    if (p.endAt) candidates.push(new Date(p.endAt).getTime());
+  });
+  ((o.pause13 && o.pause13.history) || []).forEach(p => {
+    if (p.startAt) candidates.push(new Date(p.startAt).getTime());
+    if (p.endAt) candidates.push(new Date(p.endAt).getTime());
+  });
+  if (o.step11At) candidates.push(new Date(o.step11At).getTime());
   if (candidates.length === 0) {
     // 無活動，回退到 plannedDate / productionDate 字串比對
     const d = o.plannedDate || o.productionDate;
     return d ? String(d).slice(0, 10) === ymd : false;
   }
   const start = Math.min(...candidates);
-  const end = o.step11At ? new Date(o.step11At).getTime() : Math.max(Date.now(), Math.max(...candidates));
-  return start < dayEnd && end > dayStart;
+  const end = Math.max(...candidates);
+  return start < dayEnd && end >= dayStart;
 }
 
 function isToday(iso) {
