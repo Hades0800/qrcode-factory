@@ -1102,14 +1102,21 @@ function renderSummaryPanel(from, to) {
     // 準備望小（越快越好）→ 用 target/actual；實績望大 → 用 actual/target
     const prepRate = (t.prepMinutes > 0 && prepMin > 0) ? (t.prepMinutes / prepMin * 100).toFixed(1) : '—';
     const prodRate = t.workMinutes > 0 ? (prodMin / t.workMinutes * 100).toFixed(1) : '—';
-    const rowsHtml = g.orderRows.map(r => `
+    // 生產效益率 = 生產實績 / 生產準備（％）；準備為 0 時顯示 —
+    const effRate = (pPrep, pProd) => pPrep > 0 ? (pProd / pPrep * 100).toFixed(1) + '%' : '—';
+    const rowsHtml = g.orderRows.map(r => {
+      const rPrep = Math.round(r.prepSec / 60);
+      const rProd = Math.round(r.prodSec / 60);
+      return `
       <tr>
         <td style="padding:6px 8px;font-weight:700;font-size:12px;">${escapeHtml(r.orderNo)}</td>
-        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${Math.round(r.prepSec / 60)}</td>
-        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${Math.round(r.prodSec / 60)}</td>
+        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${rPrep}</td>
+        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${rProd}</td>
+        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;color:#1f6feb;">${effRate(rPrep, rProd)}</td>
         <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${Math.round(r.abnSec / 60)}</td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
     return `
       <div style="margin-top:14px;">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
@@ -1117,12 +1124,13 @@ function renderSummaryPanel(from, to) {
           <span style="font-size:11px;color:var(--muted);">目標 — 準備 ${t.prepMinutes || '—'} / 實績 ${t.workMinutes || '—'} 分</span>
         </div>
         <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;">
-        <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:420px;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:500px;">
           <thead style="background:#f5f5f7;">
             <tr>
               <th style="padding:8px;text-align:left;font-weight:700;">工單</th>
               <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">生產準備(分)</th>
               <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">生產實績(分)</th>
+              <th style="padding:8px;text-align:center;font-weight:700;color:#1f6feb;">生產效益率</th>
               <th style="padding:8px;text-align:center;font-weight:700;color:var(--brand);">異常停線(分)</th>
             </tr>
           </thead>
@@ -1132,12 +1140,14 @@ function renderSummaryPanel(from, to) {
               <td style="padding:6px 8px;font-weight:700;color:var(--muted);font-size:12px;">合計（分）</td>
               <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${prepMin}</td>
               <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${prodMin}</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${effRate(prepMin, prodMin)}</td>
               <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;color:var(--brand);">${abnMin}</td>
             </tr>
             <tr>
               <td style="padding:6px 8px;font-weight:700;color:var(--muted);font-size:12px;">達成度</td>
               <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;${prepRate !== '—' && parseFloat(prepRate) >= 100 ? 'color:var(--success);' : ''}">${prepRate}${prepRate !== '—' ? '%' : ''}</td>
               <td style="padding:6px 8px;font-family:monospace;font-weight:800;text-align:center;${prodRate !== '—' && parseFloat(prodRate) >= 100 ? 'color:var(--success);' : ''}">${prodRate}${prodRate !== '—' ? '%' : ''}</td>
+              <td style="padding:6px 8px;text-align:center;color:var(--muted);">—</td>
               <td style="padding:6px 8px;text-align:center;color:var(--muted);">—</td>
             </tr>
           </tfoot>
@@ -1152,20 +1162,25 @@ function renderSummaryPanel(from, to) {
 function downloadSummaryCsv(from, to) {
   const groups = buildSummaryGroups(from, to);
   if (!groups || groups.length === 0) { toast('區間內沒有資料', 'error'); return; }
-  const rows = [['日期','機台','工單','準備(分)','實績(分)','異常(分)','準備目標(分)','實績目標(分)','準備達成度','實績達成度']];
+  const rows = [['日期','機台','工單','準備(分)','實績(分)','生產效益率','異常(分)','準備目標(分)','實績目標(分)','準備達成度','實績達成度']];
+  const eff = (p, q) => p > 0 ? (q / p * 100).toFixed(1) + '%' : '';
   groups.forEach(g => {
     const t = g.target;
-    g.orderRows.forEach(r => rows.push([
-      g.ymd, g.machineId, r.orderNo,
-      Math.round(r.prepSec / 60), Math.round(r.prodSec / 60), Math.round(r.abnSec / 60),
-      '', '', '', ''
-    ]));
+    g.orderRows.forEach(r => {
+      const rPrep = Math.round(r.prepSec / 60);
+      const rProd = Math.round(r.prodSec / 60);
+      rows.push([
+        g.ymd, g.machineId, r.orderNo,
+        rPrep, rProd, eff(rPrep, rProd), Math.round(r.abnSec / 60),
+        '', '', '', ''
+      ]);
+    });
     const prepMin = Math.round(g.totals.sumPrep / 60);
     const prodMin = Math.round(g.totals.sumProd / 60);
     const abnMin  = Math.round(g.totals.sumAbn  / 60);
     rows.push([
       g.ymd, g.machineId, '【合計】',
-      prepMin, prodMin, abnMin,
+      prepMin, prodMin, eff(prepMin, prodMin), abnMin,
       t.prepMinutes || '', t.workMinutes || '',
       (t.prepMinutes > 0 && prepMin > 0) ? (t.prepMinutes / prepMin * 100).toFixed(1) + '%' : '',
       t.workMinutes > 0 ? (prodMin / t.workMinutes * 100).toFixed(1) + '%' : '',
