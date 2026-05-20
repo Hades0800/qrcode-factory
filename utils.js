@@ -189,7 +189,13 @@ function computeOrderPhasesForDay(o, ymd) {
   let prodEnd = null;
   if (todayStep41 != null) {
     prodStart = todayStep41;
-    prodEnd = todayStep11 != null ? todayStep11 : todayLastEvent;
+    if (todayStep11 != null) {
+      prodEnd = todayStep11;
+    } else {
+      // 今日按了 step 41 但還沒按 step 11 → 仍在生產中，延伸到「現在」(cap 在 dayEnd)
+      const nowCapped = Math.min(Date.now(), dayEnd);
+      prodEnd = todayLastEvent != null ? Math.max(todayLastEvent, nowCapped) : nowCapped;
+    }
   } else if (step41WasBefore) {
     // 跨日繼續生產 — 找今日第一筆 pause endAt（恢復生產）；沒有就用 dayStart
     const todayResumes = allPauses
@@ -227,7 +233,14 @@ function computeOrderPhasesForDay(o, ymd) {
     abnSec += clip(ps, pe);
   });
 
-  return { prepSec, prodSec, abnSec };
+  // ── 狀態：用來標示為什麼合計可能不到 480 分 ──
+  let status = 'unknown';
+  if (todayStep11 != null) status = 'finished';            // 今日已完成
+  else if (step41WasBefore) status = 'cross_day';          // 跨日繼續生產（step 41 在更早）
+  else if (todayStep41 != null) status = 'active';         // 今日進行中（step 41 已按）
+  else if (todayFirstEntry != null) status = 'prep_only';  // 只記了 step 40，還沒按生產開始
+
+  return { prepSec, prodSec, abnSec, status };
 }
 
 // 新製規格差異項目 key → 簡短顯示
@@ -241,6 +254,19 @@ function formatNewSpecAspects(aspects) {
 function formatNewSpecLabel(aspects) {
   const s = formatNewSpecAspects(aspects);
   return s ? '新製規格-' + s + '不同' : '新製規格';
+}
+
+// 每張工單的狀態 → 顯示文字 + 顏色（給匯總表用小徽章）
+const ORDER_STATUS_BADGE = {
+  finished:  { text: '已完成',     color: '#2ea043', bg: '#e6f7ea' },
+  active:    { text: '進行中',     color: '#1f6feb', bg: '#e7f0ff' },
+  cross_day: { text: '跨日進行',   color: '#b8860b', bg: '#fff8e8' },
+  prep_only: { text: '準備中',     color: '#8e8e93', bg: '#f0f0f3' },
+  unknown:   { text: '—',         color: '#8e8e93', bg: '#f0f0f3' },
+};
+function renderOrderStatusBadge(statusKey) {
+  const s = ORDER_STATUS_BADGE[statusKey] || ORDER_STATUS_BADGE.unknown;
+  return `<span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;background:${s.bg};color:${s.color};margin-left:4px;">${s.text}</span>`;
 }
 
 // 更換範圍符號 → 顯示文字

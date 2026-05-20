@@ -514,7 +514,7 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520f"></script>
+<script src="utils.js?v=20260520g"></script>
 <script>
 const me = getMe();
 let allOrders = [];
@@ -1119,7 +1119,7 @@ function renderSummaryPanel(from, to) {
       const rProd = Math.round(r.prodSec / 60);
       return `
       <tr>
-        <td style="padding:6px 8px;font-weight:700;font-size:12px;">${escapeHtml(r.orderNo)}</td>
+        <td style="padding:6px 8px;font-weight:700;font-size:12px;">${escapeHtml(r.orderNo)}${renderOrderStatusBadge(r.status)}</td>
         <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${rPrep}</td>
         <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${rProd}</td>
         <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;font-weight:600;color:${effColor(rPrep, rProd)};">${effRate(rPrep, rProd)}</td>
