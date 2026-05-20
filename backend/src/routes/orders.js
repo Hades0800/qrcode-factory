@@ -18,6 +18,14 @@ function toTaiwanDate(t) {
   return new Date(Date.UTC(tw.getUTCFullYear(), tw.getUTCMonth(), tw.getUTCDate()));
 }
 
+// 取得時刻所在「台灣當日 08:00」對應的 UTC 時間
+// （Taiwan 08:00 = UTC 00:00 of the same Taiwan date）
+function taiwanDateAt8(t) {
+  const d = t instanceof Date ? t : new Date(t || Date.now());
+  const tw = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+  return new Date(Date.UTC(tw.getUTCFullYear(), tw.getUTCMonth(), tw.getUTCDate(), 0, 0, 0));
+}
+
 // 設定 actualStartDate 為實際開始日期（台灣時間）
 // 規則：actualStartDate 一旦有值就永遠不再覆寫；reset-production 才會清空
 // 第一次有活動時（含補登），把那筆活動時間的台灣日期寫入
@@ -331,20 +339,28 @@ export default async function orderRoutes(fastify) {
       }
       time = parsed;
     }
-    // 強制接續：本單第一筆生產時態（40/41）必須是上一張同機台已完成工單的下一分鐘
+    // 強制：本單第一筆生產時態（40/41）的時間
+    //   - 同機台同日有上一張完成 → 上單結束 + 1 分鐘
+    //   - 無上單 / 上單在前一日或更早 → 該日台灣時間 08:00
     let forcedFromPrev = false;
     let forcedPrevEnd = null;
+    let forcedReason = null; // 'prev_same_day' | 'day_start'
     if ((stepNo === '40' || stepNo === '41') && order.machineNo) {
       const existingStable = await fastify.prisma.stepEntry.findFirst({
         where: { orderId: order.id, stepNo: { in: ['40', '41'] } },
       });
       if (!existingStable) {
         const prevEnd = await getPrevMachineEndAt(fastify.prisma, order);
-        if (prevEnd) {
+        const targetDay = toTaiwanDate(time);
+        if (prevEnd && toTaiwanDate(prevEnd).getTime() === targetDay.getTime()) {
           time = new Date(new Date(prevEnd).getTime() + 60000);
-          forcedFromPrev = true;
-          forcedPrevEnd = prevEnd;
+          forcedReason = 'prev_same_day';
+        } else {
+          time = taiwanDateAt8(time);
+          forcedReason = 'day_start';
         }
+        forcedFromPrev = true;
+        forcedPrevEnd = prevEnd;
       }
     }
     await setActualStartDate(fastify, order, time);
@@ -361,7 +377,7 @@ export default async function orderRoutes(fastify) {
       },
     });
     const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
-    return { entry, order: await serializeWithPrev(fastify.prisma, updated), forcedFromPrev, forcedPrevEnd };
+    return { entry, order: await serializeWithPrev(fastify.prisma, updated), forcedFromPrev, forcedPrevEnd, forcedReason };
   });
 
   // 取消工序紀錄（5 分鐘內）

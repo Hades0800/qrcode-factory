@@ -1386,12 +1386,22 @@ function renderSteps() {
     <h2 style="margin-top:16px;">工序進度</h2>
   `;
 
-  // 與上一張工單時間銜接：本單第一筆 40/41 必須是 prevMachineEndAt + 1 分鐘
+  // 本單第一筆生產時態（40/41）強制規則：
+  //   - 同日有上一張完成 → 上單結束 + 1 分鐘
+  //   - 無上單 / 上單在前一日 → 當日 08:00
   const hasStableEntry = !!(entriesByStep['40']?.length || entriesByStep['41']?.length);
   const prevEnd = order.prevMachineEndAt ? new Date(order.prevMachineEndAt) : null;
-  const lockStableTime = !hasStableEntry && !!prevEnd && !isNaN(prevEnd);
-  const forcedTime = prevEnd ? new Date(prevEnd.getTime() + 60000) : null;
+  const lockStableTime = !hasStableEntry;
   const pad = n => String(n).padStart(2, '0');
+  const today = new Date();
+  const prevSameDay = prevEnd && !isNaN(prevEnd)
+    && prevEnd.getFullYear() === today.getFullYear()
+    && prevEnd.getMonth() === today.getMonth()
+    && prevEnd.getDate() === today.getDate();
+  const forcedTime = !lockStableTime ? null
+    : (prevSameDay
+        ? new Date(prevEnd.getTime() + 60000)
+        : new Date(today.getFullYear(), today.getMonth(), today.getDate(), 8, 0, 0));
   const forcedYmd = forcedTime ? `${forcedTime.getFullYear()}-${pad(forcedTime.getMonth()+1)}-${pad(forcedTime.getDate())}` : '';
   const forcedHM = forcedTime ? `${pad(forcedTime.getHours())}:${pad(forcedTime.getMinutes())}` : '';
   const forcedDisplay = forcedTime ? `${pad(forcedTime.getMonth()+1)}/${pad(forcedTime.getDate())} ${pad(forcedTime.getHours())}:${pad(forcedTime.getMinutes())}` : '';
@@ -1451,7 +1461,10 @@ function renderSteps() {
       } else {
         const isLockedStable = (s.id === '40' || s.id === '41') && lockStableTime;
         if (isLockedStable) {
-          body += `<div style="background:#fff8e8;border:1.5px dashed #f0ad4e;border-radius:8px;padding:8px 10px;font-size:12px;color:#8a6d3b;margin-bottom:8px;line-height:1.5;">📌 與上一張工單時間銜接<br>上一張結束於 <b>${prevEndDisplay}</b>，本單第一筆「${escapeHtml(titleText)}」自動鎖定為 <b>${forcedDisplay}</b></div>`;
+          const hintMsg = prevSameDay
+            ? `📌 與上一張工單時間銜接<br>上一張結束於 <b>${prevEndDisplay}</b>，本單第一筆「${escapeHtml(titleText)}」自動鎖定為 <b>${forcedDisplay}</b>`
+            : `📌 每日第一單<br>本單第一筆「${escapeHtml(titleText)}」自動鎖定為 <b>${forcedDisplay}</b>（每日從 08:00 起算）`;
+          body += `<div style="background:#fff8e8;border:1.5px dashed #f0ad4e;border-radius:8px;padding:8px 10px;font-size:12px;color:#8a6d3b;margin-bottom:8px;line-height:1.5;">${hintMsg}</div>`;
         }
         body += `<div style="display:flex;gap:8px;">`;
         body += `<button class="btn-success" style="flex:1;" data-record-step="${s.id}"${s.fixedNote ? ` data-note="${escapeHtml(s.fixedNote)}"` : ''}>${icon('check', 16)} 已完成</button>`;
@@ -1746,7 +1759,10 @@ async function backfillStepEntry(stepNo) {
   order = r.data.order;
   renderSteps();
   if (r.data.forcedFromPrev && r.data.entry) {
-    toast('⚓ 已自動銜接上一張工單時間：' + fmtTime(r.data.entry.recordedAt), 'success');
+    const msg = r.data.forcedReason === 'day_start'
+      ? '📅 每日第一單，自動設為 ' + fmtTime(r.data.entry.recordedAt)
+      : '⚓ 已自動銜接上一張工單時間：' + fmtTime(r.data.entry.recordedAt);
+    toast(msg, 'success');
   } else {
     toast('✓ 已補登（標記為補登）', 'success');
   }
@@ -1771,7 +1787,10 @@ async function recordStepEntry(stepNo) {
   order = r.data.order;
   renderSteps();
   if (r.data.forcedFromPrev && r.data.entry) {
-    toast('⚓ 已自動銜接上一張工單時間：' + fmtTime(r.data.entry.recordedAt), 'success');
+    const msg = r.data.forcedReason === 'day_start'
+      ? '📅 每日第一單，自動設為 ' + fmtTime(r.data.entry.recordedAt)
+      : '⚓ 已自動銜接上一張工單時間：' + fmtTime(r.data.entry.recordedAt);
+    toast(msg, 'success');
   } else {
     toast('✓ ' + (stepDef ? stepDef.title : '工序 ' + stepNo), 'success');
   }

@@ -177,9 +177,12 @@ function makeMockPrisma() {
 const ADMIN = { id: 1, username: 'admin', displayName: '管理員', isAdmin: true, isPlanner: true };
 const MACHINE = 'No1-350';
 
-const today = new Date();
+// 用「昨天」當基準，確保 1-3 號工單的時間都在過去（避免被「不能超過現在」擋）
+// 工單 4 用今天當基準，驗證跨日新單會被強制為今日 08:00
+const baseDate = new Date(); baseDate.setDate(baseDate.getDate() - 1);
+const todayBase = new Date();
 function timeAt(hh, mm) {
-  const d = new Date(today); d.setHours(hh, mm, 0, 0); return d;
+  const d = new Date(baseDate); d.setHours(hh, mm, 0, 0); return d;
 }
 function fmt(d) { return d ? new Date(d).toLocaleString('zh-TW', { hour12: false }) : '—'; }
 function header(t) { console.log('\n' + '═'.repeat(72) + '\n  ' + t + '\n' + '═'.repeat(72)); }
@@ -196,11 +199,13 @@ async function run() {
   const order1 = 'A0000000001';
   const order2 = 'B0000000002';
   const order3 = 'C0000000003';
+  const order4 = 'D0000000004';
 
-  console.log('場景：三張工單同機台接力（' + MACHINE + '）');
-  console.log('  工單 1：08:00 開始 → 09:38 結束');
-  console.log('  工單 2：應強制 09:39 開始 → 11:03 結束');
-  console.log('  工單 3：應強制 11:04 開始 → 13:46 結束');
+  console.log('場景：同機台接力（' + MACHINE + '）');
+  console.log('  [昨日] 工單 1：08:00 開始 → 09:38 結束');
+  console.log('  [昨日] 工單 2：應強制 09:39 開始（同日上單+1）→ 11:03 結束');
+  console.log('  [昨日] 工單 3：應強制 11:04 開始 → 13:46 結束');
+  console.log('  [今日] 工單 4：應強制 今日 08:00 開始（每日第一單規則）');
 
   // ── 工單 1 ──
   header('工單 1: ' + order1);
@@ -216,6 +221,7 @@ async function run() {
   console.log('    forcedFromPrev:', body.forcedFromPrev, '(應為 false — 第一張工單沒有上一張)');
   console.log('    entry.recordedAt:', fmt(body.entry.recordedAt));
 
+  const order1ForcedReason = body.forcedReason;
   // 工單 1 結束 09:38 — 直接寫 step11At 到 mock state（模擬完成）
   state.orders.get(order1).step11At = timeAt(9, 38);
   console.log('  ▸ 工單 1 完成於 09:38 (直接設定 step11At)');
@@ -253,14 +259,15 @@ async function run() {
 
   await fastify.inject({ method: 'POST', url: '/api/orders/' + order3 + '/machine', payload: { machineNo: MACHINE } });
 
-  // 試試用 已完成 button (不傳 recordedAt，用伺服器當下時間)
+  // 補登在昨日 8:00（同日 prev 在 11:03 → 強制 11:04）
   res = await fastify.inject({
     method: 'POST', url: '/api/orders/' + order3 + '/step-entries',
-    payload: { stepNo: '40' },
+    payload: { stepNo: '40', recordedAt: timeAt(8, 0).toISOString() },
   });
   body = JSON.parse(res.body);
-  console.log('  ▸ 點「已完成」紀錄 step 40（不傳時間）');
-  console.log('    forcedFromPrev:', body.forcedFromPrev, '(應為 true — 仍會強制覆寫)');
+  console.log('  ▸ 補登 step 40 於 昨日 08:00（同日上單 11:03）');
+  console.log('    forcedFromPrev:', body.forcedFromPrev, '(應為 true)');
+  console.log('    forcedReason:', body.forcedReason, '(應為 prev_same_day)');
   console.log('    entry.recordedAt:', fmt(body.entry.recordedAt), '(應為 11:04)');
 
   const order3FirstTime = new Date(body.entry.recordedAt);
@@ -278,15 +285,42 @@ async function run() {
 
   const secondEntry41 = new Date(body.entry.recordedAt);
 
+  // 工單 3 完成於昨日 13:46
+  state.orders.get(order3).step11At = timeAt(13, 46);
+  console.log('  ▸ 工單 3 完成於昨日 13:46');
+
+  // ── 工單 4：今日新單，跨日 → 強制今日 08:00 ──
+  header('工單 4 (今日新單): ' + order4);
+  await fastify.inject({ method: 'GET', url: '/api/orders/' + order4 });
+  await fastify.inject({ method: 'POST', url: '/api/orders/' + order4 + '/machine', payload: { machineNo: MACHINE } });
+
+  // 點 已完成（不傳時間，伺服器用 now）— 預期被強制為今日 08:00
+  res = await fastify.inject({
+    method: 'POST', url: '/api/orders/' + order4 + '/step-entries',
+    payload: { stepNo: '41' },
+  });
+  body = JSON.parse(res.body);
+  console.log('  ▸ 點「已完成」紀錄 step 41（不傳時間，伺服器用 now）');
+  console.log('    forcedFromPrev:', body.forcedFromPrev, '(應為 true)');
+  console.log('    forcedReason:', body.forcedReason, '(應為 day_start — 跨日)');
+  console.log('    entry.recordedAt:', fmt(body.entry.recordedAt), '(應為 今日 08:00)');
+  const order4FirstTime = new Date(body.entry.recordedAt);
+  const order4ForcedReason = body.forcedReason;
+
   // ── 驗證 ──
   header('驗證結論');
+  const isTodayAt8 = order4FirstTime.getFullYear() === todayBase.getFullYear()
+    && order4FirstTime.getMonth() === todayBase.getMonth()
+    && order4FirstTime.getDate() === todayBase.getDate()
+    && order4FirstTime.getHours() === 8
+    && order4FirstTime.getMinutes() === 0;
   const checks = [
-    ['工單 1 第一筆無強制（沒有上一張）', !state.orders.get(order1) || true],
-    ['工單 2 prevMachineEndAt = 工單 1 step11At', true /* visual */],
-    ['工單 2 第一筆強制 = 09:39', order2FirstTime.getHours() === 9 && order2FirstTime.getMinutes() === 39],
-    ['工單 3 prevMachineEndAt = 工單 2 step11At', true /* visual */],
-    ['工單 3 第一筆強制 = 11:04', order3FirstTime.getHours() === 11 && order3FirstTime.getMinutes() === 4],
+    ['工單 1 第一筆強制為昨日 08:00（每日第一單規則）', order1ForcedReason === 'day_start'],
+    ['工單 2 第一筆強制 = 09:39（同日上單+1）', order2FirstTime.getHours() === 9 && order2FirstTime.getMinutes() === 39],
+    ['工單 3 第一筆強制 = 11:04（同日上單+1）', order3FirstTime.getHours() === 11 && order3FirstTime.getMinutes() === 4],
     ['工單 3 第二筆 step41 不強制（保持 12:00）', secondEntry41.getHours() === 12 && secondEntry41.getMinutes() === 0],
+    ['工單 4 第一筆強制為今日 08:00（跨日新單）', isTodayAt8],
+    ['工單 4 forcedReason = day_start', order4ForcedReason === 'day_start'],
   ];
   checks.forEach(([label, ok]) => console.log((ok ? '  ✓ ' : '  ✗ ') + label));
   const allPass = checks.every(([, ok]) => ok);
