@@ -1106,6 +1106,12 @@ function renderSummaryPanel(from, to) {
     // 對照各機台目標：1.40 (No1) / 0.78 (No2) / 2.00 (No3, No4) / 7.00 (No5, No6)
     const effRate = (pPrep, pProd) => pPrep > 0 ? (pProd / pPrep).toFixed(2) : '—';
     const targetEff = (t.prepMinutes > 0 && t.workMinutes > 0) ? (t.workMinutes / t.prepMinutes).toFixed(2) : null;
+    // 低於目標 → 紅字；達標或無目標 → 藍字；無準備 → 灰字
+    const effColor = (pPrep, pProd) => {
+      if (pPrep <= 0) return 'var(--muted)';
+      if (!targetEff) return '#1f6feb';
+      return (pProd / pPrep) < parseFloat(targetEff) ? 'var(--brand)' : '#1f6feb';
+    };
     const rowsHtml = g.orderRows.map(r => {
       const rPrep = Math.round(r.prepSec / 60);
       const rProd = Math.round(r.prodSec / 60);
@@ -1114,7 +1120,7 @@ function renderSummaryPanel(from, to) {
         <td style="padding:6px 8px;font-weight:700;font-size:12px;">${escapeHtml(r.orderNo)}</td>
         <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${rPrep}</td>
         <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${rProd}</td>
-        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;color:#1f6feb;">${effRate(rPrep, rProd)}</td>
+        <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;font-weight:600;color:${effColor(rPrep, rProd)};">${effRate(rPrep, rProd)}</td>
         <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${Math.round(r.abnSec / 60)}</td>
       </tr>
     `;
