@@ -496,7 +496,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520w"></script>
+<script src="utils.js?v=20260520x"></script>
 <script>
 const MACHINES = [
   { id: 'No1-350', num: 'No1', spec: '350' },
@@ -537,7 +537,7 @@ function fmtHM(iso) {
 
 $('meShow').textContent = me ? me.displayName : '';
 if (me && me.isAdmin) $('adminLink').style.display = 'flex';
-if (me) $('uploadLink').style.display = 'flex';
+if (me && (me.isAdmin || me.isPlanner)) $('uploadLink').style.display = 'flex';
 $('logoutLink').onclick = e => { e.preventDefault(); localStorage.clear(); location.href = 'index.html'; };
 
 // Machine tabs
@@ -796,10 +796,10 @@ function renderContent() {
             ${o.materialType ? `<span class="oi-item"><span class="oi-icon">${icon('layers', 14)}</span><span class="oi-label">原料</span><span class="oi-value">${o.materialType === 'coil' ? '捲料' : '板料'}</span></span>` : ''}
             ${o.auxEquipment ? `<span class="oi-item"><span class="oi-icon">${icon('gear', 14)}</span><span class="oi-label">輔助設備</span><span class="oi-value">${escapeHtml(auxEquipmentLabel(o.auxEquipment))}</span></span>` : ''}
           </div>
-          <h3 style="margin:0 0 8px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;">生產實態</h3>
-          <ul class="timeline">${timeline}</ul>
           <h3 style="margin:14px 0 6px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;">設備參數</h3>
           <div class="rt-equipment-${escapeHtml(o.orderNo)}" style="background:var(--bg);border-radius:8px;padding:10px;"><div style="color:var(--muted);font-size:12px;">載入中...</div></div>
+          <h3 style="margin:14px 0 8px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;">生產實態</h3>
+          <ul class="timeline">${timeline}</ul>
         </div>
       `;
     });
