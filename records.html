@@ -514,7 +514,7 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520v"></script>
+<script src="utils.js?v=20260520w"></script>
 <script>
 const me = getMe();
 let allOrders = [];
@@ -1270,13 +1270,24 @@ $('summaryBtn').onclick = () => {
   }
   const from = $('filterFrom').value || todayYmd();
   const to = $('filterTo').value || from;
-  panel.innerHTML = renderSummaryPanel(from, to);
-  panel.style.display = 'block';
-  // 綁 panel 內按鈕事件
-  const dlBtn = panel.querySelector('#summaryDownloadBtn');
-  if (dlBtn) dlBtn.onclick = () => downloadSummaryCsv(from, to);
-  const closeBtn = panel.querySelector('#summaryCloseBtn');
-  if (closeBtn) closeBtn.onclick = () => { panel.style.display = 'none'; panel.innerHTML = ''; };
+  try {
+    panel.innerHTML = renderSummaryPanel(from, to);
+    panel.style.display = 'block';
+    // 綁 panel 內按鈕事件
+    const dlBtn = panel.querySelector('#summaryDownloadBtn');
+    if (dlBtn) dlBtn.onclick = () => downloadSummaryCsv(from, to);
+    const closeBtn = panel.querySelector('#summaryCloseBtn');
+    if (closeBtn) closeBtn.onclick = () => { panel.style.display = 'none'; panel.innerHTML = ''; };
+  } catch (e) {
+    console.error('當日匯總開啟失敗:', e);
+    panel.innerHTML = `<div class="card" style="margin-bottom:12px;">
+      <h3 style="color:var(--brand);margin:0 0 8px;">當日匯總開啟失敗</h3>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">${escapeHtml(String(e.message || e))}</div>
+      <div style="font-size:11px;color:var(--muted);font-family:monospace;white-space:pre-wrap;background:#fafafc;padding:8px;border-radius:6px;overflow-x:auto;">${escapeHtml((e.stack || '').split('\\n').slice(0, 5).join('\\n'))}</div>
+      <button class="btn-secondary" style="margin-top:10px;padding:6px 14px;font-size:13px;" onclick="document.getElementById('summaryPanel').style.display='none';document.getElementById('summaryPanel').innerHTML='';">收合</button>
+    </div>`;
+    panel.style.display = 'block';
+  }
 };
 
 loadOrders();
