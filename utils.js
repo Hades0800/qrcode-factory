@@ -271,16 +271,22 @@ function computeOrderPhasesForDay(o, ymd) {
 }
 
 // 新製規格差異項目 key → 簡短顯示
-const NEW_SPEC_ASPECT_LABELS = { raw: '原料', mold: '模具', dim: '總長寬' };
-// 回傳簡短串接，無項目回空字串；例：['raw','mold'] → '原料、模具'
+// 舊鍵（raw/dim）保留以相容歷史資料；新版單選 UI 使用 mold/mat/swm
+const NEW_SPEC_ASPECT_LABELS = {
+  raw: '原料',        // 舊鍵：相容過去多選
+  dim: '長寬',        // 舊鍵：相容過去多選
+  mold: '模具',
+  mat:  '材料',
+  swm:  'SWM/LWM',
+};
 function formatNewSpecAspects(aspects) {
   if (!Array.isArray(aspects) || aspects.length === 0) return '';
   return aspects.map(k => NEW_SPEC_ASPECT_LABELS[k] || k).join('、');
 }
-// 完整顯示串：「新製規格-X、Y不同」；無 aspects 就顯示「新製規格」
+// 完整顯示串：「新製規格-X」；無 aspects 就顯示「新製規格」
 function formatNewSpecLabel(aspects) {
   const s = formatNewSpecAspects(aspects);
-  return s ? '新製規格-' + s + '不同' : '新製規格';
+  return s ? '新製規格-' + s : '新製規格';
 }
 
 // 每張工單的狀態 → 顯示文字 + 顏色（給匯總表用小徽章）

@@ -465,8 +465,9 @@ export default async function orderRoutes(fastify) {
       if (!['new', 'mass'].includes(specType)) {
         return reply.code(400).send({ error: '無效規格類型（需為 new 或 mass）' });
       }
-      // 整理 aspects：只對「新製」有效；只接受 raw / mold / dim 三個 key
-      const ALLOWED_ASPECTS = ['raw', 'mold', 'dim'];
+      // 整理 aspects：只對「新製」有效。
+      // 舊資料相容：raw / dim 仍可被讀寫；新版單選用：mold / mat / swm
+      const ALLOWED_ASPECTS = ['mold', 'mat', 'swm', 'raw', 'dim'];
       let aspectsStr = null;
       if (specType === 'new' && Array.isArray(aspects)) {
         const cleaned = aspects.filter(a => ALLOWED_ASPECTS.includes(a));

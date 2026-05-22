@@ -731,17 +731,17 @@
             <button class="spec-choice" data-spec="mass" style="flex:1;padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font-weight:600;font-size:14px;">量產規格</button>
           </div>
         </div>
-        <!-- 新製規格的差異項目（複選）— 只在選「新製」時顯示 -->
+        <!-- 新製規格的差異項目（單選）— 只在選「新製」時顯示 -->
         <div id="newSpecAspectsBox" style="display:none;margin-bottom:16px;padding:12px;background:#fdf2f2;border:1.5px dashed #d23535;border-radius:10px;">
-          <div style="font-size:12px;font-weight:700;color:var(--brand);margin-bottom:8px;">本工單與其他不同的部分（可複選）</div>
+          <div style="font-size:12px;font-weight:700;color:var(--brand);margin-bottom:8px;">差異項目（請選一個）</div>
           <label style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;font-size:14px;">
-            <input type="checkbox" class="spec-aspect" data-aspect="raw" style="width:18px;height:18px;accent-color:#d23535;">生產原料不同
+            <input type="radio" name="specAspect" class="spec-aspect" data-aspect="mold" style="width:18px;height:18px;accent-color:#d23535;">模具
           </label>
           <label style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;font-size:14px;">
-            <input type="checkbox" class="spec-aspect" data-aspect="mold" style="width:18px;height:18px;accent-color:#d23535;">生產模具不同
+            <input type="radio" name="specAspect" class="spec-aspect" data-aspect="mat" style="width:18px;height:18px;accent-color:#d23535;">材料
           </label>
           <label style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;font-size:14px;">
-            <input type="checkbox" class="spec-aspect" data-aspect="dim" style="width:18px;height:18px;accent-color:#d23535;">成品總長寬不同
+            <input type="radio" name="specAspect" class="spec-aspect" data-aspect="swm" style="width:18px;height:18px;accent-color:#d23535;">SWM/LWM
           </label>
         </div>
         <div style="display:flex;gap:8px;">
@@ -823,7 +823,7 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520s"></script>
+<script src="utils.js?v=20260520t"></script>
 <script>
 // 作業準備（21/22）已停用；保留空陣列給歷史資料 fallback lookup
 const PRE_STEPS = [];
@@ -1280,12 +1280,8 @@ document.querySelectorAll('.spec-choice').forEach(b => {
 });
 document.querySelectorAll('.spec-aspect').forEach(cb => {
   cb.onchange = () => {
-    const k = cb.dataset.aspect;
-    if (cb.checked) {
-      if (!specPick.aspects.includes(k)) specPick.aspects.push(k);
-    } else {
-      specPick.aspects = specPick.aspects.filter(x => x !== k);
-    }
+    // radio 單選：選中就只留這一個
+    if (cb.checked) specPick.aspects = [cb.dataset.aspect];
   };
 });
 $('specTypeConfirm').onclick = async () => {
