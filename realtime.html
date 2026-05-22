@@ -496,7 +496,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520u"></script>
+<script src="utils.js?v=20260520v"></script>
 <script>
 const MACHINES = [
   { id: 'No1-350', num: 'No1', spec: '350' },
@@ -798,10 +798,8 @@ function renderContent() {
           </div>
           <h3 style="margin:0 0 8px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;">生產實態</h3>
           <ul class="timeline">${timeline}</ul>
-          <div style="margin-top:10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--brand);" onclick="toggleRtEquipment('${escapeHtml(o.orderNo)}', this)">
-            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>展開設備參數
-          </div>
-          <div class="rt-equipment-${escapeHtml(o.orderNo)}" style="display:none;background:var(--bg);border-radius:8px;padding:10px;margin-top:6px;"></div>
+          <h3 style="margin:14px 0 6px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;">設備參數</h3>
+          <div class="rt-equipment-${escapeHtml(o.orderNo)}" style="background:var(--bg);border-radius:8px;padding:10px;"><div style="color:var(--muted);font-size:12px;">載入中...</div></div>
         </div>
       `;
     });
@@ -820,6 +818,8 @@ function renderContent() {
 
   // 載入多規格卡片
   machineOrders.forEach(o => loadSpecCards(o));
+  // 載入設備參數（每張工單一筆，可編輯）
+  machineOrders.forEach(o => loadRtEquipment(o.orderNo));
 }
 
 async function loadSpecCards(o) {
@@ -1199,15 +1199,11 @@ async function saveRtEquipment(orderNo, btn) {
   res.textContent = '✓ 已儲存';
   toast('已儲存設備參數', 'success');
 }
-async function toggleRtEquipment(orderNo, btn) {
+async function loadRtEquipment(orderNo) {
   const wrap = document.querySelector('.rt-equipment-' + CSS.escape(orderNo));
   if (!wrap) return;
-  const showing = wrap.style.display !== 'none';
-  wrap.style.display = showing ? 'none' : 'block';
-  if (showing) return;
   if (wrap.dataset.loaded) return;
   wrap.dataset.loaded = '1';
-  wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;">載入中...</div>';
   const r = await api('/api/equipment-params/' + encodeURIComponent(orderNo));
   if (!r.ok) {
     wrap.innerHTML = '<div style="color:var(--brand);font-size:12px;">' + (r.error || '載入失敗') + '</div>';
