@@ -788,6 +788,33 @@
     </div>
   </div>
 
+  <!-- 作業人員（第五步） -->
+  <div class="card" id="operationCard" style="display:none;">
+    <h2>作業人員 <span class="required">第五步</span></h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div>
+        <label for="operatorNameInput" style="display:block;color:var(--muted);font-size:13px;font-weight:600;margin-bottom:6px;">設備操作</label>
+        <input type="text" id="operatorNameInput" maxlength="50" placeholder="請輸入姓名" autocomplete="off" style="width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-size:15px;background:#fff;box-sizing:border-box;">
+      </div>
+      <div>
+        <label for="totalWorkersSelect" style="display:block;color:var(--muted);font-size:13px;font-weight:600;margin-bottom:6px;">全部作業人數</label>
+        <select id="totalWorkersSelect" style="width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-size:15px;background:#fff;box-sizing:border-box;font-weight:700;">
+          <option value="">請選擇</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="9">9</option>
+          <option value="10">10</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
   <!-- 步驟區（動態生成） -->
   <div id="stepsArea" style="display:none;"></div>
 </div>
@@ -1125,22 +1152,27 @@ async function setOrder(no) {
   renderChangeScope();
   renderMaterialType();
   renderAuxEquipment();
+  renderOperationInfo();
   updateStepGates();
   saveState();
   renderSteps();
 }
 
-// 第二～四步的可見性瀑布：前一步沒完成，後面全部關掉
+// 第二～五步的可見性瀑布：前一步沒完成，後面全部關掉
 // 輔助設備（auxCard）為選填，第三步完成後即顯示，不影響後續解鎖
 function updateStepGates() {
   const ok2 = !!(order && order.specType);                    // Step 2 完成 = 規格類型已設
   const ok3 = ok2 && !!(order && order.changeScope);          // Step 3 完成 = 符號已選
   const ok4 = ok3 && !!(order && order.materialType);         // Step 4 完成 = 原料類型已選
-  $('scopeCard').style.display    = ok2 ? 'block' : 'none';
-  $('auxCard').style.display      = ok3 ? 'block' : 'none';
-  $('materialCard').style.display = ok3 ? 'block' : 'none';
-  $('stepsArea').style.display    = ok4 ? 'block' : 'none';
-  if (!ok4) $('bottomBar').classList.remove('show');
+  const opName = (order && order.operatorName || '').toString().trim();
+  const opCount = order && order.totalWorkers;
+  const ok5 = ok4 && opName !== '' && opCount != null && Number(opCount) >= 1; // Step 5 完成 = 操作姓名 + 人數
+  $('scopeCard').style.display     = ok2 ? 'block' : 'none';
+  $('auxCard').style.display       = ok3 ? 'block' : 'none';
+  $('materialCard').style.display  = ok3 ? 'block' : 'none';
+  $('operationCard').style.display = ok4 ? 'block' : 'none';
+  $('stepsArea').style.display     = ok5 ? 'block' : 'none';
+  if (!ok5) $('bottomBar').classList.remove('show');
 }
 
 function renderSpecType() {
@@ -1239,6 +1271,71 @@ document.querySelectorAll('.mat-choice').forEach(b => {
     }
   };
 });
+
+// ── 作業人員（第五步）──
+function renderOperationInfo() {
+  const nameInput = $('operatorNameInput');
+  const workersSelect = $('totalWorkersSelect');
+  if (!nameInput || !workersSelect) return;
+  nameInput.value = (order && order.operatorName) || '';
+  const n = order && order.totalWorkers;
+  workersSelect.value = (n != null && n !== '') ? String(n) : '';
+}
+{
+  const nameInput = $('operatorNameInput');
+  if (nameInput) {
+    let saveTimer = null;
+    const commit = async () => {
+      if (!order || !orderNo) return;
+      const val = (nameInput.value || '').trim();
+      const next = val === '' ? null : val;
+      const old = order.operatorName || null;
+      if (next === old) return;
+      order.operatorName = next;
+      updateStepGates();
+      const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/operation-info', {
+        method: 'POST',
+        body: { operatorName: next },
+      });
+      if (!r.ok) {
+        order.operatorName = old;
+        renderOperationInfo();
+        updateStepGates();
+        toast(r.error || '儲存失敗，已還原', 'error');
+      }
+    };
+    nameInput.addEventListener('input', () => {
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(commit, 600);
+    });
+    nameInput.addEventListener('blur', () => {
+      if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+      commit();
+    });
+  }
+  const workersSelect = $('totalWorkersSelect');
+  if (workersSelect) {
+    workersSelect.addEventListener('change', async () => {
+      if (!order || !orderNo) return;
+      const raw = workersSelect.value;
+      const next = raw === '' ? null : Number(raw);
+      const old = (order.totalWorkers == null) ? null : Number(order.totalWorkers);
+      if (next === old) return;
+      order.totalWorkers = next;
+      updateStepGates();
+      const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/operation-info', {
+        method: 'POST',
+        body: { totalWorkers: next },
+      });
+      if (!r.ok) {
+        order.totalWorkers = old;
+        renderOperationInfo();
+        updateStepGates();
+        toast(r.error || '儲存失敗，已還原', 'error');
+      }
+    });
+  }
+}
 
 // ── 輔助設備 ──
 function renderAuxEquipment() {

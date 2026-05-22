@@ -132,6 +132,8 @@ function serializeOrder(o) {
     changeScope: o.changeScope || null,      // '@' | '#' | '@#' | null
     materialType: o.materialType || null,    // 'coil'(1.0) | 'plate'(1.2) | null
     auxEquipment: o.auxEquipment || null,    // flat/leveler/slitter/wave/rewind/other | null
+    operatorName: o.operatorName || null,    // 設備操作人員姓名（第五步）
+    totalWorkers: (o.totalWorkers ?? null),  // 全部作業人數（第五步）
     productSpec: o.productSpec || '',
     moldSpec: o.moldSpec || '', material: o.material || '',
     dispatchQty: o.dispatchQty, bladeCount: o.bladeCount,
@@ -575,6 +577,67 @@ export default async function orderRoutes(fastify) {
       return { ok: true, auxEquipment };
     } catch (e) {
       request.log.error(e, 'aux-equipment failed');
+      return reply.code(500).send({
+        error: '設定失敗：' + (e.message || String(e)),
+        code: e.code || null,
+      });
+    }
+  });
+
+  // 設定設備操作人員 / 全部作業人數（第五步）
+  fastify.post('/:orderNo/operation-info', async (request, reply) => {
+    try {
+      const orderNo = String(request.params.orderNo || '').toUpperCase();
+      if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
+      const body = request.body || {};
+      let operatorName = body.operatorName;
+      let totalWorkers = body.totalWorkers;
+
+      if (operatorName !== undefined) {
+        if (operatorName === null || operatorName === '') {
+          operatorName = null;
+        } else {
+          operatorName = String(operatorName).trim().slice(0, 50);
+          if (operatorName === '') operatorName = null;
+        }
+      }
+      if (totalWorkers !== undefined) {
+        if (totalWorkers === null || totalWorkers === '') {
+          totalWorkers = null;
+        } else {
+          const n = Number(totalWorkers);
+          if (!Number.isFinite(n) || n < 1 || n > 99 || !Number.isInteger(n)) {
+            return reply.code(400).send({ error: '人數須為 1-99 的整數' });
+          }
+          totalWorkers = n;
+        }
+      }
+
+      await fastify.prisma.$executeRawUnsafe(
+        'ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "operatorName" TEXT'
+      );
+      await fastify.prisma.$executeRawUnsafe(
+        'ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "totalWorkers" INTEGER'
+      );
+
+      const sets = [];
+      const params = [];
+      if (operatorName !== undefined) {
+        params.push(operatorName);
+        sets.push(`"operatorName" = $${params.length}`);
+      }
+      if (totalWorkers !== undefined) {
+        params.push(totalWorkers);
+        sets.push(`"totalWorkers" = $${params.length}`);
+      }
+      if (sets.length === 0) return { ok: true };
+      params.push(orderNo);
+      const sql = `UPDATE "Order" SET ${sets.join(', ')} WHERE "orderNo" = $${params.length}`;
+      const result = await fastify.prisma.$executeRawUnsafe(sql, ...params);
+      if (result === 0) return reply.code(404).send({ error: '找不到工單' });
+      return { ok: true, operatorName, totalWorkers };
+    } catch (e) {
+      request.log.error(e, 'operation-info failed');
       return reply.code(500).send({
         error: '設定失敗：' + (e.message || String(e)),
         code: e.code || null,

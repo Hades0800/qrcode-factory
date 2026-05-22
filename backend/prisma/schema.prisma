@@ -49,6 +49,8 @@ model Order {
   changeScope      String?  // '@' = 僅換原料 / '#' = 僅換模刀具 / '@#' = 兩者都換
   materialType     String?  // 'coil' = 捲料（係數 1.0）/ 'plate' = 板料（係數 1.2）
   auxEquipment     String?  // 輔助設備：flat/leveler/slitter/wave/rewind/other
+  operatorName     String?  // 設備操作人員姓名（第五步）
+  totalWorkers     Int?     // 全部作業人數（第五步）
   productSpec    String?
   moldSpec       String?
   material       String?
