@@ -514,7 +514,7 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520m"></script>
+<script src="utils.js?v=20260520n"></script>
 <script>
 const me = getMe();
 let allOrders = [];
@@ -818,6 +818,8 @@ function render() {
           ${infoHtml}
           ${eventsHtml}
         </div>
+        <div class="rc-expand" style="margin-top:6px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;" onclick="toggleEquipment(${idx}, '${escapeHtml(o.orderNo)}')"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>展開設備參數</div>
+        <div class="rc-detail" id="equipment-${idx}"></div>
         <ul class="rc-timeline">${stepsHtml}</ul>
       </div>
     `;
@@ -826,6 +828,48 @@ function render() {
   $('ordersArea').querySelectorAll('[data-del]').forEach(b => {
     b.onclick = () => deleteOrder(b.getAttribute('data-del'));
   });
+}
+
+// 設備參數欄位顯示對應
+const EP_FIELDS = [
+  ['operation', '設備操作'],
+  ['totalWorkers', '全部作業人數'],
+  ['paramFileName', '設備參數檔名'],
+  ['paramFileAttr', '參數檔案屬性'],
+  ['productSpecAttr', '生產規格屬性'],
+  ['moldSpec', '模具規格'],
+  ['machineSPM', '機器SPM'],
+  ['bladeCount', '生產刀數'],
+  ['feedSetting', '送料設定'],
+  ['cutterStroke', '大刀座行程'],
+  ['strokeUpdateFreq', '行程更新頻度'],
+];
+
+function renderEquipmentParam(ep) {
+  if (!ep) return '<div style="padding:10px;color:var(--muted);font-size:13px;text-align:center;">尚未上傳設備參數</div>';
+  const rows = EP_FIELDS.map(([k, label]) => {
+    const v = ep[k];
+    const val = (v == null || v === '') ? '<span style="color:var(--muted);">—</span>' : escapeHtml(String(v));
+    return `<tr><td style="padding:4px 8px;color:var(--muted);font-size:11px;width:35%;">${label}</td><td style="padding:4px 8px;font-size:13px;font-weight:600;">${val}</td></tr>`;
+  }).join('');
+  return `<table style="width:100%;font-size:12px;border-collapse:collapse;">${rows}</table>`;
+}
+
+async function toggleEquipment(idx, orderNo) {
+  const el = document.getElementById('equipment-' + idx);
+  if (!el) return;
+  const wasHidden = !el.classList.contains('show');
+  el.classList.toggle('show');
+  if (!wasHidden) return;
+  if (el.dataset.loaded) return;
+  el.dataset.loaded = '1';
+  el.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:12px;">載入中...</div>';
+  const r = await api('/api/equipment-params/' + encodeURIComponent(orderNo));
+  if (!r.ok) {
+    el.innerHTML = '<div style="padding:10px;color:var(--brand);font-size:13px;">' + (r.error || '載入失敗') + '</div>';
+    return;
+  }
+  el.innerHTML = renderEquipmentParam(r.data.equipmentParam);
 }
 
 async function toggleDetail(idx) {

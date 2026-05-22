@@ -496,7 +496,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520m"></script>
+<script src="utils.js?v=20260520n"></script>
 <script>
 const MACHINES = [
   { id: 'No1-350', num: 'No1', spec: '350' },
@@ -797,6 +797,10 @@ function renderContent() {
           </div>
           <h3 style="margin:0 0 8px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;">生產實態</h3>
           <ul class="timeline">${timeline}</ul>
+          <div style="margin-top:10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--brand);" onclick="toggleRtEquipment('${escapeHtml(o.orderNo)}', this)">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>展開設備參數
+          </div>
+          <div class="rt-equipment-${escapeHtml(o.orderNo)}" style="display:none;background:var(--bg);border-radius:8px;padding:10px;margin-top:6px;"></div>
         </div>
       `;
     });
@@ -1129,6 +1133,46 @@ function buildTimeline(o, isAdmin) {
       </li>
     `;
   }).join('');
+}
+
+// 設備參數展開
+const RT_EP_FIELDS = [
+  ['operation', '設備操作'],
+  ['totalWorkers', '全部作業人數'],
+  ['paramFileName', '設備參數檔名'],
+  ['paramFileAttr', '參數檔案屬性'],
+  ['productSpecAttr', '生產規格屬性'],
+  ['moldSpec', '模具規格'],
+  ['machineSPM', '機器SPM'],
+  ['bladeCount', '生產刀數'],
+  ['feedSetting', '送料設定'],
+  ['cutterStroke', '大刀座行程'],
+  ['strokeUpdateFreq', '行程更新頻度'],
+];
+function renderRtEquipment(ep) {
+  if (!ep) return '<div style="color:var(--muted);font-size:12px;text-align:center;padding:6px;">尚未上傳設備參數</div>';
+  const rows = RT_EP_FIELDS.map(([k, label]) => {
+    const v = ep[k];
+    const val = (v == null || v === '') ? '<span style="color:var(--muted);">—</span>' : escapeHtml(String(v));
+    return `<tr><td style="padding:3px 6px;color:var(--muted);font-size:11px;width:40%;">${label}</td><td style="padding:3px 6px;font-size:12px;font-weight:600;">${val}</td></tr>`;
+  }).join('');
+  return `<table style="width:100%;border-collapse:collapse;">${rows}</table>`;
+}
+async function toggleRtEquipment(orderNo, btn) {
+  const wrap = document.querySelector('.rt-equipment-' + CSS.escape(orderNo));
+  if (!wrap) return;
+  const showing = wrap.style.display !== 'none';
+  wrap.style.display = showing ? 'none' : 'block';
+  if (showing) return;
+  if (wrap.dataset.loaded) return;
+  wrap.dataset.loaded = '1';
+  wrap.innerHTML = '<div style="color:var(--muted);font-size:12px;">載入中...</div>';
+  const r = await api('/api/equipment-params/' + encodeURIComponent(orderNo));
+  if (!r.ok) {
+    wrap.innerHTML = '<div style="color:var(--brand);font-size:12px;">' + (r.error || '載入失敗') + '</div>';
+    return;
+  }
+  wrap.innerHTML = renderRtEquipment(r.data.equipmentParam);
 }
 
 initDropdownMenu();

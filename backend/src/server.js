@@ -11,6 +11,7 @@ import { execSync } from 'child_process';
 import authRoutes from './routes/auth.js';
 import orderRoutes from './routes/orders.js';
 import adminRoutes from './routes/admin.js';
+import equipmentParamRoutes from './routes/equipmentParams.js';
 
 const prisma = new PrismaClient();
 
@@ -155,6 +156,7 @@ fastify.get('/diag', { onRequest: [fastify.authenticate, fastify.requireAdmin] }
 await fastify.register(authRoutes, { prefix: '/api/auth' });
 await fastify.register(orderRoutes, { prefix: '/api/orders' });
 await fastify.register(adminRoutes, { prefix: '/api/admin' });
+await fastify.register(equipmentParamRoutes, { prefix: '/api/equipment-params' });
 
 // ── 修正工單日期 ──
 fastify.post('/api/fix-dates', {

@@ -86,6 +86,7 @@ model Order {
   deletedAt   DateTime?
   pauseEvents PauseEvent[]
   stepEntries StepEntry[]
+  equipmentParam EquipmentParam?
 
   @@index([orderNo])
   @@index([productionDate])
@@ -93,6 +94,39 @@ model Order {
   @@index([actualStartDate])
   @@index([machineNo])
   @@index([updatedAt])
+  @@index([deletedAt])
+}
+
+// ───────────────────────────────
+// 設備參數（一般人員上傳；一張工單一筆）
+// ───────────────────────────────
+
+model EquipmentParam {
+  id              Int       @id @default(autoincrement())
+  orderId         Int       @unique
+  order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderNo         String    // 冗餘欄方便查詢
+
+  operation        String?  // 設備操作
+  totalWorkers     Int?     // 全部作業人數
+  paramFileName    String?  // 設備參數檔名
+  paramFileAttr    String?  // 參數檔案屬性
+  productSpecAttr  String?  // 生產規格屬性
+
+  moldSpec         String?  // 模具規格
+  machineSPM       Float?   // 機器SPM
+  bladeCount       Int?     // 生產刀數
+  feedSetting      String?  // 送料設定
+  cutterStroke     String?  // 大刀座行程
+  strokeUpdateFreq String?  // 行程更新頻度
+
+  createdBy        Int?
+  createdByName    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  @@index([orderNo])
   @@index([deletedAt])
 }
 

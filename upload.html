@@ -184,9 +184,10 @@
 <div class="container">
 
   <div class="page-tabs">
-    <button class="page-tab active" data-tab="upload">📤 上傳</button>
-    <button class="page-tab" data-tab="overview">📊 製造概覽</button>
-    <button class="page-tab" data-tab="history">📋 上傳紀錄</button>
+    <button class="page-tab active" data-tab="upload" id="tabBtn-upload">📤 工單上傳</button>
+    <button class="page-tab" data-tab="equipment" id="tabBtn-equipment">⚙ 設備參數</button>
+    <button class="page-tab" data-tab="overview" id="tabBtn-overview">📊 製造概覽</button>
+    <button class="page-tab" data-tab="history" id="tabBtn-history">📋 上傳紀錄</button>
   </div>
 
   <!-- 上傳區 -->
@@ -271,6 +272,47 @@
 
   </div><!-- /tab-upload -->
 
+  <!-- 設備參數（一般人員、admin） -->
+  <div id="tab-equipment" style="display:none;">
+    <div class="card">
+      <h2>設備參數上傳</h2>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">逐格填寫，工單號必須是今日有生產活動的工單</div>
+
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--ink);margin-bottom:4px;">工單編號 <span style="color:var(--brand);">*</span></label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="eqOrderNo" placeholder="例：F1150512001" style="flex:1;padding:10px 12px;font-size:14px;border:1.5px solid var(--border);border-radius:8px;text-transform:uppercase;">
+          <button id="eqLookupBtn" style="padding:10px 18px;background:#1f6feb;color:#fff;border:none;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;white-space:nowrap;">查詢工單</button>
+        </div>
+        <div id="eqOrderHint" style="font-size:12px;margin-top:6px;color:var(--muted);">輸入工單號後按「查詢工單」確認</div>
+      </div>
+
+      <div id="eqFormFields" style="display:none;">
+        <h3 style="margin:16px 0 8px;font-size:13px;color:var(--muted);font-weight:700;letter-spacing:.5px;border-top:1px solid var(--border);padding-top:14px;">設備操作資訊</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <label style="font-size:12px;color:var(--ink);"><div style="margin-bottom:4px;font-weight:600;">設備操作</div><input type="text" id="ep_operation" maxlength="200" style="width:100%;padding:8px 10px;font-size:14px;border:1.5px solid var(--border);border-radius:6px;"></label>
+          <label style="font-size:12px;color:var(--ink);"><div style="margin-bottom:4px;font-weight:600;">全部作業人數</div><input type="number" id="ep_totalWorkers" min="0" max="999" style="width:100%;padding:8px 10px;font-size:14px;border:1.5px solid var(--border);border-radius:6px;"></label>
+          <label style="font-size:12px;color:var(--ink);"><div style="margin-bottom:4px;font-weight:600;">設備參數檔名</div><input type="text" id="ep_paramFileName" maxlength="200" style="width:100%;padding:8px 10px;font-size:14px;border:1.5px solid var(--border);border-radius:6px;"></label>
+          <label style="font-size:12px;color:var(--ink);"><div style="margin-bottom:4px;font-weight:600;">參數檔案屬性</div><input type="text" id="ep_paramFileAttr" maxlength="200" style="width:100%;padding:8px 10px;font-size:14px;border:1.5px solid var(--border);border-radius:6px;"></label>
+          <label style="font-size:12px;color:var(--ink);grid-column:1 / span 2;"><div style="margin-bottom:4px;font-weight:600;">生產規格屬性</div><input type="text" id="ep_productSpecAttr" maxlength="200" style="width:100%;padding:8px 10px;font-size:14px;border:1.5px solid var(--border);border-radius:6px;"></label>
+        </div>
+
+        <h3 style="margin:16px 0 8px;font-size:13px;color:var(--muted);font-weight:700;letter-spacing:.5px;border-top:1px solid var(--border);padding-top:14px;">機器設定</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <label style="font-size:12px;color:var(--ink);"><div style="margin-bottom:4px;font-weight:600;">模具規格</div><input type="text" id="ep_moldSpec" maxlength="200" style="width:100%;padding:8px 10px;font-size:14px;border:1.5px solid var(--border);border-radius:6px;"></label>
+          <label style="font-size:12px;color:var(--ink);"><div style="margin-bottom:4px;font-weight:600;">機器SPM</div><input type="number" id="ep_machineSPM" step="0.1" min="0" style="width:100%;padding:8px 10px;font-size:14px;border:1.5px solid var(--border);border-radius:6px;"></label>
+          <label style="font-size:12px;color:var(--ink);"><div style="margin-bottom:4px;font-weight:600;">生產刀數</div><input type="number" id="ep_bladeCount" min="0" max="9999" style="width:100%;padding:8px 10px;font-size:14px;border:1.5px solid var(--border);border-radius:6px;"></label>
+          <label style="font-size:12px;color:var(--ink);"><div style="margin-bottom:4px;font-weight:600;">送料設定</div><input type="text" id="ep_feedSetting" maxlength="200" style="width:100%;padding:8px 10px;font-size:14px;border:1.5px solid var(--border);border-radius:6px;"></label>
+          <label style="font-size:12px;color:var(--ink);"><div style="margin-bottom:4px;font-weight:600;">大刀座行程</div><input type="text" id="ep_cutterStroke" maxlength="200" style="width:100%;padding:8px 10px;font-size:14px;border:1.5px solid var(--border);border-radius:6px;"></label>
+          <label style="font-size:12px;color:var(--ink);"><div style="margin-bottom:4px;font-weight:600;">行程更新頻度</div><input type="text" id="ep_strokeUpdateFreq" maxlength="200" style="width:100%;padding:8px 10px;font-size:14px;border:1.5px solid var(--border);border-radius:6px;"></label>
+        </div>
+
+        <button id="eqSubmitBtn" class="btn-primary btn-block" style="margin-top:18px;padding:14px;font-size:15px;">送出設備參數</button>
+        <div id="eqResult" style="margin-top:10px;font-size:13px;text-align:center;"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- 製造概覽（按日期 group by，原上傳紀錄的 day view） -->
   <div id="tab-overview" style="display:none;">
     <div class="card">
@@ -298,19 +340,36 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520m"></script>
+<script src="utils.js?v=20260520n"></script>
 <script>
 const me = getMe();
 let parsedRows = [];
 let uploadedFilename = '';
 
-// 權限檢查
+// 權限檢查（生管、admin、一般人員都可進入；視角色顯示不同 tab）
 if (!me) { location.href = 'index.html'; }
-if (me && !me.isAdmin && !me.isPlanner) { alert('需要生管或管理員權限'); location.href = 'index.html'; }
 $('meShow').textContent = me ? me.displayName + (me.isPlanner ? '（生管）' : me.isAdmin ? '（管理員）' : '') : '';
 if (me && me.isAdmin) $('adminLink').style.display = 'flex';
 $('logoutLink').onclick = e => { e.preventDefault(); localStorage.clear(); location.href = 'index.html'; };
 initDropdownMenu();
+
+// 依角色顯示對應 tab：
+//   生管：工單上傳 / 製造概覽 / 上傳紀錄
+//   一般人員：設備參數
+//   admin：全部
+const canUploadOrders = !!(me && (me.isAdmin || me.isPlanner));
+const canUploadEquipment = !!(me); // 任何登入者
+if (!canUploadOrders) {
+  ['tabBtn-upload', 'tabBtn-overview', 'tabBtn-history'].forEach(id => { const el = $(id); if (el) el.style.display = 'none'; });
+}
+if (!canUploadEquipment) $('tabBtn-equipment').style.display = 'none';
+// 預設選擇：admin 進 工單上傳；生管 進 工單上傳；一般人員 進 設備參數
+const defaultTab = canUploadOrders ? 'upload' : 'equipment';
+document.querySelectorAll('.page-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === defaultTab));
+['upload','equipment','overview','history'].forEach(t => {
+  const el = document.getElementById('tab-' + t);
+  if (el) el.style.display = (t === defaultTab) ? '' : 'none';
+});
 
 // 機台號碼自動配對（Excel 可能只寫 "2"、"3"、"No2" 等）
 const MACHINE_MAP = {
@@ -609,13 +668,121 @@ document.querySelectorAll('.page-tab').forEach(btn => {
   btn.onclick = () => {
     const tab = btn.dataset.tab;
     document.querySelectorAll('.page-tab').forEach(b => b.classList.toggle('active', b === btn));
-    $('tab-upload').style.display = tab === 'upload' ? '' : 'none';
-    $('tab-overview').style.display = tab === 'overview' ? '' : 'none';
-    $('tab-history').style.display = tab === 'history' ? '' : 'none';
+    ['upload','equipment','overview','history'].forEach(t => {
+      const el = document.getElementById('tab-' + t);
+      if (el) el.style.display = (t === tab) ? '' : 'none';
+    });
     if (tab === 'overview') loadOverview();
     if (tab === 'history') loadBatches();
   };
 });
+
+// ===== 設備參數上傳 =====
+let eqCurrentOrder = null;
+$('eqOrderNo').addEventListener('input', () => {
+  $('eqOrderNo').value = $('eqOrderNo').value.toUpperCase();
+});
+$('eqOrderNo').addEventListener('keydown', e => { if (e.key === 'Enter') $('eqLookupBtn').click(); });
+
+$('eqLookupBtn').onclick = async () => {
+  const orderNo = ($('eqOrderNo').value || '').trim().toUpperCase();
+  const hint = $('eqOrderHint');
+  $('eqFormFields').style.display = 'none';
+  $('eqResult').textContent = '';
+  if (!/^[A-Z]\d{10}$/.test(orderNo)) {
+    hint.style.color = 'var(--brand)';
+    hint.textContent = '⚠ 工單號格式：1 個英文字母 + 10 個數字';
+    return;
+  }
+  hint.style.color = 'var(--muted)';
+  hint.textContent = '查詢中...';
+  // 取得工單（admin 可直接讀；其他需檢查今日是否有活動）
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo));
+  if (!r.ok) {
+    hint.style.color = 'var(--brand)';
+    hint.textContent = '⚠ ' + (r.error || '查詢失敗');
+    return;
+  }
+  if (r.data.wasCreated) {
+    hint.style.color = 'var(--brand)';
+    hint.textContent = '⚠ 此工單號不存在（生管尚未上傳）';
+    return;
+  }
+  const o = r.data.order;
+  // 非 admin 必須是今日有活動的工單
+  if (!(me && me.isAdmin)) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const todayEnd = new Date(today.getTime() + 86400000);
+    const hasToday = (o.stepEntries || []).some(e => {
+      const t = new Date(e.recordedAt).getTime();
+      return t >= today.getTime() && t < todayEnd.getTime();
+    }) || ((o.pause12 && o.pause12.history) || []).some(p => {
+      const t = new Date(p.startAt).getTime();
+      return t >= today.getTime() && t < todayEnd.getTime();
+    }) || ((o.pause13 && o.pause13.history) || []).some(p => {
+      const t = new Date(p.startAt).getTime();
+      return t >= today.getTime() && t < todayEnd.getTime();
+    });
+    if (!hasToday) {
+      hint.style.color = 'var(--brand)';
+      hint.textContent = '⚠ 此工單號今日尚無生產活動';
+      return;
+    }
+  }
+  eqCurrentOrder = o;
+  hint.style.color = 'var(--success)';
+  hint.textContent = '✓ 工單存在：' + (o.productSpec || '—') + (o.machineNo ? '（機台 ' + o.machineNo + '）' : '');
+  $('eqFormFields').style.display = 'block';
+
+  // 已有設備參數則預填
+  const ep = await api('/api/equipment-params/' + encodeURIComponent(orderNo));
+  if (ep.ok && ep.data.equipmentParam) {
+    const e = ep.data.equipmentParam;
+    $('ep_operation').value = e.operation || '';
+    $('ep_totalWorkers').value = e.totalWorkers ?? '';
+    $('ep_paramFileName').value = e.paramFileName || '';
+    $('ep_paramFileAttr').value = e.paramFileAttr || '';
+    $('ep_productSpecAttr').value = e.productSpecAttr || '';
+    $('ep_moldSpec').value = e.moldSpec || '';
+    $('ep_machineSPM').value = e.machineSPM ?? '';
+    $('ep_bladeCount').value = e.bladeCount ?? '';
+    $('ep_feedSetting').value = e.feedSetting || '';
+    $('ep_cutterStroke').value = e.cutterStroke || '';
+    $('ep_strokeUpdateFreq').value = e.strokeUpdateFreq || '';
+  }
+};
+
+$('eqSubmitBtn').onclick = async () => {
+  if (!eqCurrentOrder) { toast('請先查詢工單', 'error'); return; }
+  const body = {
+    operation:        $('ep_operation').value.trim() || null,
+    totalWorkers:     $('ep_totalWorkers').value === '' ? null : Number($('ep_totalWorkers').value),
+    paramFileName:    $('ep_paramFileName').value.trim() || null,
+    paramFileAttr:    $('ep_paramFileAttr').value.trim() || null,
+    productSpecAttr:  $('ep_productSpecAttr').value.trim() || null,
+    moldSpec:         $('ep_moldSpec').value.trim() || null,
+    machineSPM:       $('ep_machineSPM').value === '' ? null : Number($('ep_machineSPM').value),
+    bladeCount:       $('ep_bladeCount').value === '' ? null : Number($('ep_bladeCount').value),
+    feedSetting:      $('ep_feedSetting').value.trim() || null,
+    cutterStroke:     $('ep_cutterStroke').value.trim() || null,
+    strokeUpdateFreq: $('ep_strokeUpdateFreq').value.trim() || null,
+  };
+  $('eqSubmitBtn').disabled = true;
+  const r = await api('/api/equipment-params/' + encodeURIComponent(eqCurrentOrder.orderNo), {
+    method: 'POST',
+    body,
+  });
+  $('eqSubmitBtn').disabled = false;
+  const res = $('eqResult');
+  if (!r.ok) {
+    res.style.color = 'var(--brand)';
+    res.textContent = '✗ ' + (r.error || '送出失敗');
+    return;
+  }
+  res.style.color = 'var(--success)';
+  res.textContent = '✓ 已送出設備參數';
+  toast('已送出設備參數', 'success');
+};
 
 // ===== 製造概覽（按日期 group by，含工單明細與狀態） =====
 let overviewOrders = [];
