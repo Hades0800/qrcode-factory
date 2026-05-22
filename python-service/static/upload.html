@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<title>上鎧鋼鐵 - 工單上傳</title>
+<link rel="icon" href="img/logo.jpg">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="preconnect" href="https://shangkai-manu-record.zeabur.app" crossorigin>
+<link rel="dns-prefetch" href="https://shangkai-manu-record.zeabur.app">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --brand: #d23535; --brand-dark: #a82828; --brand-soft: #fdf2f2;
+    --ink: #1c1c1e; --text: #2c2c2e; --muted: #6e6e73;
+    --border: #e5e5ea; --bg: #f2f2f5; --card: #fff;
+    --success: #2ea043; --success-soft: #e6f7ea;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased;
+  }
+  header {
+    background: #fff; border-bottom: 1px solid var(--border);
+    padding: 12px 16px; display: flex; justify-content: space-between;
+    align-items: center; position: relative; z-index: 10;
+    box-shadow: 0 1px 4px rgba(0,0,0,.04);
+  }
+  header .brand { display: flex; align-items: center; gap: 10px; }
+  header .brand img { height: 30px; }
+  header .brand-text { border-left: 2px solid var(--border); padding-left: 10px; }
+  header .brand-text .title { font-size: 13px; font-weight: 700; color: var(--ink); }
+  header .brand-text .sub { font-size: 10px; color: var(--muted); }
+  .menu-toggle {
+    background: none; border: none; font-size: 22px; color: var(--ink);
+    cursor: pointer; padding: 6px 10px; border-radius: 8px; min-height: 36px;
+    display: flex; align-items: center;
+  }
+  .dropdown-menu {
+    display: none; position: fixed; top: 56px; right: 8px;
+    background: #fff; border-radius: 12px; min-width: 170px; z-index: 999; padding: 6px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.12), 0 0 0 1px rgba(0,0,0,.04);
+  }
+  .dropdown-menu.show { display: block; }
+  .dropdown-menu a {
+    display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+    font-size: 15px; font-weight: 600; color: var(--text); text-decoration: none; border-radius: 8px;
+  }
+  .dropdown-menu a:hover { background: var(--bg); }
+  .dropdown-menu a.nav-active { color: var(--brand); background: var(--brand-soft); }
+  .dropdown-menu .menu-sep { height: 1px; background: var(--border); margin: 4px 8px; }
+  .dropdown-menu a.menu-logout { color: var(--muted); }
+
+  .container { padding: 16px; max-width: 1200px; margin: 0 auto; }
+
+  /* Tabs */
+  .page-tabs {
+    display: flex;
+    background: #fff;
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  .page-tab {
+    flex: 1;
+    text-align: center;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    border-radius: 8px;
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-family: inherit;
+    transition: all .15s;
+  }
+  .page-tab:hover { color: var(--brand); }
+  .page-tab.active { color: #fff; background: var(--brand); box-shadow: 0 2px 6px rgba(210,53,53,.25); }
+  .card {
+    background: var(--card); border-radius: 14px; padding: 20px; margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  .card h2 {
+    margin: 0 0 14px; font-size: 13px; color: var(--muted); font-weight: 700;
+    text-transform: uppercase; letter-spacing: .8px;
+  }
+  button {
+    appearance: none; border: none; border-radius: 10px; font-size: 15px;
+    padding: 14px 20px; cursor: pointer; font-weight: 700; font-family: inherit;
+    transition: transform .08s, background .15s;
+  }
+  button:active { transform: scale(.98); }
+  button:disabled { opacity: .5; }
+  .btn-primary { background: var(--brand); color: #fff; box-shadow: 0 2px 6px rgba(210,53,53,.25); }
+  .btn-success { background: var(--success); color: #fff; box-shadow: 0 2px 6px rgba(46,160,67,.25); }
+  .btn-block { width: 100%; }
+
+  /* Drop zone */
+  .drop-zone {
+    border: 2px dashed var(--border); border-radius: 14px; padding: 40px 20px;
+    text-align: center; transition: all .2s; cursor: pointer;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--brand); background: var(--brand-soft);
+  }
+  .drop-zone .dz-icon { font-size: 48px; margin-bottom: 12px; }
+  .drop-zone .dz-text { font-size: 15px; color: var(--text); font-weight: 600; }
+  .drop-zone .dz-hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .drop-zone input { display: none; }
+
+  /* Preview table */
+  .preview-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 14px; }
+  .preview-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 800px; }
+  .preview-table th {
+    background: var(--bg); font-size: 11px; color: var(--muted); font-weight: 700;
+    text-transform: uppercase; letter-spacing: .5px; padding: 10px 10px;
+    text-align: left; position: sticky; top: 0; white-space: nowrap;
+  }
+  .preview-table td { padding: 10px 10px; border-bottom: 1px solid var(--border); }
+  .preview-table tr:hover { background: #fafafc; }
+  .preview-table .err { color: var(--brand); font-weight: 600; }
+
+  /* Desktop enhancements */
+  @media (min-width: 768px) {
+    .container { padding: 24px 32px; }
+    .card { padding: 24px 28px; border-radius: 16px; margin-bottom: 20px; }
+    .page-tabs { margin-bottom: 20px; border-radius: 14px; padding: 5px; }
+    .page-tab { padding: 14px; font-size: 15px; }
+    .drop-zone { padding: 50px 30px; }
+    .preview-table { font-size: 14px; }
+    .preview-table th { padding: 12px 12px; font-size: 12px; }
+    .preview-table td { padding: 12px 12px; }
+  }
+
+  .result { padding: 16px; border-radius: 10px; margin-top: 14px; font-size: 14px; font-weight: 600; }
+  .result.ok { background: var(--success-soft); color: var(--success); }
+  .result.fail { background: var(--brand-soft); color: var(--brand); }
+
+  .stats-row { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .stat-pill {
+    background: var(--bg); padding: 8px 14px; border-radius: 8px;
+    font-size: 13px; font-weight: 600;
+  }
+  .stat-pill strong { color: var(--brand); }
+
+  #toast {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    background: rgba(28,28,30,.95); color: #fff; padding: 14px 22px;
+    border-radius: 12px; font-size: 14px; font-weight: 600; z-index: 200;
+    display: none; box-shadow: 0 8px 24px rgba(0,0,0,.2);
+  }
+  #toast.show { display: block; }
+  #toast.error { background: var(--brand); }
+  #toast.success { background: var(--success); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <img src="img/logo.jpg" alt="上鎧鋼鐵">
+    <div class="brand-text">
+      <div class="title">工單上傳</div>
+      <div class="sub" id="meShow"></div>
+    </div>
+  </div>
+  <button class="menu-toggle" id="menuBtn" onclick="document.getElementById('dropMenu').classList.toggle('show')">&#9776;</button>
+  <div class="dropdown-menu" id="dropMenu">
+    <a href="index.html">生產實態紀錄</a>
+    <a href="records.html">&#128202; 紀錄</a>
+    <a href="realtime.html">&#9889; 即時</a>
+    <a href="upload.html" class="nav-active">&#128228; 上傳</a>
+    <a href="admin.html" id="adminLink" style="display:none;">&#9881; 管理</a>
+    <div class="menu-sep"></div>
+    <a href="#" id="logoutLink" class="menu-logout">登出</a>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="page-tabs">
+    <button class="page-tab active" data-tab="upload" id="tabBtn-upload">📤 工單上傳</button>
+    <button class="page-tab" data-tab="overview" id="tabBtn-overview">📊 製造概覽</button>
+    <button class="page-tab" data-tab="history" id="tabBtn-history">📋 上傳紀錄</button>
+  </div>
+
+  <!-- 上傳區 -->
+  <div id="tab-upload">
+
+  <div class="card">
+    <h2>上傳 Excel 工單檔</h2>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;background:var(--bg);padding:12px 14px;border-radius:10px;">
+      <label style="margin:0;font-weight:600;font-size:13px;color:var(--ink);white-space:nowrap;">生產日期：</label>
+      <input type="date" id="uploadDate" style="padding:8px 10px;font-size:14px;border:1.5px solid var(--border);border-radius:8px;background:#fff;">
+      <button id="todayBtn" style="padding:6px 12px;font-size:12px;background:#fff;color:var(--ink);border:1.5px solid var(--border);border-radius:8px;cursor:pointer;font-weight:600;">今日</button>
+      <div style="flex:1;min-width:150px;font-size:11px;color:var(--muted);">📅 補上傳可選過去日期</div>
+    </div>
+
+    <div class="drop-zone" id="dropZone">
+      <div class="dz-icon">&#128196;</div>
+      <div class="dz-text">點擊選擇或拖曳 Excel 檔案</div>
+      <div class="dz-hint">支援 .xlsx / .xls 格式</div>
+      <input type="file" id="fileInput" accept=".xlsx,.xls">
+    </div>
+    <div id="fileName" style="text-align:center;margin-top:10px;font-size:13px;color:var(--muted);"></div>
+  </div>
+
+  <div class="card" id="todayCard" style="display:none;">
+    <h2>今日已上傳工單</h2>
+    <div id="todayStats" style="font-size:13px;color:var(--muted);margin-bottom:10px;"></div>
+    <div class="preview-wrap">
+      <table class="preview-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>製造單號</th>
+            <th>生產日期</th>
+            <th>品名規格</th>
+            <th>模具</th>
+            <th>數量</th>
+            <th>總數</th>
+            <th>狀態</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="todayBody"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+      ⓘ 可在上方「📋 上傳紀錄」一次取消整批上傳。
+    </div>
+  </div>
+
+  <div class="card" id="previewCard" style="display:none;">
+    <h2>預覽（上傳前確認）</h2>
+    <div class="stats-row" id="statsRow"></div>
+    <div class="preview-wrap">
+      <table class="preview-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>製造單號</th>
+            <th>生產日期</th>
+            <th>生產規格</th>
+            <th>模具規格</th>
+            <th>領用材料</th>
+            <th>機台</th>
+            <th>派工數</th>
+            <th>刀數</th>
+            <th>SPM</th>
+            <th>一片理論重</th>
+            <th>全部總重量</th>
+            <th>狀態</th>
+          </tr>
+        </thead>
+        <tbody id="previewBody"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:10px;">
+      <button class="btn-primary btn-block" id="uploadBtn">&#128228; 確認上傳</button>
+      <button class="btn-block" id="cancelBtn" style="background:var(--bg);color:var(--ink);border:1.5px solid var(--border);">取消</button>
+    </div>
+    <div id="result"></div>
+  </div>
+
+  </div><!-- /tab-upload -->
+
+  <!-- 設備參數（一般人員、admin） -->
+  <!-- 製造概覽（按日期 group by，原上傳紀錄的 day view） -->
+  <div id="tab-overview" style="display:none;">
+    <div class="card">
+      <h2 style="display:flex;justify-content:space-between;align-items:center;">
+        <span>製造概覽</span>
+        <button id="refreshOverviewBtn" style="padding:6px 12px;font-size:12px;background:#fff;color:var(--ink);border:1.5px solid var(--border);border-radius:6px;cursor:pointer;">🔄 重新整理</button>
+      </h2>
+      <div id="overviewContent" style="color:var(--muted);padding:30px;text-align:center;">載入中...</div>
+    </div>
+  </div>
+
+  <!-- 上傳紀錄（按上傳批次） -->
+  <div id="tab-history" style="display:none;">
+    <div class="card">
+      <h2 style="display:flex;justify-content:space-between;align-items:center;">
+        <span>上傳紀錄</span>
+        <button id="refreshBatchBtn" style="padding:6px 12px;font-size:12px;background:#fff;color:var(--ink);border:1.5px solid var(--border);border-radius:6px;cursor:pointer;">🔄 重新整理</button>
+      </h2>
+      <div id="historyContent" style="color:var(--muted);padding:30px;text-align:center;">載入中...</div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script src="js/config.js"></script>
+<script src="js/utils.js?v=20260520ab"></script>
+<script>
+const me = getMe();
+let parsedRows = [];
+let uploadedFilename = '';
+
+// 權限檢查：只有生管 / admin 能進上傳頁（一般人員從即時頁直接填設備參數）
+if (!me) { location.href = 'index.html'; }
+if (me && !me.isAdmin && !me.isPlanner) { alert('需要生管或管理員權限'); location.href = 'index.html'; }
+$('meShow').textContent = me ? me.displayName + (me.isPlanner ? '（生管）' : me.isAdmin ? '（管理員）' : '') : '';
+if (me && me.isAdmin) $('adminLink').style.display = 'flex';
+$('logoutLink').onclick = e => { e.preventDefault(); localStorage.clear(); location.href = 'index.html'; };
+initDropdownMenu();
+
+// 機台號碼自動配對（Excel 可能只寫 "2"、"3"、"No2" 等）
+const MACHINE_MAP = {
+  '1': 'No1-350', 'No1': 'No1-350', 'No1-350': 'No1-350',
+  '2': 'No2-250', 'No2': 'No2-250', 'No2-250': 'No2-250',
+  '3': 'No3-60',  'No3': 'No3-60',  'No3-60':  'No3-60',
+  '4': 'No4-90',  'No4': 'No4-90',  'No4-90':  'No4-90',
+  '5': 'No5-40',  'No5': 'No5-40',  'No5-40':  'No5-40',
+  '6': 'No6-40',  'No6': 'No6-40',  'No6-40':  'No6-40',
+};
+function normalizeMachine(v) {
+  if (!v) return '';
+  const s = String(v).trim();
+  return MACHINE_MAP[s] || s;
+}
+
+// 欄位對應（Excel 欄位名 → 系統欄位）— 同義字都對應到同一欄位
+const FIELD_MAP = {
+  // 製造單號
+  '製造單號': 'orderNo', '工單號': 'orderNo', '工單編號': 'orderNo',
+  // 生產規格 / 品名
+  '品名規格': 'productSpec', '生產規格': 'productSpec', '品名': 'productSpec',
+  // 模具
+  '模具': 'moldSpec', '模具規格': 'moldSpec',
+  // 領料
+  '領料': 'material', '領用材料': 'material', '材料': 'material',
+  '領用': 'material', '材質': 'material', '原料': 'material', '物料': 'material',
+  // 機台
+  '機台': 'machineNo', '機台號': 'machineNo', '機台編號': 'machineNo',
+  // 生產日期
+  '生產日期': 'productionDate', '日期': 'productionDate',
+  // 數量 / 派工數
+  '數量': 'dispatchQty', '派工數': 'dispatchQty',
+  // 設定數字 / 刀數
+  '設定數字': 'bladeCount', '刀數': 'bladeCount',
+  // 機器 SPM
+  '機器SPM': 'machineSPM', 'SPM': 'machineSPM',
+  // 單重 / 一片理論重
+  '單重': 'unitWeight', '一片理論重': 'unitWeight', '單片重': 'unitWeight',
+  // 總數 / 總重量
+  '總數': 'totalWeight', '全部總重量': 'totalWeight', '總重量': 'totalWeight',
+};
+
+// 預設生產日期為今日
+(function () {
+  const t = new Date();
+  const ymd = t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0');
+  $('uploadDate').value = ymd;
+})();
+$('todayBtn').onclick = () => {
+  const t = new Date();
+  const ymd = t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0');
+  $('uploadDate').value = ymd;
+};
+
+// Drop zone
+const dropZone = $('dropZone');
+const fileInput = $('fileInput');
+dropZone.onclick = () => fileInput.click();
+dropZone.ondragover = e => { e.preventDefault(); dropZone.classList.add('drag-over'); };
+dropZone.ondragleave = () => dropZone.classList.remove('drag-over');
+dropZone.ondrop = e => { e.preventDefault(); dropZone.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); };
+fileInput.onchange = e => { if (e.target.files[0]) handleFile(e.target.files[0]); };
+
+function handleFile(file) {
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { toast('檔案過大（上限 5MB）', 'error'); return; }
+  if (!/\.(xlsx|xls)$/i.test(file.name)) { toast('請選擇 .xlsx 或 .xls 檔', 'error'); return; }
+  uploadedFilename = file.name;
+  $('fileName').textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      // raw: true → 拿 Excel 儲存格實際資料，避免「自訂格式」造假
+      // 例如儲存格實際是數字 1159421004，自訂格式顯示成 F1159421004 → raw 模式下 orderNo 會是純數字 → 不通過格式檢查
+      const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true });
+      parseRows(json);
+    } catch(err) {
+      toast('Excel 解析失敗：' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseRows(json) {
+  if (!json.length) { toast('Excel 沒有資料', 'error'); return; }
+  // 自動對應欄位（header 比對時去掉空白、括號、連字符等雜訊，放寬容差）
+  const normHeader = s => String(s || '').trim().replace(/[\s　()（）\-_－\/／:：]/g, '').toLowerCase();
+  const normalizedFieldMap = {};
+  Object.entries(FIELD_MAP).forEach(([k, v]) => { normalizedFieldMap[normHeader(k)] = v; });
+  const headers = Object.keys(json[0]);
+  const mapping = {};
+  const unmatched = [];
+  headers.forEach(h => {
+    const key = normHeader(h);
+    if (normalizedFieldMap[key]) mapping[h] = normalizedFieldMap[key];
+    else if (h.trim()) unmatched.push(h);
+  });
+  if (!Object.values(mapping).includes('orderNo')) {
+    toast('找不到「製造單號」欄位，請確認 Excel 第一列有此欄位名', 'error');
+    return;
+  }
+  if (unmatched.length > 0) {
+    console.warn('[上傳] 這些 Excel 欄位沒對應到系統欄位，資料會被忽略：', unmatched);
+    toast('未認得 Excel 欄位：' + unmatched.join('、') + '（資料會被忽略）', 'error');
+  }
+
+  // 用使用者選的日期（預設今日）
+  const selectedDate = $('uploadDate').value;
+  const today = new Date();
+  const fallbackDate = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+  const todayStr = selectedDate || fallbackDate;
+
+  const allRows = json.map(row => {
+    const obj = {};
+    Object.keys(mapping).forEach(excelKey => {
+      let val = row[excelKey];
+      const field = mapping[excelKey];
+      if (field === 'productionDate' && val instanceof Date) {
+        val = val.toISOString().slice(0, 10);
+      }
+      obj[field] = val;
+    });
+    // 沒有生產日期就用上傳當日
+    if (!obj.productionDate) obj.productionDate = todayStr;
+    obj.orderNo = String(obj.orderNo || '').trim();
+    obj._valid = /^[A-Z]\d{10}$/.test(obj.orderNo.toUpperCase());
+    if (obj._valid) obj.orderNo = obj.orderNo.toUpperCase();
+    // 機台號自動配對
+    if (obj.machineNo) obj.machineNo = normalizeMachine(obj.machineNo);
+    // 數值欄位：0 視為空值（拿掉）
+    ['dispatchQty','bladeCount','machineSPM','unitWeight','totalWeight'].forEach(k => {
+      if (obj[k] !== undefined && obj[k] !== null && obj[k] !== '') {
+        const n = Number(obj[k]);
+        obj[k] = (isNaN(n) || n === 0) ? null : n;
+      }
+    });
+    // 疑似殘留行：orderNo 看起來合法但其他欄位（規格/領料/機台/數量）全空
+    // 通常是 Excel 殘留資料（之前刪除沒清乾淨、隱藏列、白字格式）
+    const otherFields = ['productSpec','moldSpec','material','machineNo','dispatchQty','bladeCount','machineSPM','unitWeight','totalWeight'];
+    obj._suspicious = obj._valid && otherFields.every(k => obj[k] === undefined || obj[k] === null || obj[k] === '');
+    return obj;
+  });
+
+  parsedRows = allRows;
+
+  renderPreview();
+}
+
+function renderPreview() {
+  $('previewCard').style.display = 'block';
+  $('result').innerHTML = '';
+  const valid = parsedRows.filter(r => r._valid && !r._suspicious).length;
+  const suspicious = parsedRows.filter(r => r._suspicious).length;
+  const invalid = parsedRows.length - valid - suspicious;
+  $('statsRow').innerHTML = `
+    <div class="stat-pill">共 <strong>${parsedRows.length}</strong> 筆</div>
+    <div class="stat-pill">有效 <strong>${valid}</strong></div>
+    ${invalid ? `<div class="stat-pill" style="color:var(--brand);">格式錯誤 <strong>${invalid}</strong></div>` : ''}
+    ${suspicious ? `<div class="stat-pill" style="color:#f0ad4e;">疑似殘留 <strong>${suspicious}</strong></div>` : ''}
+  `;
+  $('previewBody').innerHTML = parsedRows.map((r, i) => {
+    const statusCell = r._suspicious
+      ? '<span style="color:#f0ad4e;">⚠ 疑似殘留</span>'
+      : (r._valid ? '&#10003;' : '<span class="err">&#10007;</span>');
+    const orderCell = r._suspicious
+      ? `<span style="color:#f0ad4e;">${escapeHtml(r.orderNo)} (其他欄位皆空，不上傳)</span>`
+      : `<span class="${r._valid ? '' : 'err'}">${escapeHtml(r.orderNo)}${r._valid ? '' : ' (格式錯誤)'}</span>`;
+    const rowStyle = r._suspicious ? ' style="background:#fff3cd;"' : '';
+    return `
+    <tr${rowStyle}>
+      <td>${i + 1}</td>
+      <td>${orderCell}</td>
+      <td>${escapeHtml(r.productionDate || '')}</td>
+      <td>${escapeHtml(r.productSpec || '')}</td>
+      <td>${escapeHtml(r.moldSpec || '')}</td>
+      <td>${escapeHtml(r.material || '')}</td>
+      <td>${escapeHtml(r.machineNo || '')}</td>
+      <td>${escapeHtml(r.dispatchQty || '')}</td>
+      <td>${escapeHtml(r.bladeCount || '')}</td>
+      <td>${escapeHtml(r.machineSPM || '')}</td>
+      <td>${escapeHtml(r.unitWeight || '')}</td>
+      <td>${escapeHtml(r.totalWeight || '')}</td>
+      <td>${statusCell}</td>
+    </tr>
+  `;
+  }).join('');
+  $('previewCard').scrollIntoView({ behavior: 'smooth' });
+}
+
+$('cancelBtn').onclick = () => {
+  parsedRows = [];
+  $('previewCard').style.display = 'none';
+  $('fileName').textContent = '';
+  fileInput.value = '';
+};
+
+$('uploadBtn').onclick = async () => {
+  const rows = parsedRows.filter(r => r._valid && !r._suspicious);
+  if (rows.length === 0) { toast('沒有有效的工單', 'error'); return; }
+  const selectedDate = $('uploadDate').value;
+  const today = new Date();
+  const ymd = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+  if (selectedDate && selectedDate !== ymd) {
+    if (!confirm('你選的日期是 ' + selectedDate + '（非今日），確定要用這個日期上傳嗎？\n\n這是補上傳功能，工單的生產日期會標記為該日期。')) return;
+  }
+  $('uploadBtn').disabled = true;
+  $('uploadBtn').textContent = '上傳中...';
+  const clean = rows.map(r => {
+    const o = Object.assign({}, r);
+    delete o._valid;
+    return o;
+  });
+  const res = await api('/api/orders/bulk-upload', { method: 'POST', body: { orders: clean, filename: uploadedFilename, uploadDate: $('uploadDate').value } });
+  $('uploadBtn').disabled = false;
+  $('uploadBtn').innerHTML = '&#128228; 確認上傳';
+  if (!res.ok) {
+    $('result').innerHTML = `<div class="result fail">${res.error || '上傳失敗'}</div>`;
+    return;
+  }
+  const d = res.data;
+  let html = `<div class="result ok">上傳完成：新增 ${d.created} 筆、更新 ${d.updated} 筆<br>可切到「📋 上傳紀錄」查看明細</div>`;
+  if (d.errors && d.errors.length > 0) {
+    html += `<div class="result fail" style="margin-top:8px;">錯誤 ${d.errors.length} 筆：<br>${d.errors.map(e => escapeHtml(e)).join('<br>')}</div>`;
+  }
+  $('result').innerHTML = html;
+  // 隱藏預覽卡片，清空檔案狀態
+  $('previewCard').style.display = 'none';
+  $('fileName').textContent = '';
+  uploadedFilename = '';
+  fileInput.value = '';
+  parsedRows = [];
+  toast('上傳完成', 'success');
+  loadTodayOrders();
+};
+
+// 今日已上傳
+async function loadTodayOrders() {
+  const r = await api('/api/orders?limit=200');
+  if (!r.ok) return;
+  const today = new Date();
+  const todayYmd = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+  const rows = (r.data.orders || []).filter(o => {
+    const d = o.productionDate ? new Date(o.productionDate) : null;
+    if (!d) return false;
+    return d.getFullYear() === today.getFullYear() &&
+           d.getMonth() === today.getMonth() &&
+           d.getDate() === today.getDate();
+  });
+  if (rows.length === 0) { $('todayCard').style.display = 'none'; return; }
+  $('todayCard').style.display = 'block';
+  const hasActivity = o => !!(o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At || o.step11At);
+  const active = rows.filter(hasActivity).length;
+  $('todayStats').textContent = `今日上傳 ${rows.length} 筆（${active} 筆已開始生產，${rows.length - active} 筆可取消）`;
+  const isAdmin = me && me.isAdmin;
+  const canManageToday = isAdmin || (me && me.isPlanner);
+  $('todayBody').innerHTML = rows.map((o, i) => {
+    const started = hasActivity(o);
+    let actionBtn = '—';
+    if (!started && canManageToday) {
+      actionBtn = `<button style="padding:6px 12px;font-size:12px;background:#fff;color:var(--brand);border:1.5px solid var(--brand);border-radius:6px;cursor:pointer;" onclick="deleteOrder('${escapeHtml(o.orderNo)}', false)">取消</button>`;
+    } else if (started && isAdmin) {
+      actionBtn = `<button style="padding:6px 12px;font-size:12px;background:var(--brand);color:#fff;border:none;border-radius:6px;cursor:pointer;" onclick="deleteOrder('${escapeHtml(o.orderNo)}', true)">強制取消</button>`;
+    }
+    return `
+      <tr>
+        <td>${i + 1}</td>
+        <td><strong>${escapeHtml(o.orderNo)}</strong></td>
+        <td>${escapeHtml(o.productionDate ? String(o.productionDate).slice(0,10) : '')}</td>
+        <td style="white-space:normal;max-width:240px;">${escapeHtml(o.productSpec || '')}</td>
+        <td>${escapeHtml(o.moldSpec || '')}</td>
+        <td>${o.dispatchQty || ''}</td>
+        <td>${o.totalWeight || ''}</td>
+        <td>${started ? '<span style="color:var(--success);">已生產</span>' : '<span style="color:var(--muted);">未開始</span>'}</td>
+        <td>${actionBtn}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function deleteOrder(orderNo, isForce) {
+  const msg = isForce
+    ? `⚠️ 強制取消工單「${orderNo}」\n\n此工單已開始生產，掃描紀錄會一併刪除！\n\n確定要繼續？`
+    : `確定取消工單「${orderNo}」？\n\n可重新上傳新版本。`;
+  if (!confirm(msg)) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo), { method: 'DELETE' });
+  if (!r.ok) { toast(r.error || '取消失敗', 'error'); return; }
+  toast('已取消 ' + orderNo, 'success');
+  loadTodayOrders();
+}
+
+// ===== 頁面 tab 切換 =====
+document.querySelectorAll('.page-tab').forEach(btn => {
+  btn.onclick = () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.page-tab').forEach(b => b.classList.toggle('active', b === btn));
+    ['upload','overview','history'].forEach(t => {
+      const el = document.getElementById('tab-' + t);
+      if (el) el.style.display = (t === tab) ? '' : 'none';
+    });
+    if (tab === 'overview') loadOverview();
+    if (tab === 'history') loadBatches();
+  };
+});
+
+// ===== 製造概覽（按日期 group by，含工單明細與狀態） =====
+let overviewOrders = [];
+
+async function loadOverview() {
+  const content = $('overviewContent');
+  content.innerHTML = '<div style="color:var(--muted);padding:30px;text-align:center;">載入中...</div>';
+  const r = await api('/api/orders?limit=500');
+  if (!r.ok) { content.innerHTML = '<div style="color:var(--brand);padding:30px;text-align:center;">' + (r.error || '載入失敗') + '</div>'; return; }
+  overviewOrders = (r.data.orders || []);
+  if (overviewOrders.length === 0) {
+    content.innerHTML = '<div style="color:var(--muted);padding:30px;text-align:center;">目前沒有工單</div>';
+    return;
+  }
+
+  // Group by productionDate
+  const groups = {};
+  overviewOrders.forEach(o => {
+    const key = o.productionDate ? String(o.productionDate).slice(0, 10) : '未設定日期';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(o);
+  });
+  const sortedDays = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+  const hasActivity = o => !!(o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At || o.step11At || (o.stepEntries && o.stepEntries.length > 0));
+
+  content.innerHTML = sortedDays.map(day => {
+    const orders = groups[day];
+    const completed = orders.filter(o => o.step11At).length;
+    const active = orders.filter(o => !o.step11At && hasActivity(o)).length;
+    const waiting = orders.length - completed - active;
+    return `
+      <div class="day-group" style="margin-bottom:14px;">
+        <div class="day-header" style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:var(--card);border:1px solid var(--border);border-radius:12px;cursor:pointer;transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.06)'" onmouseout="this.style.boxShadow='none'" onclick="toggleOverviewDay('${day}')">
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+            <strong style="font-size:18px;color:var(--ink);">${escapeHtml(day)}</strong>
+            <span style="font-size:14px;color:var(--muted);">${orders.length} 筆工單</span>
+            <div style="display:flex;gap:10px;font-size:13px;">
+              ${completed > 0 ? '<span style="color:var(--success);font-weight:600;">已完成 ' + completed + '</span>' : ''}
+              ${active > 0 ? '<span style="color:#1f6feb;font-weight:600;">生產中 ' + active + '</span>' : ''}
+              ${waiting > 0 ? '<span style="color:#f0ad4e;font-weight:600;">待生產 ' + waiting + '</span>' : ''}
+            </div>
+          </div>
+          <span class="day-arrow" id="ov-arrow-${day}" style="color:var(--brand);font-size:14px;transition:transform .2s;">▶</span>
+        </div>
+        <div id="ov-detail-${day}" style="display:none;margin-top:6px;">
+          <div class="preview-wrap" style="border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff;">
+            <table class="preview-table" style="font-size:12px;">
+              <thead><tr><th>#</th><th>製造單號</th><th>機台</th><th>生產規格</th><th>模具</th><th>派工數</th><th>總重量</th><th>狀態</th></tr></thead>
+              <tbody>
+                ${orders.map((o, i) => {
+                  const started = hasActivity(o);
+                  let status;
+                  if (o.step11At) status = '<span style="color:var(--success);">已完成</span>';
+                  else if (started) status = '<span style="color:#1f6feb;">生產中</span>';
+                  else status = '<span style="color:#f0ad4e;">待生產</span>';
+                  // 顯示「計畫 vs 實際」差異標籤：當兩者都有值且不同時亮黃色標
+                  let mismatchTag = '';
+                  if (o.actualStartDate && o.plannedDate) {
+                    const actDate = String(o.actualStartDate).slice(0, 10);
+                    const plDate = String(o.plannedDate).slice(0, 10);
+                    if (actDate !== plDate) {
+                      mismatchTag = ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 6px;border-radius:6px;" title="計畫 ' + plDate + ' / 實際 ' + actDate + '">計畫 ' + plDate + '</span>';
+                    }
+                  }
+                  return '<tr>' +
+                    '<td>' + (i+1) + '</td>' +
+                    '<td><strong>' + escapeHtml(o.orderNo) + '</strong>' + mismatchTag + '</td>' +
+                    '<td>' + escapeHtml(o.machineNo || '') + '</td>' +
+                    '<td style="max-width:200px;white-space:normal;">' + escapeHtml(o.productSpec || '') + '</td>' +
+                    '<td>' + escapeHtml(o.moldSpec || '') + '</td>' +
+                    '<td>' + (o.dispatchQty || '') + '</td>' +
+                    '<td>' + (o.totalWeight || '') + '</td>' +
+                    '<td>' + status + '</td>' +
+                  '</tr>';
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleOverviewDay(day) {
+  const detail = document.getElementById('ov-detail-' + day);
+  const arrow = document.getElementById('ov-arrow-' + day);
+  if (!detail) return;
+  if (detail.style.display === 'none') {
+    detail.style.display = '';
+    if (arrow) arrow.style.transform = 'rotate(90deg)';
+  } else {
+    detail.style.display = 'none';
+    if (arrow) arrow.style.transform = '';
+  }
+}
+
+$('refreshOverviewBtn').onclick = loadOverview;
+
+// ===== 上傳紀錄（按上傳批次） =====
+async function loadBatches() {
+  const content = $('historyContent');
+  content.innerHTML = '<div style="color:var(--muted);padding:30px;text-align:center;">載入中...</div>';
+  const r = await api('/api/orders/upload-batches?limit=100');
+  if (!r.ok) { content.innerHTML = '<div style="color:var(--brand);padding:30px;text-align:center;">' + (r.error || '載入失敗') + '</div>'; return; }
+  const batches = r.data.batches || [];
+  if (batches.length === 0) {
+    content.innerHTML = '<div style="color:var(--muted);padding:30px;text-align:center;">目前沒有上傳紀錄</div>';
+    return;
+  }
+
+  const isAdmin = me && me.isAdmin;
+  const isPlanner = me && me.isPlanner;
+  const canManage = isAdmin || isPlanner;
+
+  content.innerHTML = batches.map(b => {
+    const uploadTime = fmtTime(b.uploadedAt);
+    const isCancelled = !!b.cancelledAt;
+    const prodDate = b.productionDate ? String(b.productionDate).slice(0, 10) : '';
+    const orderList = (b.orderNos || []);
+    return `
+      <div style="margin-bottom:12px;padding:16px 20px;background:${isCancelled ? '#f9f9f9' : 'var(--card)'};border:1px solid ${isCancelled ? '#e5e5ea' : 'var(--border)'};border-radius:12px;transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.06)'" onmouseout="this.style.boxShadow='none'">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;text-align:left;">
+              <span style="font-size:15px;font-weight:700;color:${isCancelled ? 'var(--muted)' : 'var(--ink)'};min-width:120px;">${escapeHtml(b.filename || '未命名')}</span>
+              ${isCancelled ? '<span style="background:var(--brand);color:#fff;font-size:11px;padding:2px 8px;border-radius:6px;font-weight:700;flex-shrink:0;">已刪除</span>' : ''}
+            </div>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px;text-align:left;">
+              上傳時間：${uploadTime}　|　上傳者：${escapeHtml(b.uploadedByName || '—')}　|　${b.rowCount} 筆工單
+              ${prodDate ? '　|　生產日期：' + prodDate : ''}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-shrink:0;">
+            <button style="padding:6px 12px;font-size:12px;background:#fff;color:var(--ink);border:1.5px solid var(--border);border-radius:6px;cursor:pointer;" onclick="toggleBatchDetail(${b.id})">
+              <span id="batch-arrow-${b.id}">▶</span> 明細
+            </button>
+            ${canManage && !isCancelled ? '<button style="padding:6px 12px;font-size:12px;background:#fff;color:var(--brand);border:1.5px solid var(--brand);border-radius:6px;cursor:pointer;font-weight:600;" onclick="deleteBatch(' + b.id + ', ' + escapeHtml(JSON.stringify(b.filename)) + ')">整批刪除</button>' : ''}
+          </div>
+        </div>
+        <div id="batch-detail-${b.id}" style="display:none;margin-top:12px;">
+          <div class="preview-wrap" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+            <table class="preview-table" style="font-size:12px;">
+              <thead><tr><th>#</th><th>製造單號</th>${canManage && !isCancelled ? '<th>操作</th>' : ''}</tr></thead>
+              <tbody>
+                ${orderList.map((no, i) => `<tr>
+                  <td>${i+1}</td>
+                  <td><strong>${escapeHtml(no)}</strong></td>
+                  ${canManage && !isCancelled ? '<td><button style="padding:3px 8px;font-size:11px;background:#fff;color:var(--brand);border:1.5px solid var(--brand);border-radius:6px;cursor:pointer;" onclick="deleteSingleOrder(\'' + escapeHtml(no) + '\')">刪除</button></td>' : ''}
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleBatchDetail(id) {
+  const detail = document.getElementById('batch-detail-' + id);
+  const arrow = document.getElementById('batch-arrow-' + id);
+  if (!detail) return;
+  if (detail.style.display === 'none') {
+    detail.style.display = '';
+    if (arrow) arrow.textContent = '▼';
+  } else {
+    detail.style.display = 'none';
+    if (arrow) arrow.textContent = '▶';
+  }
+}
+
+async function deleteBatch(batchId, filename) {
+  if (!confirm('確定整批刪除「' + filename + '」？\n\n未開始生產的工單會完全刪除，已開始生產的只清除上傳資訊。')) return;
+  const r = await api('/api/orders/upload-batches/' + batchId, { method: 'DELETE' });
+  if (!r.ok) { toast(r.error || '刪除失敗', 'error'); return; }
+  toast('已刪除批次：' + (r.data.deleted || 0) + ' 筆刪除、' + (r.data.cleared || 0) + ' 筆清除', 'success');
+  loadBatches();
+}
+
+async function deleteSingleOrder(orderNo) {
+  if (!confirm('確定刪除工單「' + orderNo + '」？')) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo), { method: 'DELETE' });
+  if (!r.ok) { toast(r.error || '刪除失敗', 'error'); return; }
+  toast('已刪除 ' + orderNo, 'success');
+  loadBatches();
+}
+
+$('refreshBatchBtn').onclick = loadBatches;
+
+// 頁面載入就抓今日工單
+loadTodayOrders();
+</script>
+</body>
+</html>

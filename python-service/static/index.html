@@ -1,0 +1,2396 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta http-equiv="Permissions-Policy" content="camera=(self), microphone=(), geolocation=()">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="上鎧鋼鐵">
+<meta name="theme-color" content="#d23535">
+<title>上鎧鋼鐵 - 廠務工單系統</title>
+<link rel="icon" href="img/logo.jpg">
+<link rel="apple-touch-icon" href="img/logo.jpg">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="preconnect" href="https://shangkai-manu-record.zeabur.app" crossorigin>
+<link rel="dns-prefetch" href="https://shangkai-manu-record.zeabur.app">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  /* 第三/四步 chip 按下去的瞬間反饋（視覺上立即有感） */
+  .scope-choice, .mat-choice { transition: transform .08s, background .15s, color .15s, border-color .15s; }
+  .scope-choice:active, .mat-choice:active { transform: scale(0.96); }
+  :root {
+    --brand: #d23535;
+    --brand-dark: #a82828;
+    --brand-soft: #fdf2f2;
+    --ink: #1c1c1e;
+    --text: #2c2c2e;
+    --muted: #6e6e73;
+    --border: #e5e5ea;
+    --bg: #f2f2f5;
+    --card: #ffffff;
+    --success: #2ea043;
+    --success-soft: #e6f7ea;
+    --safe-top: env(safe-area-inset-top, 0);
+    --safe-bottom: env(safe-area-inset-bottom, 0);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Header */
+  header {
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    padding-top: calc(12px + var(--safe-top));
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 1px 4px rgba(0,0,0,.04);
+  }
+  header .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  header .brand img {
+    height: 32px;
+    width: auto;
+    flex-shrink: 0;
+  }
+  header .brand-text {
+    border-left: 2px solid var(--border);
+    padding-left: 10px;
+    line-height: 1.2;
+    min-width: 0;
+  }
+  header .brand-text .title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  header .brand-text .sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .menu-toggle {
+    background: none; border: none; font-size: 22px; color: var(--ink);
+    cursor: pointer; padding: 6px 10px; border-radius: 8px;
+    min-height: 36px; display: flex; align-items: center; flex-shrink: 0;
+  }
+  .menu-toggle:hover { background: var(--bg); }
+  .dropdown-menu {
+    display: none; position: fixed; top: 56px; right: 8px;
+    background: #fff; border-radius: 12px; min-width: 170px; z-index: 999; padding: 6px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.12), 0 0 0 1px rgba(0,0,0,.04);
+    animation: menuIn .15s ease;
+  }
+  .dropdown-menu.show { display: block; }
+  @keyframes menuIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+  .dropdown-menu a {
+    display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+    font-size: 15px; font-weight: 600; color: var(--text);
+    text-decoration: none; border-radius: 8px;
+  }
+  .dropdown-menu a:hover { background: var(--bg); }
+  .dropdown-menu a.nav-active { color: var(--brand); background: var(--brand-soft); }
+  .dropdown-menu .menu-sep { height: 1px; background: var(--border); margin: 4px 8px; }
+  .dropdown-menu a.menu-logout { color: var(--muted); }
+
+  .container {
+    padding: 14px;
+    max-width: 600px;
+    margin: 0 auto;
+    padding-bottom: calc(120px + var(--safe-bottom));
+  }
+
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 18px 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.02);
+  }
+  .card h2 {
+    margin: 0 0 14px;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .card h2 .required {
+    background: var(--brand);
+    color: #fff;
+    font-size: 9px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    letter-spacing: .5px;
+    font-weight: 700;
+  }
+
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+  input[type=text], input[type=password], textarea {
+    width: 100%;
+    padding: 16px;
+    font-size: 17px;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    background: #fff;
+    color: var(--ink);
+    transition: border-color .15s, box-shadow .15s;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input[type=text]:focus, input[type=password]:focus, textarea:focus {
+    outline: none;
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px rgba(210,53,53,.12);
+  }
+  textarea { min-height: 70px; resize: vertical; }
+
+  button {
+    appearance: none;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    padding: 16px;
+    cursor: pointer;
+    font-weight: 700;
+    font-family: inherit;
+    transition: transform .08s, opacity .15s, background .15s, box-shadow .15s;
+    min-height: 52px;
+    touch-action: manipulation;
+  }
+  button:active { transform: scale(.97); }
+  button:disabled { opacity: .5; }
+  .btn-primary {
+    background: var(--brand);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(210,53,53,.3);
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--brand-dark); }
+  .btn-primary:active { box-shadow: 0 2px 6px rgba(210,53,53,.3); }
+  .btn-secondary {
+    background: #fff;
+    color: var(--ink);
+    border: 1.5px solid var(--border);
+  }
+  .btn-secondary:hover { background: #f7f7f9; }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-danger { background: #fff; color: var(--brand); border: 1.5px solid var(--brand); }
+  .btn-danger:hover { background: var(--brand-soft); }
+  .btn-block { width: 100%; }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+
+  /* 機台按鈕格 */
+  .machine-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .machine-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 8px;
+    min-height: 80px;
+    background: #fff;
+    border: 2px solid var(--border);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all .15s;
+    font-family: inherit;
+  }
+  .machine-btn:active { transform: scale(.96); }
+  .machine-btn:hover { border-color: var(--brand); background: var(--brand-soft); }
+  .machine-btn .m-num { font-size: 20px; font-weight: 800; color: var(--brand); }
+  .machine-btn .m-spec { font-size: 13px; color: var(--muted); margin-top: 2px; font-weight: 600; }
+  .machine-btn.selected {
+    border-color: var(--brand);
+    background: var(--brand);
+    box-shadow: 0 4px 12px rgba(210,53,53,.3);
+  }
+  .machine-btn.selected .m-num { color: #fff; }
+  .machine-btn.selected .m-spec { color: rgba(255,255,255,.85); }
+  .machine-btn.disabled {
+    background: #e5e5ea;
+    border-color: #d1d1d6;
+    cursor: not-allowed;
+    opacity: .6;
+  }
+  .machine-btn.disabled .m-num { color: #8e8e93; }
+  .machine-btn.disabled .m-spec { color: #aeaeb2; }
+  .machine-btn.disabled:hover { background: #e5e5ea; border-color: #d1d1d6; }
+  .machine-btn .m-tag {
+    font-size: 9px;
+    color: #8e8e93;
+    background: #fff;
+    padding: 1px 6px;
+    border-radius: 8px;
+    margin-top: 4px;
+    font-weight: 600;
+  }
+
+  /* 底部動作按鈕 */
+  .action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .action-btn {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px;
+    border-radius: 14px;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    min-height: 60px;
+    transition: all .15s;
+  }
+  .action-btn:active { transform: scale(.98); }
+  .action-btn .act-icon {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 800;
+  }
+  .action-btn .act-body { flex: 1; min-width: 0; }
+  .action-btn .act-title { font-size: 15px; font-weight: 700; }
+  .action-btn .act-hint { font-size: 11px; opacity: .8; margin-top: 2px; line-height: 1.3; }
+  .action-btn.act-success { background: var(--success); color: #fff; box-shadow: 0 4px 12px rgba(46,160,67,.3); }
+  .action-btn.act-success .act-icon { background: rgba(255,255,255,.2); }
+  .action-btn.act-warning { background: #f0ad4e; color: #fff; box-shadow: 0 4px 12px rgba(240,173,78,.3); }
+  .action-btn.act-warning .act-icon { background: rgba(255,255,255,.2); }
+  .action-btn.act-danger { background: var(--brand); color: #fff; box-shadow: 0 4px 12px rgba(210,53,53,.3); }
+  .action-btn.act-danger .act-icon { background: rgba(255,255,255,.2); }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .75; }
+  }
+  .manual-tag {
+    display: inline-block;
+    background: #f0ad4e;
+    color: #fff;
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-weight: 700;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+  .backfill-form {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: #fffbe6;
+    border-radius: 8px;
+    border: 1px solid #f0ad4e;
+  }
+  .backfill-form input {
+    padding: 6px 8px;
+    font-size: 13px;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    min-height: 32px;
+  }
+  .backfill-form button {
+    padding: 6px 12px;
+    font-size: 12px;
+    min-height: 32px;
+  }
+
+  .or-divider {
+    display: flex;
+    align-items: center;
+    margin: 14px 0;
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 600;
+  }
+  .or-divider::before, .or-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  .or-divider::before { margin-right: 12px; }
+  .or-divider::after { margin-left: 12px; }
+
+  /* 工單顯示 */
+  .order-display {
+    text-align: center;
+    padding: 8px 0;
+  }
+  .order-display .label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .order-display .num {
+    font-size: 30px;
+    font-weight: 800;
+    color: var(--ink);
+    letter-spacing: -.5px;
+    margin-bottom: 6px;
+    word-break: break-all;
+    line-height: 1.1;
+  }
+  .order-display .updated {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* Steps */
+  .step {
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 10px;
+    background: #fff;
+    transition: all .15s;
+    display: flex;
+    gap: 14px;
+  }
+  .step.done {
+    background: var(--success-soft);
+    border-color: var(--success);
+  }
+  .step .step-num {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: var(--bg);
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 800;
+    transition: all .2s;
+  }
+  .step.done .step-num {
+    background: var(--success);
+    color: #fff;
+  }
+  .step .step-body { flex: 1; min-width: 0; }
+  .step .title {
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--ink);
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .step .hint {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+  .step .time {
+    font-size: 13px;
+    color: var(--success);
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .step .note-text {
+    font-size: 13px;
+    color: var(--text);
+    background: rgba(255,255,255,.7);
+    padding: 8px 10px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    word-break: break-all;
+    border-left: 3px solid var(--success);
+  }
+  .step button { font-size: 15px; padding: 13px; min-height: 48px; }
+  .step-actions { display: flex; gap: 8px; }
+  .step-actions .btn-primary { flex: 1; }
+  .step-actions .btn-success { flex: 0 0 auto; padding: 13px 18px; background: var(--success); color: #fff; box-shadow: 0 2px 6px rgba(46,160,67,.25); }
+
+  .badge {
+    display: inline-block;
+    background: var(--border);
+    color: var(--muted);
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-left: 6px;
+  }
+  .badge.ok { background: var(--success); color: #fff; }
+
+  /* 進度條 */
+  .progress-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, var(--brand-soft), #ffffff);
+    border-radius: 12px;
+    border: 1.5px solid var(--brand-soft);
+  }
+  .progress-summary .text {
+    flex: 1;
+    font-size: 13px;
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .progress-summary .text small {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 500;
+    margin-top: 2px;
+  }
+  .progress-summary .count {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--brand);
+    line-height: 1;
+  }
+  .progress-bar {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 12px;
+    grid-column: 1 / -1;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--brand), var(--brand-dark));
+    border-radius: 3px;
+    transition: width .3s;
+  }
+  .progress-summary { flex-wrap: wrap; }
+  .progress-summary .progress-bar { width: 100%; }
+
+  /* Sticky bottom action */
+  .bottom-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #fff;
+    border-top: 1px solid var(--border);
+    padding: 12px 14px;
+    padding-bottom: calc(12px + var(--safe-bottom));
+    box-shadow: 0 -4px 16px rgba(0,0,0,.06);
+    z-index: 50;
+    display: none;
+  }
+  .bottom-bar.show { display: block; }
+  .bottom-bar button {
+    width: 100%;
+    background: var(--brand);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(210,53,53,.3);
+    font-size: 16px;
+    min-height: 56px;
+  }
+
+  /* Scanner Modal */
+  #scannerModal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.95);
+    z-index: 100;
+    flex-direction: column;
+    padding: 20px;
+  }
+  #scannerModal.show { display: flex; }
+  #scannerModal .modal-title {
+    color: #fff;
+    font-size: 17px;
+    margin-bottom: 14px;
+    text-align: center;
+    font-weight: 600;
+  }
+  #qr-reader { width: 100%; max-width: 480px; margin: 0 auto; background: #000; border-radius: 12px; overflow: hidden; }
+  #qr-reader video { border-radius: 12px; }
+  #scannerModal .close-btn { margin-top: 16px; max-width: 480px; margin-left: auto; margin-right: auto; width: 100%; }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(28,28,30,.95);
+    color: #fff;
+    padding: 14px 22px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    z-index: 200;
+    display: none;
+    max-width: 90%;
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,.2);
+  }
+  #toast.show { display: block; }
+  #toast.error { background: var(--brand); }
+  #toast.success { background: var(--success); }
+
+  /* 登入畫面 */
+  #loginScreen {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(160deg, #ffffff 0%, #faf0f0 100%);
+    z-index: 300;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  #loginScreen.show { display: flex; }
+  #loginScreen .logo-area {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  #loginScreen .logo-area img {
+    width: 220px;
+    max-width: 80vw;
+    height: auto;
+    margin-bottom: 8px;
+  }
+  #loginScreen .login-box {
+    background: #fff;
+    padding: 28px 26px;
+    border-radius: 18px;
+    max-width: 380px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(168,40,40,.12), 0 0 0 1px rgba(0,0,0,.04);
+  }
+  #loginScreen h2 {
+    margin: 0 0 4px;
+    font-size: 20px;
+    color: var(--ink);
+    text-align: center;
+    font-weight: 700;
+  }
+  #loginScreen .login-sub {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 22px;
+  }
+  #loginScreen label { margin-top: 14px; }
+  #loginScreen .login-error {
+    color: var(--brand);
+    font-size: 13px;
+    margin-top: 14px;
+    min-height: 18px;
+    text-align: center;
+    font-weight: 500;
+  }
+  #loginScreen .login-btn { margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <img src="img/logo.jpg" alt="上鎧鋼鐵">
+    <div class="brand-text">
+      <div class="title">廠務工單系統</div>
+      <div class="sub" id="leaderShow">未登入</div>
+    </div>
+  </div>
+  <button class="menu-toggle" id="menuBtn" style="display:none;" onclick="$('dropMenu').classList.toggle('show')"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="18" x2="20" y2="18"/></svg></button>
+  <div class="dropdown-menu" id="dropMenu">
+    <a href="index.html" class="nav-active">生產實態紀錄</a>
+    <a href="records.html">📊 紀錄</a>
+    <a href="realtime.html">⚡ 即時</a>
+    <a href="upload.html" id="uploadLink" style="display:none;">📤 上傳</a>
+    <a href="admin.html" id="adminLink" style="display:none;">⚙ 管理</a>
+    <div class="menu-sep"></div>
+    <a href="#" id="logoutLink" class="menu-logout">登出</a>
+  </div>
+</header>
+
+<div class="container">
+  <!-- 機台選擇（第一步） -->
+  <div class="card" id="machineCard">
+    <h2>選擇機台 <span class="required">第一步</span></h2>
+    <div id="machineEmpty">
+      <div class="machine-grid">
+        <button class="machine-btn" data-machine="No1-350"><span class="m-num">No1</span><span class="m-spec">350</span></button>
+        <button class="machine-btn" data-machine="No2-250"><span class="m-num">No2</span><span class="m-spec">250</span></button>
+        <button class="machine-btn" data-machine="No3-60"><span class="m-num">No3</span><span class="m-spec">60</span></button>
+        <button class="machine-btn" data-machine="No4-90"><span class="m-num">No4</span><span class="m-spec">90</span></button>
+        <button class="machine-btn" data-machine="No5-40"><span class="m-num">No5</span><span class="m-spec">40</span></button>
+        <button class="machine-btn" data-machine="No6-40"><span class="m-num">No6</span><span class="m-spec">40</span></button>
+      </div>
+    </div>
+    <div id="machineShow" style="display:none;">
+      <div class="order-display">
+        <div class="label">機台</div>
+        <div class="num" id="machineNoText" style="font-size:24px;color:var(--brand);"></div>
+      </div>
+      <button class="btn-secondary btn-block" id="changeMachineBtn" style="margin-top:14px;">更換機台</button>
+    </div>
+  </div>
+
+  <!-- 工單號（第二步） -->
+  <div class="card" id="orderCard" style="display:none;">
+    <h2>工單號 <span class="required">第二步</span></h2>
+    <div id="orderEmpty">
+      <button class="btn-primary btn-block" id="scanOrderBtn"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;margin-right:6px;"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>掃描工單條碼</button>
+      <div class="or-divider">或</div>
+      <div class="row">
+        <input type="text" id="orderInput" placeholder="手動輸入工單號">
+        <button class="btn-secondary" id="setOrderBtn" style="flex:0 0 90px;">確定</button>
+      </div>
+      <div class="or-divider">或</div>
+      <button class="btn-block" id="idleBtn" style="background:#6e6e73;color:#fff;box-shadow:0 2px 6px rgba(110,110,115,.25);">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;margin-right:6px;"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>生產無工令
+        <div style="font-size:11px;font-weight:500;margin-top:2px;opacity:.85;">設備無稼動</div>
+      </button>
+    </div>
+    <div id="orderShow" style="display:none;">
+      <div class="order-display">
+        <div class="label">目前工單</div>
+        <div class="num" id="orderNoText"></div>
+        <div class="updated" id="orderUpdated"></div>
+      </div>
+      <!-- 規格類型 -->
+      <div style="margin-top:14px;padding:12px 14px;background:#f8f8fa;border-radius:10px;border:1px solid var(--border);">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600;letter-spacing:.5px;">規格類型</div>
+        <div id="specTypeDisplay" style="font-size:14px;font-weight:600;color:var(--muted);">尚未設定</div>
+        <button class="btn-secondary btn-block" id="setSpecTypeBtn" style="margin-top:8px;font-size:13px;padding:10px;">＋ 設定 / 修改規格類型</button>
+      </div>
+      <button class="btn-secondary btn-block" id="changeOrderBtn" style="margin-top:14px;">更換工單</button>
+    </div>
+
+    <!-- 規格類型 modal -->
+    <div id="specTypeModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:20px;">
+      <div style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:20px;box-shadow:0 12px 32px rgba(0,0,0,.25);">
+        <div style="font-size:16px;font-weight:700;margin-bottom:14px;color:var(--ink);">設定規格類型</div>
+        <div style="margin-bottom:16px;">
+          <div style="display:flex;gap:8px;">
+            <button class="spec-choice" data-spec="new" style="flex:1;padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font-weight:600;font-size:14px;">新製規格</button>
+            <button class="spec-choice" data-spec="mass" style="flex:1;padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font-weight:600;font-size:14px;">量產規格</button>
+          </div>
+        </div>
+        <!-- 新製規格的差異項目（單選）— 只在選「新製」時顯示 -->
+        <div id="newSpecAspectsBox" style="display:none;margin-bottom:16px;padding:12px;background:#fdf2f2;border:1.5px dashed #d23535;border-radius:10px;">
+          <div style="font-size:12px;font-weight:700;color:var(--brand);margin-bottom:8px;">差異項目（請選一個）</div>
+          <label style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;font-size:14px;">
+            <input type="radio" name="specAspect" class="spec-aspect" data-aspect="mold" style="width:18px;height:18px;accent-color:#d23535;">模具
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;font-size:14px;">
+            <input type="radio" name="specAspect" class="spec-aspect" data-aspect="mat" style="width:18px;height:18px;accent-color:#d23535;">材料
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;font-size:14px;">
+            <input type="radio" name="specAspect" class="spec-aspect" data-aspect="swm" style="width:18px;height:18px;accent-color:#d23535;">SWM/LWM
+          </label>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-secondary" id="specTypeCancel" style="flex:1;padding:12px;">取消</button>
+          <button class="btn-primary" id="specTypeConfirm" style="flex:1;padding:12px;" disabled>確定</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 更換範圍（第三步） -->
+  <div class="card" id="scopeCard" style="display:none;">
+    <h2>設置準備 <span class="required">第三步</span></h2>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button class="scope-choice" data-scope="same" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:15px;">沿用前單</button>
+      <button class="scope-choice" data-scope="@" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:15px;">原料更換</button>
+      <button class="scope-choice" data-scope="#" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:15px;">模具</button>
+      <button class="scope-choice" data-scope="@#" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:15px;">原料與模具更換</button>
+      <button class="scope-choice" data-scope="" style="padding:10px;border:1.5px solid var(--border);border-radius:10px;background:#f8f8fa;cursor:pointer;font-weight:600;font-size:13px;color:var(--muted);">清除</button>
+    </div>
+  </div>
+
+  <!-- 輔助設備（新增） -->
+  <div class="card" id="auxCard" style="display:none;">
+    <h2>輔助設備</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <button class="aux-choice" data-aux="flat" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:14px;">軋平機</button>
+      <button class="aux-choice" data-aux="leveler" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:14px;">整平機</button>
+      <button class="aux-choice" data-aux="slitter" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:14px;">分條機</button>
+      <button class="aux-choice" data-aux="wave" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:14px;">波浪機</button>
+      <button class="aux-choice" data-aux="rewind" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:14px;">收料機</button>
+      <button class="aux-choice" data-aux="other" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:14px;">其他設備</button>
+    </div>
+    <button class="scope-choice" data-aux="" style="margin-top:8px;width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:#f8f8fa;cursor:pointer;font-weight:600;font-size:13px;color:var(--muted);" id="auxClearBtn">清除</button>
+  </div>
+
+  <!-- 原料（第四步） -->
+  <div class="card" id="materialCard" style="display:none;">
+    <h2>原料 <span class="required">第四步</span></h2>
+    <div style="display:flex;gap:8px;">
+      <button class="mat-choice" data-mat="coil" style="flex:1;padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font-weight:700;font-size:15px;">捲料</button>
+      <button class="mat-choice" data-mat="plate" style="flex:1;padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font-weight:700;font-size:15px;">板料</button>
+      <button class="mat-choice" data-mat="" style="flex:0 0 auto;padding:14px;border:2px solid var(--border);border-radius:10px;background:#f8f8fa;cursor:pointer;font-weight:600;font-size:13px;color:var(--muted);">清除</button>
+    </div>
+  </div>
+
+  <!-- 作業人員（第五步） -->
+  <div class="card" id="operationCard" style="display:none;">
+    <h2>作業人員 <span class="required">第五步</span></h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div>
+        <label for="operatorNameInput" style="display:block;color:var(--muted);font-size:13px;font-weight:600;margin-bottom:6px;">設備操作</label>
+        <input type="text" id="operatorNameInput" maxlength="50" placeholder="請輸入姓名" autocomplete="off" style="width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-size:15px;background:#fff;box-sizing:border-box;">
+      </div>
+      <div>
+        <label for="totalWorkersSelect" style="display:block;color:var(--muted);font-size:13px;font-weight:600;margin-bottom:6px;">全部作業人數</label>
+        <select id="totalWorkersSelect" style="width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-size:15px;background:#fff;box-sizing:border-box;font-weight:700;">
+          <option value="">請選擇</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="9">9</option>
+          <option value="10">10</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- 步驟區（動態生成） -->
+  <div id="stepsArea" style="display:none;"></div>
+</div>
+
+<!-- Sticky 完成送出 -->
+<div class="bottom-bar" id="bottomBar">
+  <button id="finishBtn"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-3px;margin-right:6px;"><polyline points="20 6 9 17 4 12"/></svg>完成送出，掃下一張工單</button>
+</div>
+
+<!-- 掃描 Modal -->
+<div id="scannerModal">
+  <div class="modal-title" id="scannerTitle">請掃描 QR Code</div>
+  <div id="qr-reader"></div>
+  <div id="cameraError" style="display:none;color:#fff;text-align:center;padding:20px;background:rgba(255,255,255,.08);border-radius:12px;max-width:480px;margin:0 auto;">
+    <div style="margin-bottom:10px;"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/><line x1="2" y1="2" x2="22" y2="22"/></svg></div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:8px;">無法開啟相機</div>
+    <div id="cameraErrorMsg" style="font-size:13px;opacity:.85;margin-bottom:14px;line-height:1.5;"></div>
+    <div style="font-size:12px;opacity:.7;text-align:left;background:rgba(0,0,0,.3);padding:12px;border-radius:8px;line-height:1.6;">
+      <strong>請檢查：</strong><br>
+      1. 瀏覽器是否允許使用相機<br>
+      2. iPhone：設定 → Safari → 相機 → 允許<br>
+      3. Android：設定 → 應用程式 → 瀏覽器 → 權限 → 相機<br>
+      4. 沒有其他 App 正在用相機<br>
+      5. 改用「手動輸入」也可以
+    </div>
+  </div>
+  <button class="btn-danger close-btn" id="closeScannerBtn">關閉，改用手動輸入</button>
+</div>
+
+<!-- 登入畫面 -->
+<div id="loginScreen">
+  <div class="logo-area">
+    <img src="img/logo.jpg" alt="上鎧鋼鐵 SHANG KAI STEEL">
+  </div>
+  <div class="login-box">
+    <h2>廠務工單系統</h2>
+    <div class="login-sub">請使用小組長帳號登入</div>
+    <label>帳號</label>
+    <input type="text" id="loginUsername" autocomplete="username" autocapitalize="none">
+    <label>密碼</label>
+    <input type="password" id="loginPassword" autocomplete="current-password">
+    <div class="login-error" id="loginError"></div>
+    <button class="btn-primary btn-block login-btn" id="loginBtn">登入</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="js/config.js"></script>
+<script src="js/utils.js?v=20260520ab"></script>
+<script>
+// 作業準備（21/22）已停用；保留空陣列給歷史資料 fallback lookup
+const PRE_STEPS = [];
+
+// kind: 'simple' = 直接記錄（fixedNote 為固定備註）
+// 已停用步驟（6 後工程、7 其他作業）：歷史資料保留，新單不再顯示
+const STEPS = [
+  { id: '40', kind: 'simple', title: '01. 生產準備', hint: '含清理、料模刀與試模', fixedNote: '含清理、料模刀與試模' },
+  { id: '41', kind: 'simple', title: '02. 生產開始', hint: '生產中斷參數調整／多次任何中斷生產／無論是否連續生產', fixedNote: null },
+];
+
+const ACTIONS_FINISH = { id: '11', title: '工單完成與結束', hint: '開始新的製造工單', style: 'act-success', icon: '✓' };
+
+const STEP_FIELD = {
+  '21': { time: 'step21At', note: null },
+  '22': { time: 'step22At', note: null },
+  '23': { time: 'step23At', note: null },
+  '1':  { time: 'step1At',  note: null },
+  '2':  { time: 'step2At',  note: null },
+  '3':  { time: 'step3At',  note: null },
+  '4':  { time: 'step4At',  note: null },
+  '5':  { time: 'step5At',  note: null },
+  '8':  { time: 'step8At',  note: null },
+  '40': { time: 'step40At', note: null },
+  '41': { time: 'step41At', note: null },
+  '6':  { time: 'step6At',  note: null },
+  '7':  { time: 'step7At',  note: null },
+  '11': { time: 'step11At', note: null },
+  '12': { time: 'step12At', note: 'step12Note' },
+  '13': { time: 'step13At', note: 'step13Note' },
+};
+
+// ====== State ======
+let token = localStorage.getItem('token') || '';
+let me = JSON.parse(localStorage.getItem('me') || 'null');
+initDropdownMenu();
+let orderNo = '';
+let order = null;
+let scanner = null;
+let scanMode = null;
+let pendingStep = null;
+
+// 狀態保存（防止重新整理或不小心登出丟失工作進度）
+const STATE_KEY = 'scan_state';
+function saveState() {
+  if (!me || !me.id) return;
+  const state = { leaderId: me.id, selectedMachine, orderNo };
+  localStorage.setItem(STATE_KEY, JSON.stringify(state));
+}
+function clearState() { localStorage.removeItem(STATE_KEY); }
+function getSavedState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STATE_KEY) || 'null');
+    if (!s || !me || s.leaderId !== me.id) return null;
+    return s;
+  } catch (e) { return null; }
+}
+
+// index.html 專用 api()：401 時觸發 logout 而非 redirect
+async function api(path, options = {}) {
+  try {
+    const headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const res = await fetch(API_URL + path, {
+      method: options.method || 'GET',
+      headers,
+      body: options.body ? JSON.stringify(options.body) : undefined,
+    });
+    let data;
+    try { data = await res.json(); }
+    catch (e) { return { ok: false, status: res.status, error: '伺服器回應錯誤' }; }
+    if (res.status === 401) {
+      logout(true);
+      return { ok: false, status: 401, error: data.error || '請重新登入' };
+    }
+    if (!res.ok) return { ok: false, status: res.status, error: data.error || '操作失敗', data };
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: '網路錯誤：' + (err && err.message ? err.message : err) };
+  }
+}
+
+// ====== 登入 / 登出 ======
+function showLogin(errMsg) {
+  $('loginScreen').classList.add('show');
+  $('loginError').textContent = errMsg || '';
+  $('loginPassword').value = '';
+  setTimeout(() => $('loginUsername').focus(), 100);
+}
+function hideLogin() {
+  $('loginScreen').classList.remove('show');
+}
+
+async function doLogin() {
+  const username = $('loginUsername').value.trim();
+  const password = $('loginPassword').value;
+  if (!username || !password) {
+    $('loginError').textContent = '請輸入帳號密碼';
+    return;
+  }
+  $('loginBtn').disabled = true;
+  $('loginError').textContent = '';
+  const r = await api('/api/auth/login', { method: 'POST', body: { username, password } });
+  $('loginBtn').disabled = false;
+  if (!r.ok) {
+    $('loginError').textContent = r.error || '登入失敗';
+    return;
+  }
+  token = r.data.token;
+  me = r.data.leader;
+  localStorage.setItem('token', token);
+  localStorage.setItem('me', JSON.stringify(me));
+  hideLogin();
+  renderHeader();
+  toast('登入成功', 'success');
+  loadIdleMachines();
+  restoreSavedState();
+}
+
+// 恢復上次未完成的工作狀態
+async function restoreSavedState() {
+  const s = getSavedState();
+  if (!s) return;
+  // 恢復機台選擇
+  if (s.selectedMachine) {
+    selectMachine(s.selectedMachine);
+    // 恢復工單（如果有）
+    if (s.orderNo) {
+      setTimeout(() => {
+        $('orderInput').value = s.orderNo;
+        setOrder(s.orderNo);
+      }, 100);
+    }
+    toast('已恢復上次進度', 'success');
+  }
+}
+
+function logout(silent) {
+  token = '';
+  me = null;
+  localStorage.removeItem('token');
+  localStorage.removeItem('me');
+  orderNo = '';
+  order = null;
+  selectedMachine = '';
+  document.querySelectorAll('.machine-btn').forEach(b => b.classList.remove('selected'));
+  $('machineEmpty').style.display = 'block';
+  $('machineShow').style.display = 'none';
+  $('orderCard').style.display = 'none';
+  $('orderEmpty').style.display = 'block';
+  $('orderShow').style.display = 'none';
+  $('scopeCard').style.display = 'none';
+  $('materialCard').style.display = 'none';
+  $('stepsArea').style.display = 'none';
+  $('orderInput').value = '';
+  $('bottomBar').classList.remove('show');
+  renderHeader();
+  showLogin(silent ? '登入逾期，請重新登入' : '');
+}
+
+$('loginBtn').onclick = doLogin;
+$('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+$('loginUsername').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginPassword').focus(); });
+$('logoutLink').onclick = e => { e.preventDefault(); if (confirm('確定登出？')) logout(); };
+
+function renderHeader() {
+  if (me) {
+    $('leaderShow').textContent = me.displayName + (me.isAdmin ? '（管理員）' : '');
+    $('menuBtn').style.display = 'flex';
+    $('uploadLink').style.display = (me.isAdmin || me.isPlanner) ? 'flex' : 'none';
+    $('adminLink').style.display = me.isAdmin ? 'flex' : 'none';
+  } else {
+    $('leaderShow').textContent = '未登入';
+    $('menuBtn').style.display = 'none';
+  }
+}
+
+// ====== 機台（第一步）======
+let selectedMachine = '';
+
+function selectMachine(no) {
+  selectedMachine = no;
+  document.querySelectorAll('.machine-btn').forEach(b => {
+    b.classList.toggle('selected', b.getAttribute('data-machine') === no);
+  });
+  $('orderCard').style.display = 'block';
+  $('machineEmpty').style.display = 'none';
+  $('machineShow').style.display = 'block';
+  $('machineNoText').textContent = no;
+  saveState();
+  setTimeout(() => $('orderInput').focus(), 200);
+}
+
+let idleMachinesToday = new Set();
+
+async function loadIdleMachines() {
+  const r = await api('/api/idle-events?limit=50');
+  if (!r.ok) return;
+  const now = new Date();
+  idleMachinesToday = new Set((r.data.events || []).filter(e => {
+    const d = new Date(e.createdAt);
+    return d.getFullYear() === now.getFullYear() &&
+           d.getMonth() === now.getMonth() &&
+           d.getDate() === now.getDate();
+  }).map(e => e.machineNo));
+  renderMachineButtons();
+}
+
+function renderMachineButtons() {
+  document.querySelectorAll('.machine-btn').forEach(b => {
+    const m = b.getAttribute('data-machine');
+    const isIdle = idleMachinesToday.has(m);
+    b.classList.toggle('disabled', isIdle);
+    // 加/移除無工令標籤
+    let tag = b.querySelector('.m-tag');
+    if (isIdle && !tag) {
+      const s = document.createElement('div');
+      s.className = 'm-tag';
+      s.textContent = '今日無工令';
+      b.appendChild(s);
+    } else if (!isIdle && tag) {
+      tag.remove();
+    }
+  });
+}
+
+document.querySelectorAll('.machine-btn').forEach(b => {
+  b.onclick = () => {
+    const m = b.getAttribute('data-machine');
+    if (idleMachinesToday.has(m)) {
+      toast('此機台今日已記錄無工令，請到紀錄頁取消後再選擇', 'error');
+      return;
+    }
+    selectMachine(m);
+  };
+});
+$('changeMachineBtn').onclick = () => {
+  clearState();
+  selectedMachine = '';
+  document.querySelectorAll('.machine-btn').forEach(b => b.classList.remove('selected'));
+  $('machineEmpty').style.display = 'block';
+  $('machineShow').style.display = 'none';
+  $('orderCard').style.display = 'none';
+  $('stepsArea').style.display = 'none';
+  $('bottomBar').classList.remove('show');
+};
+
+// ====== 工單號（第二步）======
+async function setOrder(no) {
+  no = String(no || '').trim().toUpperCase();
+  if (!no) { toast('工單號不可空白', 'error'); return; }
+  if (!/^[A-Z]\d{10}$/.test(no)) { toast('工單號格式錯誤：需 1 個英文字母 + 10 個數字（例：F1150407024）', 'error'); return; }
+  if (!selectedMachine) { toast('請先選擇機台', 'error'); return; }
+  const r = await api('/api/orders/' + encodeURIComponent(no));
+  if (!r.ok) {
+    if (r.status === 409 && r.data && r.data.code === 'SOFT_DELETED') {
+      alert('工單「' + no + '」之前已被刪除。\n\n請聯絡管理員到 admin 頁面的「回收桶 → 已刪除工單」救回，或改用其他工單號。');
+      return;
+    }
+    toast(r.error, 'error');
+    return;
+  }
+  // 後端在工單不存在時會自動建立，並回傳 wasCreated:true
+  // 為避免單號 key 錯後一路記到錯的單上（例如把 0 打成 9），跳確認對話框讓使用者再看一次
+  if (r.data.wasCreated) {
+    const ok = confirm('系統中還沒有「' + no + '」這張工單的上傳資料。\n\n請再次確認單號是否輸入正確。\n\n如確定要建立並記錄，按「確定」；\n若可能打錯了，按「取消」回上一步。');
+    if (!ok) {
+      // 使用者取消：不繼續流程（建立的空殼工單會留在 DB，可由 admin 在「查單號歷史」清理）
+      return;
+    }
+  }
+  orderNo = no;
+  order = r.data.order;
+  // 設定機台到 DB
+  const mr = await api('/api/orders/' + encodeURIComponent(no) + '/machine', {
+    method: 'POST',
+    body: { machineNo: selectedMachine },
+  });
+  if (mr.ok) order = mr.data.order;
+  $('orderEmpty').style.display = 'none';
+  $('orderShow').style.display = 'block';
+  $('orderNoText').textContent = no;
+  $('orderUpdated').textContent = order.updatedAt ? ('最後更新：' + fmtTime(order.updatedAt)) : '尚未開始';
+  renderSpecType();
+  renderChangeScope();
+  renderMaterialType();
+  renderAuxEquipment();
+  renderOperationInfo();
+  updateStepGates();
+  saveState();
+  renderSteps();
+}
+
+// 第二～五步的可見性瀑布：前一步沒完成，後面全部關掉
+// 輔助設備（auxCard）為選填，第三步完成後即顯示，不影響後續解鎖
+function updateStepGates() {
+  const ok2 = !!(order && order.specType);                    // Step 2 完成 = 規格類型已設
+  const ok3 = ok2 && !!(order && order.changeScope);          // Step 3 完成 = 符號已選
+  const ok4 = ok3 && !!(order && order.materialType);         // Step 4 完成 = 原料類型已選
+  const opName = (order && order.operatorName || '').toString().trim();
+  const opCount = order && order.totalWorkers;
+  const ok5 = ok4 && opName !== '' && opCount != null && Number(opCount) >= 1; // Step 5 完成 = 操作姓名 + 人數
+  $('scopeCard').style.display     = ok2 ? 'block' : 'none';
+  $('auxCard').style.display       = ok3 ? 'block' : 'none';
+  $('materialCard').style.display  = ok3 ? 'block' : 'none';
+  $('operationCard').style.display = ok4 ? 'block' : 'none';
+  $('stepsArea').style.display     = ok5 ? 'block' : 'none';
+  if (!ok5) $('bottomBar').classList.remove('show');
+}
+
+function renderSpecType() {
+  const el = $('specTypeDisplay');
+  if (!el) return;
+  if (!order || !order.specType) {
+    el.style.color = 'var(--muted)';
+    el.textContent = '尚未設定';
+    return;
+  }
+  el.style.color = 'var(--ink)';
+  if (order.specType === 'new') {
+    el.innerHTML = icon('sparkles', 16) + ' ' + escapeHtml(formatNewSpecLabel(order.newSpecAspects));
+  } else if (order.specType === 'mass') {
+    el.innerHTML = icon('box', 16) + ' 量產規格';
+  } else {
+    el.textContent = order.specType;
+  }
+}
+
+// ── 更換範圍（第三步） ──
+function renderChangeScope() {
+  const current = (order && order.changeScope) || '';
+  document.querySelectorAll('.scope-choice').forEach(b => {
+    const val = b.getAttribute('data-scope');
+    const isSelected = val !== '' && val === current;
+    b.style.background = isSelected ? 'var(--brand)' : (val === '' ? '#f8f8fa' : '#fff');
+    b.style.color = isSelected ? '#fff' : (val === '' ? 'var(--muted)' : 'var(--ink)');
+    b.style.borderColor = isSelected ? 'var(--brand)' : 'var(--border)';
+    // 內部符號 pill 跟著反白；"same" 用灰色預設
+    const sym = b.querySelector('.scope-sym');
+    if (sym) {
+      const isSame = val === 'same';
+      sym.style.background = isSelected ? 'rgba(255,255,255,.22)' : (isSame ? '#f0f0f3' : '#fff3cd');
+      sym.style.color = isSelected ? '#fff' : (isSame ? 'var(--muted)' : '#b8860b');
+    }
+  });
+}
+
+document.querySelectorAll('.scope-choice').forEach(b => {
+  b.onclick = async () => {
+    if (!order || !orderNo) { toast('請先載入工單', 'error'); return; }
+    const val = b.getAttribute('data-scope') || null;
+    const old = order.changeScope || null;
+    if (val === old) return; // 點同一顆等同沒動，不發 request
+    // 樂觀更新：UI 先反應，背景送 API
+    order.changeScope = val;
+    renderChangeScope();
+    updateStepGates();
+    const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/change-scope', {
+      method: 'POST',
+      body: { changeScope: val },
+    });
+    if (!r.ok) {
+      order.changeScope = old;
+      renderChangeScope();
+      updateStepGates();
+      toast(r.error || '設定失敗，已還原', 'error');
+      return;
+    }
+  };
+});
+
+// ── 原料（第四步） ──
+function renderMaterialType() {
+  const current = (order && order.materialType) || '';
+  document.querySelectorAll('.mat-choice').forEach(b => {
+    const val = b.getAttribute('data-mat');
+    const isSelected = val !== '' && val === current;
+    b.style.background = isSelected ? 'var(--brand)' : (val === '' ? '#f8f8fa' : '#fff');
+    b.style.color = isSelected ? '#fff' : (val === '' ? 'var(--muted)' : 'var(--ink)');
+    b.style.borderColor = isSelected ? 'var(--brand)' : 'var(--border)';
+  });
+}
+
+document.querySelectorAll('.mat-choice').forEach(b => {
+  b.onclick = async () => {
+    if (!order || !orderNo) { toast('請先載入工單', 'error'); return; }
+    const val = b.getAttribute('data-mat') || null;
+    const old = order.materialType || null;
+    if (val === old) return;
+    // 樂觀更新：UI 先反應，背景送 API
+    order.materialType = val;
+    renderMaterialType();
+    updateStepGates();
+    const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/material-type', {
+      method: 'POST',
+      body: { materialType: val },
+    });
+    if (!r.ok) {
+      order.materialType = old;
+      renderMaterialType();
+      updateStepGates();
+      toast(r.error || '設定失敗，已還原', 'error');
+      return;
+    }
+  };
+});
+
+// ── 作業人員（第五步）──
+function renderOperationInfo() {
+  const nameInput = $('operatorNameInput');
+  const workersSelect = $('totalWorkersSelect');
+  if (!nameInput || !workersSelect) return;
+  nameInput.value = (order && order.operatorName) || '';
+  const n = order && order.totalWorkers;
+  workersSelect.value = (n != null && n !== '') ? String(n) : '';
+}
+{
+  const nameInput = $('operatorNameInput');
+  if (nameInput) {
+    let saveTimer = null;
+    const commit = async () => {
+      if (!order || !orderNo) return;
+      const val = (nameInput.value || '').trim();
+      const next = val === '' ? null : val;
+      const old = order.operatorName || null;
+      if (next === old) return;
+      order.operatorName = next;
+      updateStepGates();
+      const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/operation-info', {
+        method: 'POST',
+        body: { operatorName: next },
+      });
+      if (!r.ok) {
+        order.operatorName = old;
+        renderOperationInfo();
+        updateStepGates();
+        toast(r.error || '儲存失敗，已還原', 'error');
+      }
+    };
+    nameInput.addEventListener('input', () => {
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(commit, 600);
+    });
+    nameInput.addEventListener('blur', () => {
+      if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+      commit();
+    });
+  }
+  const workersSelect = $('totalWorkersSelect');
+  if (workersSelect) {
+    workersSelect.addEventListener('change', async () => {
+      if (!order || !orderNo) return;
+      const raw = workersSelect.value;
+      const next = raw === '' ? null : Number(raw);
+      const old = (order.totalWorkers == null) ? null : Number(order.totalWorkers);
+      if (next === old) return;
+      order.totalWorkers = next;
+      updateStepGates();
+      const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/operation-info', {
+        method: 'POST',
+        body: { totalWorkers: next },
+      });
+      if (!r.ok) {
+        order.totalWorkers = old;
+        renderOperationInfo();
+        updateStepGates();
+        toast(r.error || '儲存失敗，已還原', 'error');
+      }
+    });
+  }
+}
+
+// ── 輔助設備 ──
+function renderAuxEquipment() {
+  const current = (order && order.auxEquipment) || '';
+  document.querySelectorAll('.aux-choice').forEach(b => {
+    const val = b.getAttribute('data-aux');
+    const isSelected = val === current && val !== '';
+    b.style.background = isSelected ? 'var(--brand)' : '#fff';
+    b.style.color = isSelected ? '#fff' : 'var(--ink)';
+    b.style.borderColor = isSelected ? 'var(--brand)' : 'var(--border)';
+  });
+}
+document.querySelectorAll('.aux-choice').forEach(b => {
+  b.onclick = async () => {
+    if (!order || !orderNo) { toast('請先載入工單', 'error'); return; }
+    const val = b.getAttribute('data-aux') || null;
+    const old = order.auxEquipment || null;
+    if (val === old) return;
+    order.auxEquipment = val;
+    renderAuxEquipment();
+    const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/aux-equipment', {
+      method: 'POST',
+      body: { auxEquipment: val },
+    });
+    if (!r.ok) {
+      order.auxEquipment = old;
+      renderAuxEquipment();
+      toast(r.error || '設定失敗，已還原', 'error');
+    }
+  };
+});
+$('auxClearBtn').onclick = async () => {
+  if (!order || !orderNo) return;
+  const old = order.auxEquipment || null;
+  if (old == null) return;
+  order.auxEquipment = null;
+  renderAuxEquipment();
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/aux-equipment', {
+    method: 'POST', body: { auxEquipment: null },
+  });
+  if (!r.ok) { order.auxEquipment = old; renderAuxEquipment(); toast(r.error || '清除失敗', 'error'); }
+};
+
+$('setOrderBtn').onclick = () => setOrder($('orderInput').value);
+$('orderInput').addEventListener('keydown', e => { if (e.key === 'Enter') setOrder($('orderInput').value); });
+
+// ── 規格類型 modal ──
+let specPick = { type: null, aspects: [] };
+function openSpecTypeModal() {
+  if (!order) { toast('請先載入工單', 'error'); return; }
+  specPick = {
+    type: order.specType || null,
+    aspects: Array.isArray(order.newSpecAspects) ? [...order.newSpecAspects] : [],
+  };
+  $('specTypeModal').style.display = 'flex';
+  syncSpecTypeUI();
+}
+function closeSpecTypeModal() {
+  $('specTypeModal').style.display = 'none';
+}
+function syncSpecTypeUI() {
+  // 類型按鈕高亮
+  document.querySelectorAll('.spec-choice').forEach(b => {
+    if (b.dataset.spec === specPick.type) {
+      b.style.borderColor = 'var(--brand)';
+      b.style.background = 'var(--brand-soft)';
+      b.style.color = 'var(--brand)';
+    } else {
+      b.style.borderColor = 'var(--border)';
+      b.style.background = '#fff';
+      b.style.color = 'var(--ink)';
+    }
+  });
+  // 新製規格的差異項目區塊：選「新製」才顯示
+  const aspectsBox = $('newSpecAspectsBox');
+  if (specPick.type === 'new') {
+    aspectsBox.style.display = 'block';
+    document.querySelectorAll('.spec-aspect').forEach(cb => {
+      cb.checked = specPick.aspects.includes(cb.dataset.aspect);
+    });
+  } else {
+    aspectsBox.style.display = 'none';
+  }
+  const valid = !!specPick.type;
+  $('specTypeConfirm').disabled = !valid;
+  $('specTypeConfirm').style.opacity = valid ? '1' : '.4';
+}
+
+$('setSpecTypeBtn').onclick = openSpecTypeModal;
+$('specTypeCancel').onclick = closeSpecTypeModal;
+document.querySelectorAll('.spec-choice').forEach(b => {
+  b.onclick = () => {
+    specPick.type = b.dataset.spec;
+    // 切回量產時清掉差異項目
+    if (specPick.type !== 'new') specPick.aspects = [];
+    syncSpecTypeUI();
+  };
+});
+document.querySelectorAll('.spec-aspect').forEach(cb => {
+  cb.onchange = () => {
+    // radio 單選：選中就只留這一個
+    if (cb.checked) specPick.aspects = [cb.dataset.aspect];
+  };
+});
+$('specTypeConfirm').onclick = async () => {
+  if (!specPick.type) return;
+  $('specTypeConfirm').disabled = true;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/spec-type', {
+    method: 'POST',
+    body: { specType: specPick.type, aspects: specPick.aspects },
+  });
+  $('specTypeConfirm').disabled = false;
+  if (!r.ok) {
+    console.error('spec-type failed:', r);
+    const hint = r.data && r.data.hint ? '\n' + r.data.hint : '';
+    alert('設定失敗（' + (r.status || '?') + '）：' + (r.error || '未知錯誤') + hint);
+    return;
+  }
+  if (order) {
+    order.specType = r.data.specType;
+    order.difficultyFactor = null;
+    order.newSpecAspects = r.data.newSpecAspects
+      ? String(r.data.newSpecAspects).split(',').filter(Boolean)
+      : [];
+  }
+  renderSpecType();
+  updateStepGates();
+  saveState();
+  closeSpecTypeModal();
+  toast('已設定規格類型', 'success');
+};
+$('scanOrderBtn').onclick = () => openScanner('order');
+$('idleBtn').onclick = async () => {
+  if (!selectedMachine) { toast('請先選擇機台', 'error'); return; }
+  if (!confirm('確定記錄「生產無工令」？\n\n機台：' + selectedMachine + '\n（記錄後會跳回選機台）')) return;
+  const note = prompt('備註（可留白）：', '') || '';
+  const r = await api('/api/idle-events', { method: 'POST', body: { machineNo: selectedMachine, note } });
+  if (!r.ok) { toast(r.error || '失敗', 'error'); return; }
+  toast('已記錄無工令：' + selectedMachine, 'success');
+  // 重置到選機台
+  selectedMachine = '';
+  document.querySelectorAll('.machine-btn').forEach(b => b.classList.remove('selected'));
+  $('machineEmpty').style.display = 'block';
+  $('machineShow').style.display = 'none';
+  $('orderCard').style.display = 'none';
+  $('orderInput').value = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  loadIdleMachines();
+};
+$('changeOrderBtn').onclick = () => {
+  orderNo = ''; order = null;
+  $('orderEmpty').style.display = 'block';
+  $('orderShow').style.display = 'none';
+  $('scopeCard').style.display = 'none';
+  $('materialCard').style.display = 'none';
+  $('orderInput').value = '';
+  $('stepsArea').style.display = 'none';
+  $('bottomBar').classList.remove('show');
+  saveState(); // 保留機台，但清空工單
+};
+
+// ====== 步驟渲染 ======
+function renderSteps() {
+  const area = $('stepsArea');
+  // 顯示由 updateStepGates() 統一管理；renderSteps 只負責內容
+  area.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'card';
+
+  const isPaused = (order.pause12 && order.pause12.active) || (order.pause13 && order.pause13.active);
+  const doneCount = STEPS.filter(s => order[STEP_FIELD[s.id].time]).length;
+  const pct = Math.round(doneCount / STEPS.length * 100);
+  if (isPaused) {
+    wrap.style.opacity = '0.5';
+    wrap.style.pointerEvents = 'none';
+  }
+  const pauseNotice = isPaused ? '<div style="background:var(--brand);color:#fff;padding:10px 14px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;margin-bottom:12px;">' + icon('pause', 14) + ' 暫停中 — 請先恢復生產才能繼續操作</div>' : '';
+  const now = Date.now();
+
+  // 作業準備：PRE_STEPS 為空時整塊不渲染
+  let preHtml = '';
+  if (PRE_STEPS.length > 0) {
+  preHtml = '<h2>作業準備</h2>';
+  const preEntriesByStep = {};
+  (order.stepEntries || []).filter(e => ['21','22','23'].includes(e.stepNo)).forEach(e => {
+    if (!preEntriesByStep[e.stepNo]) preEntriesByStep[e.stepNo] = [];
+    preEntriesByStep[e.stepNo].push(e);
+  });
+  PRE_STEPS.forEach(s => {
+    const entries = preEntriesByStep[s.id] || [];
+    const hasEntries = entries.length > 0;
+    const titleText = s.title.replace(/^\d+\.\s*/, '');
+    let body = `<div class="title">${escapeHtml(titleText)}` +
+      (hasEntries ? `<span class="badge ok">×${entries.length}</span>` : '') + '</div>';
+    if (s.hint) body += '<div class="hint">' + s.hint + '</div>';
+
+    entries.forEach((e, i) => {
+      const elapsed = now - new Date(e.recordedAt).getTime();
+      const canCancel = elapsed < 5 * 60 * 1000;
+      const manualTag = e.isManual ? '<span class="manual-tag">補登</span>' : '';
+      body += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${e.isManual ? '#fffbe6' : (canCancel ? 'var(--success-soft)' : '#f5f5f7')};border-radius:8px;">`;
+      body += `<span style="font-size:12px;color:var(--success);font-weight:600;flex:1;display:inline-flex;align-items:center;gap:4px;">${icon('check', 14)}${escapeHtml(titleText)} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
+      if (canCancel && !isPaused) {
+        body += `<button class="btn-danger" data-cancel-entry="${e.id}" style="padding:4px 10px;font-size:11px;min-height:28px;">取消</button>`;
+      }
+      body += '</div>';
+    });
+
+    if (isPaused) {
+      body += '<button class="btn-success btn-block" disabled>' + icon('check', 16) + ' 已完成</button>';
+    } else {
+      body += `<div style="display:flex;gap:8px;">`;
+      body += `<button class="btn-success" style="flex:1;" data-record-step="${s.id}">${icon('check', 16)} 已完成</button>`;
+      body += `<button class="btn-secondary" data-backfill="${s.id}" style="flex:0 0 auto;padding:10px 14px;font-size:13px;color:#b8860b;">${icon('edit', 14)} 補登</button>`;
+      body += `</div>`;
+      body += `<div class="backfill-form" id="backfill-${s.id}" style="display:none;">`;
+      body += `<input type="date" id="bf-date-${s.id}" value="${todayYmd()}">`;
+      body += `<input type="time" id="bf-time-${s.id}" step="60" value="">`;
+      body += `<button class="btn-primary" data-backfill-submit="${s.id}">確認補登</button>`;
+      body += `<button class="btn-secondary" data-backfill-cancel="${s.id}">取消</button>`;
+      body += `</div>`;
+    }
+
+    preHtml += `<div class="step${hasEntries ? ' done' : ''}"><div class="step-body">${body}</div></div>`;
+  });
+  }
+
+  // stepEntries 按 stepNo 分組
+  const entriesByStep = {};
+  (order.stepEntries || []).forEach(e => {
+    if (!entriesByStep[e.stepNo]) entriesByStep[e.stepNo] = [];
+    entriesByStep[e.stepNo].push(e);
+  });
+  const stepsWithEntries = new Set(Object.keys(entriesByStep));
+  const newDoneCount = stepsWithEntries.size;
+  const newPct = Math.round(newDoneCount / STEPS.length * 100);
+
+  wrap.innerHTML = `
+    ${pauseNotice}
+    ${preHtml}
+    <h2 style="margin-top:16px;">工序進度</h2>
+  `;
+
+  // 本單第一筆生產時態（40/41）強制規則：
+  //   - 同日有上一張完成 → 上單結束 + 1 分鐘
+  //   - 無上單 / 上單在前一日 → 當日 08:00
+  // 生產狀態機：step 41 後不能再按 step 40，直到 step 30（切換規格）或 pause 13（異常中斷）介入
+  const allEntries = order.stepEntries || [];
+  const lastStep41Ms = allEntries.filter(e => e.stepNo === '41').map(e => new Date(e.recordedAt).getTime()).sort((a,b)=>b-a)[0] || 0;
+  const lastStep30Ms = allEntries.filter(e => e.stepNo === '30').map(e => new Date(e.recordedAt).getTime()).sort((a,b)=>b-a)[0] || 0;
+  const lastPause13Ms = ((order.pause13 && order.pause13.history) || []).map(p => new Date(p.startAt).getTime()).sort((a,b)=>b-a)[0] || 0;
+  const lastReleaseMs = Math.max(lastStep30Ms, lastPause13Ms);
+  const prepAllowed = lastStep41Ms === 0 || lastReleaseMs > lastStep41Ms;
+
+  const hasStableEntry = !!(entriesByStep['40']?.length || entriesByStep['41']?.length);
+  const prevEnd = order.prevMachineEndAt ? new Date(order.prevMachineEndAt) : null;
+  const lockStableTime = !hasStableEntry;
+  const pad = n => String(n).padStart(2, '0');
+  const today = new Date();
+  const prevSameDay = prevEnd && !isNaN(prevEnd)
+    && prevEnd.getFullYear() === today.getFullYear()
+    && prevEnd.getMonth() === today.getMonth()
+    && prevEnd.getDate() === today.getDate();
+  const forcedTime = !lockStableTime ? null
+    : (prevSameDay
+        ? new Date(prevEnd.getTime() + 60000)
+        : new Date(today.getFullYear(), today.getMonth(), today.getDate(), 8, 0, 0));
+  const forcedYmd = forcedTime ? `${forcedTime.getFullYear()}-${pad(forcedTime.getMonth()+1)}-${pad(forcedTime.getDate())}` : '';
+  const forcedHM = forcedTime ? `${pad(forcedTime.getHours())}:${pad(forcedTime.getMinutes())}` : '';
+  const forcedDisplay = forcedTime ? `${pad(forcedTime.getMonth()+1)}/${pad(forcedTime.getDate())} ${pad(forcedTime.getHours())}:${pad(forcedTime.getMinutes())}` : '';
+  const prevEndDisplay = prevEnd ? `${pad(prevEnd.getMonth()+1)}/${pad(prevEnd.getDate())} ${pad(prevEnd.getHours())}:${pad(prevEnd.getMinutes())}` : '';
+
+  STEPS.forEach(s => {
+    const entries = entriesByStep[s.id] || [];
+    const hasEntries = entries.length > 0;
+    const titleText = s.title.replace(/^\d+\.\s*/, '');
+
+    let body = `<div class="title">${escapeHtml(titleText)}` +
+      (hasEntries ? `<span class="badge ok">×${entries.length}</span>` : '') +
+      '</div>';
+    if (s.hint) body += '<div class="hint">' + s.hint + '</div>';
+
+    // 每次紀錄（如有 note 顯示在標籤後面）
+    entries.forEach((e, i) => {
+      const elapsed = now - new Date(e.recordedAt).getTime();
+      const canCancel = elapsed < 5 * 60 * 1000;
+      const manualTag = e.isManual ? '<span class="manual-tag">補登</span>' : '';
+      const noteTxt = e.note ? `（${escapeHtml(e.note)}）` : '';
+      body += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${e.isManual ? '#fffbe6' : (canCancel ? 'var(--success-soft)' : '#f5f5f7')};border-radius:8px;">`;
+      body += `<span style="font-size:12px;color:var(--success);font-weight:600;flex:1;display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;">${icon('check', 14)}${escapeHtml(titleText)}${noteTxt} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
+      if (canCancel && !isPaused) {
+        body += `<button class="btn-danger" data-cancel-entry="${e.id}" style="padding:4px 10px;font-size:11px;min-height:28px;">取消</button>`;
+      }
+      body += '</div>';
+    });
+
+    // 'options' kind = 多選一（生產開始）
+    if (s.kind === 'options') {
+      if (isPaused) {
+        body += '<button class="btn-success btn-block" disabled>' + icon('pause', 16) + ' 暫停中</button>';
+      } else {
+        body += '<div style="display:flex;flex-direction:column;gap:6px;">';
+        s.options.forEach(opt => {
+          body += `<button class="btn-success step-opt" data-step="${s.id}" data-note="${escapeHtml(opt)}" style="text-align:center;padding:12px;font-size:14px;">${escapeHtml(opt)}</button>`;
+        });
+        body += '</div>';
+        // 補登：選狀態（同主 UI 三顆按鈕）+ 時間
+        body += `<button class="btn-secondary" data-backfill="${s.id}" style="width:100%;margin-top:6px;padding:10px 14px;font-size:13px;color:#b8860b;">${icon('edit', 14)} 補登</button>`;
+        body += `<div class="backfill-form" id="backfill-${s.id}" style="display:none;flex-direction:column;gap:8px;">`;
+        body += `<div style="font-size:11px;color:var(--muted);">選擇狀態</div>`;
+        body += `<div style="display:flex;flex-direction:column;gap:6px;">`;
+        s.options.forEach(opt => {
+          body += `<button type="button" class="bf-opt-pick" data-step="${s.id}" data-val="${escapeHtml(opt)}" style="padding:10px;border:1.5px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-weight:600;font-size:13px;text-align:center;transition:background .15s,color .15s,border-color .15s;">${escapeHtml(opt)}</button>`;
+        });
+        body += `</div>`;
+        body += `<div style="display:flex;gap:6px;"><input type="date" id="bf-date-${s.id}" value="${todayYmd()}" style="flex:1;"><input type="time" id="bf-time-${s.id}" step="60" value="" style="flex:1;"></div>`;
+        body += `<div style="display:flex;gap:6px;"><button class="btn-primary" data-backfill-submit="${s.id}" style="flex:1;">確認補登</button><button class="btn-secondary" data-backfill-cancel="${s.id}" style="flex:0 0 auto;">取消</button></div>`;
+        body += `</div>`;
+      }
+    } else {
+      // 'simple' kind = 一般步驟（含 fixedNote 自動帶入）
+      const isPrepBlocked = s.id === '40' && !prepAllowed;
+      if (isPaused) {
+        body += '<button class="btn-success btn-block" disabled>' + icon('check', 16) + ' 已完成</button>';
+      } else if (isPrepBlocked) {
+        body += `<div style="background:#f5f5f7;border:1.5px dashed var(--border);border-radius:8px;padding:10px;font-size:12px;color:var(--muted);line-height:1.5;text-align:center;">🔒 已按生產開始<br>須先「切換規格」或「異常中斷」才能再按生產準備</div>`;
+      } else {
+        const isLockedStable = (s.id === '40' || s.id === '41') && lockStableTime;
+        if (isLockedStable) {
+          const hintMsg = prevSameDay
+            ? `📌 與上一張工單時間銜接<br>上一張結束於 <b>${prevEndDisplay}</b>，本單第一筆「${escapeHtml(titleText)}」自動鎖定為 <b>${forcedDisplay}</b>`
+            : `📌 每日第一單<br>本單第一筆「${escapeHtml(titleText)}」自動鎖定為 <b>${forcedDisplay}</b>（每日從 08:00 起算）`;
+          body += `<div style="background:#fff8e8;border:1.5px dashed #f0ad4e;border-radius:8px;padding:8px 10px;font-size:12px;color:#8a6d3b;margin-bottom:8px;line-height:1.5;">${hintMsg}</div>`;
+        }
+        body += `<div style="display:flex;gap:8px;">`;
+        body += `<button class="btn-success" style="flex:1;" data-record-step="${s.id}"${s.fixedNote ? ` data-note="${escapeHtml(s.fixedNote)}"` : ''}>${icon('check', 16)} 已完成</button>`;
+        body += `<button class="btn-secondary" data-backfill="${s.id}" style="flex:0 0 auto;padding:10px 14px;font-size:13px;color:#b8860b;">${icon('edit', 14)} 補登</button>`;
+        body += `</div>`;
+        body += `<div class="backfill-form" id="backfill-${s.id}" style="display:none;">`;
+        if (isLockedStable) {
+          body += `<input type="date" id="bf-date-${s.id}" value="${forcedYmd}" disabled style="background:#f5f5f7;color:#8a6d3b;">`;
+          body += `<input type="time" id="bf-time-${s.id}" step="60" value="${forcedHM}" disabled style="background:#f5f5f7;color:#8a6d3b;">`;
+          body += `<div style="font-size:11px;color:#8a6d3b;">⚓ 時間已鎖定（銜接上一張工單）</div>`;
+        } else {
+          body += `<input type="date" id="bf-date-${s.id}" value="${todayYmd()}">`;
+          body += `<input type="time" id="bf-time-${s.id}" step="60" value="">`;
+        }
+        body += `<button class="btn-primary" data-backfill-submit="${s.id}">確認補登</button>`;
+        body += `<button class="btn-secondary" data-backfill-cancel="${s.id}">取消</button>`;
+        body += `</div>`;
+      }
+    }
+
+    const div = document.createElement('div');
+    div.className = 'step' + (hasEntries ? ' done' : '');
+    div.innerHTML = `<div class="step-body">${body}</div>`;
+    wrap.appendChild(div);
+  });
+
+  // 更換規格（stepNo=30）— 收進 04 生產中斷裡顯示
+  const specChangeEntries = (order.stepEntries || []).filter(e => e.stepNo === '30');
+
+  // 03. 生產結束（工單完成與結束 → 含/不含附屬設備 modal）
+  const finishCard = document.createElement('div');
+  const isFinished = !!order.step11At;
+  finishCard.className = 'step' + (isFinished ? ' done' : '');
+  let finishBody = '<div class="title">生產結束' + (isFinished ? '<span class="badge ok">×1</span>' : '') + '</div>';
+  finishBody += '<div class="hint">工單完成與結束（含 / 不含附屬設備）</div>';
+  if (isFinished) {
+    const noteTxt = order.step11Note ? '（' + escapeHtml(order.step11Note) + '）' : '';
+    finishBody += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:var(--success-soft);border-radius:8px;">
+      <span style="font-size:12px;color:var(--success);font-weight:600;flex:1;display:inline-flex;align-items:center;gap:4px;">${icon('check', 14)}已完成${noteTxt} — ${fmtTime(order.step11At)}</span>
+    </div>`;
+    finishBody += '<button class="btn-success btn-block" disabled>' + icon('check', 16) + ' 已完成</button>';
+  } else if (isPaused) {
+    finishBody += '<button class="btn-success btn-block" disabled>' + icon('check', 16) + ' 暫停中，請先恢復</button>';
+  } else {
+    finishBody += `<div style="display:flex;gap:8px;">`;
+    finishBody += `<button id="finishStepBtn" class="btn-success" style="flex:1;">${icon('check', 16)} 已完成</button>`;
+    finishBody += `<button id="finishStepBfBtn" class="btn-secondary" style="flex:0 0 auto;padding:10px 14px;font-size:13px;color:#b8860b;">${icon('edit', 14)} 補登</button>`;
+    finishBody += `</div>`;
+  }
+  finishCard.innerHTML = `<div class="step-body">${finishBody}</div>`;
+  wrap.appendChild(finishCard);
+
+  // 04. 生產中斷（pause12/13 整合）
+  const intCard = document.createElement('div');
+  const p12 = order.pause12 || {};
+  const p13 = order.pause13 || {};
+  const activePause = (p12.active) ? { type: '12', info: p12 }
+                    : (p13.active) ? { type: '13', info: p13 }
+                    : null;
+  const totalCount = (p12.count || 0) + (p13.count || 0);
+  const totalSec   = (p12.totalSec || 0) + (p13.totalSec || 0);
+  intCard.className = 'step' + (totalCount > 0 ? ' done' : '');
+  intCard.style.borderLeft = '4px solid #f0ad4e';
+  let intBody = '<div class="title">生產中斷' + (totalCount > 0 ? `<span class="badge ok" style="background:#f0ad4e;">×${totalCount}</span>` : '') + '</div>';
+  intBody += '<div class="hint">設備異常停機 ／ 超過1小時以上的停機 ／ 中午休息或下班時間</div>';
+  if (activePause) {
+    const noteTxt = activePause.info.active.note ? `（${escapeHtml(activePause.info.active.note)}）` : '';
+    intBody += `<div style="margin-bottom:8px;padding:8px 10px;background:#fff3cd;border-left:3px solid #f0ad4e;border-radius:6px;font-size:13px;color:#8a6d3b;font-weight:600;">中斷中${noteTxt} <span class="live-timer" data-start="${activePause.info.active.startAt}"></span></div>`;
+    intBody += `<div style="text-align:center;font-size:12px;color:var(--muted);padding:8px;background:#f5f5f7;border-radius:6px;">↓ 請按下方「恢復生產」按鈕</div>`;
+  } else {
+    if (totalCount > 0) {
+      intBody += `<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">累計 ${totalCount} 次，共 ${fmtDuration(totalSec)}</div>`;
+    }
+    intBody += `<div style="display:flex;gap:8px;">`;
+    intBody += `<button id="interruptBtn" style="flex:1;background:#f0ad4e;color:#fff;border:none;border-radius:8px;padding:14px;font-weight:700;font-size:15px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;">${icon('pause', 16)}生產中斷</button>`;
+    intBody += `<button id="interruptBfBtn" class="btn-secondary" style="flex:0 0 auto;padding:10px 14px;font-size:13px;color:#b8860b;">${icon('edit', 14)} 補登</button>`;
+    intBody += `</div>`;
+    intBody += `<div class="backfill-form" id="interrupt-bf" style="display:none;flex-direction:column;gap:6px;">
+      <select id="ibf-reason" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;">
+        <option value="">-- 選擇中斷原因 --</option>
+        <option value="設備異常停機|13">設備異常停機</option>
+        <option value="超過1小時以上的停機|12">超過1小時以上的停機</option>
+        <option value="中午休息或下班時間|12">中午休息或下班時間</option>
+      </select>
+      <input type="text" id="ibf-note" placeholder="補充說明（選填）" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;box-sizing:border-box;">
+      <div style="display:flex;gap:6px;">
+        <div style="flex:1;"><label style="font-size:11px;color:var(--muted);">開始時間</label><input type="datetime-local" id="ibf-start" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></div>
+        <div style="flex:1;"><label style="font-size:11px;color:var(--muted);">結束時間</label><input type="datetime-local" id="ibf-end" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-primary" style="flex:1;" onclick="submitInterruptBackfill()">確認補登</button>
+        <button class="btn-secondary" style="flex:0 0 auto;" onclick="document.getElementById('interrupt-bf').style.display='none'">取消</button>
+      </div>
+    </div>`;
+  }
+
+  // — 04 內部分隔 + 更換規格 區段 —
+  intBody += `<div style="margin-top:14px;padding-top:14px;border-top:1.5px dashed #f0ad4e;">`;
+  intBody += '<div style="font-size:13px;font-weight:700;color:#b8860b;display:flex;align-items:center;gap:6px;">' + icon('clipboard', 14) + ' 更換規格' +
+    (specChangeEntries.length ? `<span class="badge ok" style="background:#f0ad4e;">×${specChangeEntries.length}</span>` : '') + '</div>';
+  intBody += '<div class="hint" style="margin-top:2px;">多規格工單切換規格時填入（例：規格 2、規格 3）</div>';
+  specChangeEntries.forEach(e => {
+    const elapsed = now - new Date(e.recordedAt).getTime();
+    const canCancel = elapsed < 5 * 60 * 1000;
+    const manualTag = e.isManual ? '<span class="manual-tag">補登</span>' : '';
+    intBody += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${canCancel ? '#fff4d6' : '#fff8e8'};border-radius:8px;border-left:3px solid #f0ad4e;">`;
+    intBody += `<span style="font-size:12px;color:#b8860b;font-weight:600;flex:1;display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;">${icon('clipboard', 14)}${escapeHtml(e.note || '')} — ${fmtTime(e.recordedAt)}${manualTag}</span>`;
+    if (canCancel && !isPaused) {
+      intBody += `<button class="btn-danger" data-cancel-entry="${e.id}" style="padding:4px 10px;font-size:11px;min-height:28px;">取消</button>`;
+    }
+    intBody += '</div>';
+  });
+  if (isPaused) {
+    intBody += '<button class="btn-success btn-block" disabled style="background:#f0ad4e;margin-top:8px;">' + icon('clipboard', 16) + ' 記錄更換</button>';
+  } else {
+    intBody += `<div style="display:flex;gap:6px;margin-top:8px;">`;
+    intBody += `<input type="text" id="specChangeInput" placeholder="新規格描述（例：規格 2）" maxlength="200" style="flex:1;padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">`;
+    intBody += `<button id="specChangeBtn" style="flex:0 0 auto;padding:10px 18px;background:#f0ad4e;color:#fff;border:none;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;">${icon('clipboard', 14)} 記錄</button>`;
+    intBody += `</div>`;
+  }
+  intBody += `</div>`;
+
+  intCard.innerHTML = `<div class="step-body">${intBody}</div>`;
+  wrap.appendChild(intCard);
+
+  area.appendChild(wrap);
+
+  // 暫停中：獨立的恢復生產卡，緊接在 04 生產中斷下方、不被灰幕鎖住，是唯一可按的按鈕
+  if (activePause) {
+    const noteTxt = activePause.info.active.note ? `（${escapeHtml(activePause.info.active.note)}）` : '';
+    const bg = activePause.type === '13' ? 'var(--brand)' : '#f0ad4e';
+    const resumeCard = document.createElement('div');
+    resumeCard.className = 'card';
+    resumeCard.style.cssText = 'border:2px solid #f0ad4e;background:#fff8e8;';
+    resumeCard.innerHTML = `
+      <div style="text-align:center;padding:6px 0 4px;">
+        <div style="font-size:18px;font-weight:700;color:#b8860b;margin-bottom:4px;display:inline-flex;align-items:center;gap:6px;">${icon('pause', 18)}生產中斷中${noteTxt}</div>
+        <div style="font-size:13px;color:#8a6d3b;margin-bottom:14px;">已中斷 <span class="live-timer" data-start="${activePause.info.active.startAt}"></span> · 請先恢復生產才能繼續操作</div>
+        <button id="resumeBtn" style="width:100%;background:${bg};color:#fff;border:none;border-radius:10px;padding:18px;font-weight:700;font-size:18px;cursor:pointer;animation:pulse 1.5s infinite;display:inline-flex;align-items:center;justify-content:center;gap:8px;">${icon('play', 22)}恢復生產</button>
+      </div>
+    `;
+    area.appendChild(resumeCard);
+  }
+
+  startLiveTimers();
+
+  // 21/22/23 的掃描和已完成
+  area.querySelectorAll('[data-scan]').forEach(b => {
+    b.onclick = () => startStepScan(b.getAttribute('data-scan'));
+  });
+  area.querySelectorAll('[data-done]').forEach(b => {
+    b.onclick = () => submitStep(b.getAttribute('data-done'), '');
+  });
+  area.querySelectorAll('[data-clear]').forEach(b => {
+    b.onclick = () => clearStep(b.getAttribute('data-clear'));
+  });
+  // 一般步驟記錄（按 已完成 → 跳是否加備註 → 送出）
+  area.querySelectorAll('[data-record-step]').forEach(b => {
+    b.onclick = () => recordStepEntry(b.getAttribute('data-record-step'));
+  });
+  area.querySelectorAll('[data-cancel-entry]').forEach(b => {
+    b.onclick = () => cancelStepEntry(b.getAttribute('data-cancel-entry'));
+  });
+  // 補登
+  area.querySelectorAll('[data-backfill]').forEach(b => {
+    b.onclick = () => {
+      const id = b.getAttribute('data-backfill');
+      const form = document.getElementById('backfill-' + id);
+      form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+    };
+  });
+  area.querySelectorAll('[data-backfill-cancel]').forEach(b => {
+    b.onclick = () => {
+      document.getElementById('backfill-' + b.getAttribute('data-backfill-cancel')).style.display = 'none';
+    };
+  });
+  area.querySelectorAll('[data-backfill-submit]').forEach(b => {
+    b.onclick = () => backfillStepEntry(b.getAttribute('data-backfill-submit'));
+  });
+  // 補登狀態三選一（options-kind step）
+  area.querySelectorAll('.bf-opt-pick').forEach(b => {
+    b.onclick = () => {
+      const stepId = b.dataset.step;
+      area.querySelectorAll(`.bf-opt-pick[data-step="${stepId}"]`).forEach(other => {
+        other.style.background = '#fff';
+        other.style.color = 'var(--ink)';
+        other.style.borderColor = 'var(--border)';
+        other.dataset.selected = '';
+      });
+      b.style.background = 'var(--brand)';
+      b.style.color = '#fff';
+      b.style.borderColor = 'var(--brand)';
+      b.dataset.selected = '1';
+    };
+  });
+  // 更換規格（不綁 Enter，避免行動裝置誤觸；只能按按鈕）
+  const specBtn = document.getElementById('specChangeBtn');
+  if (specBtn) {
+    specBtn.onclick = () => {
+      const input = document.getElementById('specChangeInput');
+      const text = (input?.value || '').trim();
+      if (!text) { toast('請填入規格描述', 'error'); input?.focus(); return; }
+      if (!confirm('確定記錄更換規格為「' + text + '」？')) return;
+      recordSpecChange(text);
+    };
+  }
+
+  // 03 生產結束
+  const finishStepBtn = document.getElementById('finishStepBtn');
+  if (finishStepBtn) {
+    finishStepBtn.onclick = () => {
+      if (isPaused) { toast('請先恢復生產', 'error'); return; }
+      showCompleteModal();
+    };
+  }
+  const finishStepBfBtn = document.getElementById('finishStepBfBtn');
+  if (finishStepBfBtn) {
+    finishStepBfBtn.onclick = () => {
+      if (isPaused) { toast('請先恢復生產', 'error'); return; }
+      showCompleteModal(true);
+    };
+  }
+  // 04 生產中斷
+  const interruptBtn = document.getElementById('interruptBtn');
+  if (interruptBtn) interruptBtn.onclick = () => showInterruptModal();
+  const interruptBfBtn = document.getElementById('interruptBfBtn');
+  if (interruptBfBtn) interruptBfBtn.onclick = () => {
+    const f = document.getElementById('interrupt-bf');
+    f.style.display = f.style.display === 'none' ? '' : 'none';
+  };
+  const resumeBtn = document.getElementById('resumeBtn');
+  if (resumeBtn && activePause) resumeBtn.onclick = () => resumePause(activePause.type);
+
+  $('bottomBar').classList.remove('show');
+}
+
+async function recordSpecChange(note) {
+  if (!orderNo) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/step-entries', {
+    method: 'POST',
+    body: { stepNo: '30', note },
+  });
+  if (!r.ok) { toast(r.error, 'error'); return; }
+  order = r.data.order;
+  renderSteps();
+  toast('📋 已記錄更換：' + note, 'success');
+}
+
+function getCurrentStep() {
+  let latest = null, latestTime = 0;
+  // 先從 stepEntries 找最近一筆（新流程）
+  (order.stepEntries || []).forEach(e => {
+    const t = new Date(e.recordedAt).getTime();
+    if (t > latestTime) {
+      const stepDef = STEPS.find(s => s.id === e.stepNo) || PRE_STEPS.find(s => s.id === e.stepNo);
+      if (stepDef) { latestTime = t; latest = stepDef; }
+    }
+  });
+  // fallback：舊 stepXAt 欄位（兼容歷史資料）
+  STEPS.forEach(s => {
+    const f = STEP_FIELD[s.id];
+    if (!f || !f.time) return;
+    const t = order[f.time];
+    if (t && new Date(t).getTime() > latestTime) {
+      latestTime = new Date(t).getTime();
+      latest = s;
+    }
+  });
+  return latest ? latest.title : '尚未開始';
+}
+
+// 補登工序（自訂日期時間）
+async function backfillStepEntry(stepNo) {
+  const dateVal = document.getElementById('bf-date-' + stepNo)?.value;
+  const timeVal = document.getElementById('bf-time-' + stepNo)?.value;
+  if (!dateVal || !timeVal) { toast('請填寫日期和時間', 'error'); return; }
+  const dt = new Date(dateVal + 'T' + timeVal);
+  if (isNaN(dt)) { toast('日期時間格式錯誤', 'error'); return; }
+  // 是否加文字備註？沒就沒
+  let note = null;
+  if (confirm('要加文字備註嗎？')) {
+    const text = prompt('請輸入備註：', '');
+    if (text === null) return; // 取消整個動作
+    if (text.trim()) note = text.trim();
+  }
+  if (!confirm('確認補登？\n時間：' + fmtTime(dt.toISOString()) + (note ? '\n備註：' + note : '') + '\n將標記為「補登」')) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/step-entries', {
+    method: 'POST',
+    body: { stepNo, recordedAt: dt.toISOString(), note },
+  });
+  if (!r.ok) { toast(r.error, 'error'); return; }
+  order = r.data.order;
+  renderSteps();
+  if (r.data.forcedFromPrev && r.data.entry) {
+    const msg = r.data.forcedReason === 'day_start'
+      ? '📅 每日第一單，自動設為 ' + fmtTime(r.data.entry.recordedAt)
+      : '⚓ 已自動銜接上一張工單時間：' + fmtTime(r.data.entry.recordedAt);
+    toast(msg, 'success');
+  } else {
+    toast('✓ 已補登（標記為補登）', 'success');
+  }
+}
+
+// 記錄工序（日誌式，可重複）
+async function recordStepEntry(stepNo) {
+  if (!orderNo) return;
+  // 是否加文字備註？沒就沒
+  let note = null;
+  if (confirm('要加文字備註嗎？')) {
+    const text = prompt('請輸入備註：', '');
+    if (text === null) return; // 取消整個動作
+    if (text.trim()) note = text.trim();
+  }
+  const stepDef = STEPS.find(s => s.id === stepNo) || PRE_STEPS.find(s => s.id === stepNo);
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/step-entries', {
+    method: 'POST',
+    body: { stepNo, note },
+  });
+  if (!r.ok) { toast(r.error, 'error'); return; }
+  order = r.data.order;
+  renderSteps();
+  if (r.data.forcedFromPrev && r.data.entry) {
+    const msg = r.data.forcedReason === 'day_start'
+      ? '📅 每日第一單，自動設為 ' + fmtTime(r.data.entry.recordedAt)
+      : '⚓ 已自動銜接上一張工單時間：' + fmtTime(r.data.entry.recordedAt);
+    toast(msg, 'success');
+  } else {
+    toast('✓ ' + (stepDef ? stepDef.title : '工序 ' + stepNo), 'success');
+  }
+}
+
+// 取消工序紀錄（5 分鐘內）
+async function cancelStepEntry(entryId) {
+  if (!confirm('確定取消此筆紀錄？（5 分鐘內可取消）')) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/step-entries/' + entryId, { method: 'DELETE' });
+  if (!r.ok) { toast(r.error, 'error'); return; }
+  order = r.data.order;
+  renderSteps();
+  toast('已取消', 'success');
+}
+
+// 統一的「生產中斷」三選一 modal
+function showInterruptModal() {
+  if (!orderNo) return;
+  const old = document.getElementById('interruptModal');
+  if (old) old.remove();
+  const modal = document.createElement('div');
+  modal.id = 'interruptModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:24px;width:100%;max-width:340px;box-shadow:0 10px 40px rgba(0,0,0,.2);">
+      <h3 style="margin:0 0 16px;font-size:17px;color:var(--ink);">生產中斷</h3>
+      <div style="display:flex;flex-direction:column;gap:10px;" id="intOptList">
+        <button class="btn-secondary int-opt" data-opt="abnormal" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('alert', 18)}<span>設備異常停機</span></button>
+        <button class="btn-secondary int-opt" data-opt="long" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('clock', 18)}<span>超過1小時以上的停機</span></button>
+        <button class="btn-secondary int-opt" data-opt="break" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('coffee', 18)}<span>中午休息或下班時間</span></button>
+      </div>
+      <div id="intNoteWrap" style="display:none;margin-top:10px;">
+        <input type="text" id="intNoteInput" placeholder="" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;box-sizing:border-box;">
+        <button class="btn-primary" id="intNoteConfirm" style="width:100%;margin-top:8px;padding:12px;font-size:15px;">確認中斷</button>
+      </div>
+      <button id="interruptModalCancel" style="width:100%;margin-top:12px;padding:12px;font-size:14px;background:none;border:1.5px solid var(--border);border-radius:10px;color:var(--muted);cursor:pointer;">取消</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  document.getElementById('interruptModalCancel').onclick = () => modal.remove();
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+  modal.querySelectorAll('.int-opt').forEach(btn => {
+    btn.onclick = () => {
+      const opt = btn.dataset.opt;
+      if (opt === 'break') {
+        // 中午休息／下班 — 不需輸入，直接送
+        modal.remove();
+        executePause({ type: '12', title: '中午休息或下班時間' }, '中午休息或下班時間');
+        return;
+      }
+      // 異常 / 長時間 → 切換到輸入區
+      document.getElementById('intOptList').style.display = 'none';
+      const wrap = document.getElementById('intNoteWrap');
+      const input = document.getElementById('intNoteInput');
+      const confirmBtn = document.getElementById('intNoteConfirm');
+      wrap.style.display = '';
+      if (opt === 'abnormal') {
+        input.placeholder = '異常說明（必填，例：模具頓刀）';
+        input.value = '';
+        confirmBtn.onclick = () => {
+          const val = input.value.trim();
+          if (!val) { toast('請輸入異常說明', 'error'); return; }
+          modal.remove();
+          executePause({ type: '13', title: '設備異常停機' }, val);
+        };
+        input.focus();
+      } else { // long
+        input.placeholder = '補充說明（選填，例：模具維修）';
+        input.value = '';
+        confirmBtn.onclick = () => {
+          const val = input.value.trim();
+          const note = val ? '超過1小時以上的停機 - ' + val : '超過1小時以上的停機';
+          modal.remove();
+          executePause({ type: '12', title: '超過1小時以上的停機' }, note);
+        };
+        input.focus();
+      }
+    };
+  });
+}
+
+async function submitInterruptBackfill() {
+  if (!orderNo) return;
+  const sel = document.getElementById('ibf-reason').value;
+  if (!sel) { toast('請選擇中斷原因', 'error'); return; }
+  const [reason, type] = sel.split('|');
+  const detail = document.getElementById('ibf-note').value.trim();
+  const note = detail ? reason + ' - ' + detail : reason;
+  const startAt = document.getElementById('ibf-start').value;
+  const endAt = document.getElementById('ibf-end').value;
+  if (!startAt || !endAt) { toast('請填寫開始和結束時間', 'error'); return; }
+  if (!confirm('確認補登？\n原因：' + note + '\n開始：' + startAt + '\n結束：' + endAt)) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/pause-backfill', {
+    method: 'POST',
+    body: { type, note, startAt: new Date(startAt).toISOString(), endAt: new Date(endAt).toISOString() },
+  });
+  if (!r.ok) { toast(r.error || '補登失敗', 'error'); return; }
+  order = r.data.order;
+  renderSteps();
+  toast('✓ 已補登中斷', 'success');
+}
+
+// 工單完成 modal（含/不含附屬設備 + 主/附屬獨立運作 + 補登時間）
+// prefillBackfill: 從「補登」按鈕進來的話，補登時間區塊預設展開
+function showCompleteModal(prefillBackfill = false) {
+  if (!orderNo) return;
+  const old = document.getElementById('completeModal');
+  if (old) old.remove();
+  const modal = document.createElement('div');
+  modal.id = 'completeModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:24px;width:100%;max-width:360px;box-shadow:0 10px 40px rgba(0,0,0,.2);margin:auto;">
+      <h3 style="margin:0 0 6px;font-size:17px;color:var(--ink);">本工單完成生產</h3>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">① 請選擇是否含附屬設備：</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button class="btn-secondary cmp-opt" data-aux="含附屬設備" style="padding:12px;font-size:14px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('gear', 18)}<span>含附屬設備</span></button>
+        <button class="btn-secondary cmp-opt" data-aux="不含附屬設備" style="padding:12px;font-size:14px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('ban', 18)}<span>不含附屬設備</span></button>
+      </div>
+      <div style="margin-top:14px;font-size:12px;color:var(--muted);margin-bottom:8px;">② 主設備與附屬設備：</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <label class="cmp-indep-row" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;font-size:14px;">
+          <input type="radio" name="cmpIndep" value="可分開獨立運作" checked style="width:16px;height:16px;accent-color:#d23535;">可以分開獨立運作
+        </label>
+        <label class="cmp-indep-row" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;font-size:14px;">
+          <input type="radio" name="cmpIndep" value="無法分開獨立運作" style="width:16px;height:16px;accent-color:#d23535;">無法分開獨立運作
+        </label>
+      </div>
+      <button id="cmpBackfillToggle" style="width:100%;margin-top:14px;padding:10px;background:none;border:1.5px dashed var(--border);border-radius:10px;color:#b8860b;font-size:13px;cursor:pointer;">${icon('edit', 14)} 補登時間（不填用現在）</button>
+      <div id="cmpBackfillWrap" style="display:${prefillBackfill ? '' : 'none'};margin-top:8px;">
+        <input type="datetime-local" id="cmpBackfillTime" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;box-sizing:border-box;">
+      </div>
+      <button id="completeModalCancel" style="width:100%;margin-top:12px;padding:12px;font-size:14px;background:none;border:1.5px solid var(--border);border-radius:10px;color:var(--muted);cursor:pointer;">取消</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  document.getElementById('completeModalCancel').onclick = () => modal.remove();
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+  document.getElementById('cmpBackfillToggle').onclick = () => {
+    const wrap = document.getElementById('cmpBackfillWrap');
+    wrap.style.display = wrap.style.display === 'none' ? '' : 'none';
+  };
+  if (prefillBackfill) setTimeout(() => document.getElementById('cmpBackfillTime')?.focus(), 50);
+
+  modal.querySelectorAll('.cmp-opt').forEach(btn => {
+    btn.onclick = async () => {
+      const auxNote = btn.dataset.aux;
+      const indepEl = modal.querySelector('input[name="cmpIndep"]:checked');
+      const indepNote = indepEl ? indepEl.value : '可分開獨立運作';
+      const note = auxNote + '｜' + indepNote;
+      const bfTime = document.getElementById('cmpBackfillTime').value;
+      let recordedAt = null;
+      if (bfTime) {
+        const dt = new Date(bfTime);
+        if (isNaN(dt)) { toast('補登時間格式錯誤', 'error'); return; }
+        if (dt > new Date()) { toast('補登時間不能超過現在', 'error'); return; }
+        recordedAt = dt.toISOString();
+      }
+      const summary = recordedAt ? `「${note}」\n補登時間：${bfTime.replace('T', ' ')}` : `「${note}」`;
+      if (!confirm('確定完成此工單？\n' + summary)) return;
+      modal.remove();
+      try { await submitStepWithBody('11', { note, recordedAt }); } catch (e) {}
+      finishOrder();
+    };
+  });
+}
+
+async function submitStepWithBody(stepId, body) {
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/steps/' + stepId, {
+    method: 'POST',
+    body,
+  });
+  if (!r.ok) {
+    toast(r.error, 'error');
+    if (r.data && r.data.order) { order = r.data.order; renderSteps(); }
+    return;
+  }
+  order = r.data.order;
+  $('orderUpdated').textContent = '最後更新：' + fmtTime(order.updatedAt);
+  renderSteps();
+  const stepDef = STEPS.find(s => s.id === stepId) || (stepId === '11' ? ACTIONS_FINISH : null);
+  toast('✓ 已記錄 ' + (stepDef ? stepDef.title : '步驟 ' + stepId), 'success');
+}
+
+async function executePause(p, note) {
+  if (!orderNo) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/pause', {
+    method: 'POST',
+    body: { type: p.type, note, activeStep: getCurrentStep() },
+  });
+  if (!r.ok) { toast(r.error, 'error'); return; }
+  order = r.data.order;
+  renderSteps();
+  toast(p.title + ' — 開始計時', 'success');
+  startLiveTimers();
+}
+
+async function resumePause(type) {
+  if (!orderNo) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/resume', {
+    method: 'POST',
+    body: { type },
+  });
+  if (!r.ok) { toast(r.error, 'error'); return; }
+  order = r.data.order;
+  const dur = r.data.resumed ? r.data.resumed.duration : 0;
+  renderSteps();
+  toast('已恢復生產（暫停 ' + fmtDuration(dur) + '）', 'success');
+}
+
+
+// 即時計時器
+let timerInterval = null;
+function startLiveTimers() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(updateLiveTimers, 1000);
+  updateLiveTimers();
+}
+function updateLiveTimers() {
+  document.querySelectorAll('.live-timer').forEach(el => {
+    const start = new Date(el.dataset.start);
+    const sec = Math.round((Date.now() - start.getTime()) / 1000);
+    el.textContent = fmtDuration(sec);
+  });
+  // 沒有 timer 就停止
+  if (!document.querySelector('.live-timer')) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+}
+
+function finishOrder() {
+  clearState();
+  orderNo = ''; order = null; selectedMachine = '';
+  document.querySelectorAll('.machine-btn').forEach(b => b.classList.remove('selected'));
+  $('machineEmpty').style.display = 'block';
+  $('machineShow').style.display = 'none';
+  $('orderCard').style.display = 'none';
+  $('orderEmpty').style.display = 'block';
+  $('orderShow').style.display = 'none';
+  $('scopeCard').style.display = 'none';
+  $('materialCard').style.display = 'none';
+  $('orderInput').value = '';
+  $('stepsArea').style.display = 'none';
+  $('bottomBar').classList.remove('show');
+  toast('已完成，請選擇機台開始下一張工單', 'success');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+$('finishBtn').onclick = finishOrder;
+
+// ====== 步驟操作 ======
+function startStepScan(stepId) {
+  if (!orderNo) { toast('請先設定工單', 'error'); return; }
+  pendingStep = stepId;
+  openScanner('step');
+}
+
+async function clearStep(stepId) {
+  if (!confirm('確定要取消「' + STEPS.find(s => s.id === stepId).title + '」的紀錄嗎？')) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/steps/' + stepId, { method: 'DELETE' });
+  if (!r.ok) { toast(r.error, 'error'); return; }
+  order = r.data.order;
+  $('orderUpdated').textContent = '最後更新：' + fmtTime(order.updatedAt);
+  renderSteps();
+  toast('已取消紀錄', 'success');
+}
+
+async function submitStep(stepId, note) {
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/steps/' + stepId, {
+    method: 'POST',
+    body: { note: note || '' },
+  });
+  if (!r.ok) {
+    toast(r.error, 'error');
+    if (r.data && r.data.order) { order = r.data.order; renderSteps(); }
+    return;
+  }
+  order = r.data.order;
+  $('orderUpdated').textContent = '最後更新：' + fmtTime(order.updatedAt);
+  renderSteps();
+  toast('✓ 已記錄 ' + STEPS.find(s => s.id === stepId).title, 'success');
+}
+
+// ====== 掃描器 ======
+function showCameraError(msg) {
+  $('qr-reader').style.display = 'none';
+  $('cameraError').style.display = 'block';
+  $('cameraErrorMsg').textContent = msg;
+}
+
+function openScanner(mode) {
+  scanMode = mode;
+  const titles = {
+    'order': '請對準工單條碼',
+    'step': '請掃描工項 QR Code',
+  };
+  $('scannerTitle').textContent = titles[mode] || '請掃描 QR Code';
+  $('scannerModal').classList.add('show');
+  $('qr-reader').style.display = 'block';
+  $('cameraError').style.display = 'none';
+
+  // 檢查瀏覽器是否支援
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showCameraError('此瀏覽器不支援相機（需 HTTPS + 現代瀏覽器）');
+    return;
+  }
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+    showCameraError('需在 HTTPS 網站才能使用相機');
+    return;
+  }
+
+  if (!scanner) {
+    try { scanner = new Html5Qrcode('qr-reader'); }
+    catch (e) { showCameraError('掃描器初始化失敗：' + e.message); return; }
+  }
+  scanner.start(
+    { facingMode: 'environment' },
+    { fps: 10, qrbox: { width: 260, height: 260 } },
+    onScanSuccess,
+    () => {},
+  ).catch(err => {
+    const errStr = String(err && err.message || err);
+    let friendly = errStr;
+    if (/Permission|NotAllowed|denied/i.test(errStr)) {
+      friendly = '相機權限被拒絕。請到瀏覽器設定中開啟相機權限後重新整理。';
+    } else if (/NotFound|no.*camera/i.test(errStr)) {
+      friendly = '找不到相機裝置。';
+    } else if (/NotReadable|in use|busy/i.test(errStr)) {
+      friendly = '相機被其他 App 佔用，請關閉其他相機 App 後再試。';
+    } else if (/Overconstrained/i.test(errStr)) {
+      // 改用前鏡頭再試
+      scanner.start({ facingMode: 'user' }, { fps: 10, qrbox: { width: 260, height: 260 } }, onScanSuccess, () => {})
+        .catch(e2 => showCameraError('相機規格不支援：' + errStr));
+      return;
+    }
+    showCameraError(friendly);
+  });
+}
+
+async function closeScanner() {
+  $('scannerModal').classList.remove('show');
+  if (scanner) {
+    try { await scanner.stop(); } catch (e) {}
+  }
+  // 關閉時讓對應的輸入框獲得焦點，方便手動輸入
+  setTimeout(() => {
+    if (scanMode === 'order') $('orderInput').focus();
+  }, 200);
+}
+$('closeScannerBtn').onclick = closeScanner;
+
+async function onScanSuccess(decodedText) {
+  if (scanMode === 'order') {
+    await closeScanner();
+    let raw = String(decodedText || '').trim();
+    let extracted = raw;
+    try {
+      if (/^https?:\/\//i.test(raw)) {
+        const u = new URL(raw);
+        const q = u.searchParams;
+        extracted = q.get('order') || q.get('orderNo') || q.get('no') || q.get('id') ||
+                    u.pathname.split('/').filter(Boolean).pop() || raw;
+      }
+    } catch (e) {}
+    $('orderInput').value = extracted;
+    toast('掃到：' + raw.slice(0, 40) + (raw.length > 40 ? '…' : '') + '，請確認後按確定', 'success');
+    $('orderInput').focus();
+    return;
+  }
+
+  // step 模式（21/22/23）
+  const m = String(decodedText).match(/^STEP[:\-]?(\d+)$/i);
+  if (!m) { toast('不是工項 QR：' + decodedText, 'error'); return; }
+  const scanned = m[1];
+  if (scanned !== pendingStep) {
+    toast('掃到的是項目 ' + scanned + '，但你選的是項目 ' + pendingStep, 'error');
+    return;
+  }
+  await closeScanner();
+
+  await submitStep(pendingStep, '');
+  pendingStep = null;
+}
+
+// ====== 啟動 ======
+renderHeader();
+if (API_URL.startsWith('PASTE_')) {
+  toast('尚未設定 API_URL，請先部署後端', 'error');
+} else if (!token) {
+  showLogin();
+} else {
+  loadIdleMachines();
+  restoreSavedState();
+}
+</script>
+</body>
+</html>

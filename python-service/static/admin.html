@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<title>上鎧鋼鐵 - 帳號管理</title>
+<link rel="icon" href="img/logo.jpg">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="preconnect" href="https://shangkai-manu-record.zeabur.app" crossorigin>
+<link rel="dns-prefetch" href="https://shangkai-manu-record.zeabur.app">
+<style>
+  :root {
+    --brand: #d23535;
+    --brand-dark: #a82828;
+    --brand-soft: #fdf2f2;
+    --ink: #1c1c1e;
+    --text: #2c2c2e;
+    --muted: #6e6e73;
+    --border: #e5e5ea;
+    --bg: #f2f2f5;
+    --card: #ffffff;
+    --success: #2ea043;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,.04);
+    position: relative;
+    z-index: 10;
+  }
+  header .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+  }
+  header .brand img { height: 30px; width: auto; flex-shrink: 0; }
+  header .brand-text {
+    border-left: 2px solid var(--border);
+    padding-left: 10px;
+    line-height: 1.2;
+    min-width: 0;
+    flex: 1;
+  }
+  header .brand-text .title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  header .brand-text .sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  header .right { display: flex; gap: 2px; flex-shrink: 0; }
+  header .right a {
+    color: var(--brand);
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    padding: 6px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+  @media (max-width: 480px) {
+    header .brand img { height: 26px; }
+    header .brand-text { padding-left: 8px; }
+    header .brand-text .title { font-size: 12px; }
+    header .right a { font-size: 11px; padding: 5px 7px; }
+  }
+  header .right a:hover { background: var(--brand-soft); }
+
+  .container { padding: 16px; max-width: 760px; margin: 0 auto; }
+  .card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.02);
+  }
+  .card h2 {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin: 12px 0 6px;
+    font-weight: 500;
+  }
+  input[type=text], input[type=password] {
+    width: 100%;
+    padding: 13px 14px;
+    font-size: 15px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    color: var(--ink);
+    transition: border-color .15s;
+  }
+  input[type=text]:focus, input[type=password]:focus {
+    outline: none;
+    border-color: var(--brand);
+  }
+  button {
+    appearance: none;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    padding: 11px 16px;
+    cursor: pointer;
+    font-weight: 600;
+    font-family: inherit;
+    transition: transform .08s, background .15s;
+  }
+  button:active { transform: scale(.98); }
+  .btn-primary { background: var(--brand); color: #fff; box-shadow: 0 2px 6px rgba(210,53,53,.2); }
+  .btn-primary:hover { background: var(--brand-dark); }
+  .btn-secondary { background: #f2f2f5; color: var(--ink); border: 1.5px solid var(--border); }
+  .btn-secondary:hover { background: #e8e8eb; }
+  .btn-danger { background: #fff; color: var(--brand); border: 1.5px solid var(--brand); }
+  .btn-danger:hover { background: var(--brand-soft); }
+  .btn-block { width: 100%; padding: 14px; margin-top: 8px; }
+
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 0;
+    font-size: 14px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border-radius: 8px;
+  }
+  .checkbox-row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--brand); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+  th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+
+  .badge {
+    display: inline-block;
+    background: var(--brand);
+    color: #fff;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-left: 4px;
+  }
+  .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .row-actions button { padding: 7px 12px; font-size: 12px; }
+
+  #toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(28,28,30,.95);
+    color: #fff;
+    padding: 14px 22px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    display: none;
+    max-width: 90%;
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,.2);
+  }
+  #toast.show { display: block; }
+  #toast.error { background: var(--brand); }
+  #toast.success { background: var(--success); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <img src="img/logo.jpg" alt="上鎧鋼鐵">
+    <div class="brand-text">
+      <div class="title">帳號管理</div>
+      <div class="sub" id="meShow"></div>
+    </div>
+  </div>
+  <div class="right">
+    <a href="index.html">生產實態紀錄</a>
+    <a href="records.html">紀錄</a>
+    <a href="#" id="logoutLink">登出</a>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="card">
+    <h2>新增小組長</h2>
+    <label>帳號（只能英數，登入用，例：wang、lin01）</label>
+    <input type="text" id="newUsername" autocapitalize="none" autocomplete="off" placeholder="例：wang" pattern="[a-zA-Z0-9_]+">
+    <label>顯示名稱（中文，記錄到工單上的人名）</label>
+    <input type="text" id="newDisplayName" placeholder="例：王大明">
+    <label>密碼（至少 6 字）</label>
+    <input type="password" id="newPassword" autocomplete="new-password">
+    <div class="checkbox-row">
+      <input type="checkbox" id="newIsAdmin">
+      <label for="newIsAdmin" style="margin:0;">設為管理員</label>
+    </div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="newIsPlanner">
+      <label for="newIsPlanner" style="margin:0;">設為生管（可上傳工單）</label>
+    </div>
+    <button class="btn-primary btn-block" id="createBtn">新增帳號</button>
+  </div>
+
+  <div class="card">
+    <h2>所有小組長</h2>
+    <div id="leadersTable">載入中...</div>
+  </div>
+
+  <div class="card">
+    <h2>回收桶（可救回）</h2>
+    <div id="recoveryTabs" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+      <button class="rec-tab active" data-tab="deleted" style="padding:8px 14px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:#fff;cursor:pointer;">已刪除工單 <span class="rec-count">—</span></button>
+      <button class="rec-tab" data-tab="reset" style="padding:8px 14px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:#fff;cursor:pointer;">已重設紀錄 <span class="rec-count">—</span></button>
+      <button class="rec-tab" data-tab="cancelled" style="padding:8px 14px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:#fff;cursor:pointer;">已取消批次 <span class="rec-count">—</span></button>
+    </div>
+    <p id="recoveryHint" style="font-size:12px;color:var(--muted);margin:0 0 10px;">整張被刪掉的工單。按「救回」會還原工單 + 所有生產紀錄。</p>
+    <div id="recoveryContent">載入中...</div>
+    <div id="recoveryPager" style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:14px;"></div>
+  </div>
+
+  <div class="card">
+    <h2>操作紀錄</h2>
+    <style>
+      .rec-tab.active { background: var(--brand) !important; color: #fff !important; border-color: var(--brand) !important; }
+      .rec-tab .rec-count { font-size: 11px; opacity: .85; margin-left: 4px; }
+      .rec-day-header { font-size: 13px; font-weight: 700; color: var(--ink); margin: 12px 0 6px; padding: 4px 0; border-bottom: 2px solid var(--border); }
+      .rec-day-header:first-child { margin-top: 0; }
+    </style>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+      <span style="font-size:12px;color:var(--muted);">最近</span>
+      <select id="auditDays" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);font-size:13px;">
+        <option value="1">1 天</option>
+        <option value="3">3 天</option>
+        <option value="7" selected>7 天</option>
+        <option value="14">14 天</option>
+        <option value="30">30 天</option>
+      </select>
+      <span style="font-size:12px;color:var(--muted);">的所有刪除 / 重設 / 取消 / 救回 / 自動建單動作</span>
+    </div>
+    <div id="auditLog">載入中...</div>
+  </div>
+
+  <div class="card">
+    <h2>查單號歷史</h2>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">輸入工單號（可只輸入部分）查所有相關紀錄：含已刪除工單、含已取消批次。</p>
+    <div style="display:flex;gap:8px;">
+      <input type="text" id="findOrderInput" placeholder="例：F1159421004" autocapitalize="characters" autocomplete="off" style="flex:1;">
+      <button class="btn-primary" id="findOrderBtn" style="white-space:nowrap;">查詢</button>
+    </div>
+    <div id="findOrderResult" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="card">
+    <h2>系統工具</h2>
+    <button class="btn-primary btn-block" id="migrateDatesBtn" style="margin-bottom:6px;">遷移：拆分計畫日期 / 實際開始日期</button>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 14px;">把舊 productionDate 拆成「計畫日期 (plannedDate)」與「實際開始日期 (actualStartDate)」。執行後即時頁、紀錄頁、製造概覽會以實際日期為準，並標出計畫日期不同處。建議只跑一次。</p>
+    <div id="migrateDatesResult" style="margin:0 0 14px;"></div>
+
+    <button class="btn-secondary btn-block" id="fixDatesBtn" style="margin-bottom:6px;">舊版：修正所有工單生產日期</button>
+    <p style="font-size:12px;color:var(--muted);margin:0;">舊功能（依第一筆活動重設 productionDate）。新流程已用「遷移」取代，平常不需要按。</p>
+    <div id="fixDatesResult" style="margin-top:8px;"></div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script src="js/config.js"></script>
+<script src="js/utils.js?v=20260520ab"></script>
+<script>
+
+const me = requireLogin();
+if (me && !me.isAdmin) {
+  alert('需要管理員權限');
+  location.href = 'index.html';
+}
+if (me && !me.isAdmin) {
+  alert('需要管理員權限');
+  location.href = 'index.html';
+}
+if (me) $('meShow').textContent = '管理員：' + me.displayName;
+
+$('logoutLink').onclick = e => {
+  e.preventDefault();
+  if (!confirm('登出？')) return;
+  localStorage.removeItem('token');
+  localStorage.removeItem('me');
+  location.href = 'index.html';
+};
+
+async function loadLeaders() {
+  const r = await api('/api/admin/leaders');
+  if (!r.ok) { $('leadersTable').textContent = r.error || '載入失敗'; return; }
+  const leaders = r.data.leaders;
+  if (!leaders.length) { $('leadersTable').innerHTML = '<div style="color:#999;">尚無帳號</div>'; return; }
+  const rows = leaders.map(l => `
+    <tr>
+      <td><strong>${escapeHtml(l.displayName)}</strong>${l.isAdmin ? ' <span class="badge">管理員</span>' : ''}${l.isPlanner ? ' <span class="badge" style="background:#f0ad4e;">生管</span>' : ''}<br><span style="color:#888;font-size:12px;">@${escapeHtml(l.username)}</span></td>
+      <td style="font-size:12px;color:#666;">${fmtDate(l.createdAt)}</td>
+      <td class="row-actions">
+        <button class="btn-secondary" data-reset="${l.id}" data-name="${escapeHtml(l.displayName)}">改密碼</button>
+        ${l.id === me.id ? '' : `<button class="btn-danger" data-delete="${l.id}" data-name="${escapeHtml(l.displayName)}">刪除</button>`}
+      </td>
+    </tr>
+  `).join('');
+  $('leadersTable').innerHTML = `<table><thead><tr><th>姓名 / 帳號</th><th>建立日期</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table>`;
+
+  $('leadersTable').querySelectorAll('[data-reset]').forEach(b => {
+    b.onclick = () => resetPassword(b.dataset.reset, b.dataset.name);
+  });
+  $('leadersTable').querySelectorAll('[data-delete]').forEach(b => {
+    b.onclick = () => deleteLeader(b.dataset.delete, b.dataset.name);
+  });
+}
+
+initDropdownMenu();
+
+$('createBtn').onclick = async () => {
+  const username = $('newUsername').value.trim();
+  const displayName = $('newDisplayName').value.trim();
+  const password = $('newPassword').value;
+  const isAdmin = $('newIsAdmin').checked;
+  const isPlanner = $('newIsPlanner').checked;
+  if (!username || !displayName || !password) { toast('請填寫完整', 'error'); return; }
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) { toast('帳號只能用英數和底線', 'error'); return; }
+  if (password.length < 6) { toast('密碼至少 6 字', 'error'); return; }
+  $('createBtn').disabled = true;
+  const r = await api('/api/admin/leaders', { method: 'POST', body: { username, displayName, password, isAdmin, isPlanner } });
+  $('createBtn').disabled = false;
+  if (!r.ok) { toast(r.error, 'error'); return; }
+  toast('已新增 ' + displayName, 'success');
+  $('newUsername').value = ''; $('newDisplayName').value = ''; $('newPassword').value = ''; $('newIsAdmin').checked = false; $('newIsPlanner').checked = false;
+  loadLeaders();
+};
+
+async function resetPassword(id, name) {
+  const newPassword = prompt('為「' + name + '」設定新密碼（至少 6 字）：', '');
+  if (!newPassword) return;
+  if (newPassword.length < 6) { alert('密碼至少 6 字'); return; }
+  const r = await api('/api/admin/leaders/' + id + '/reset-password', { method: 'POST', body: { newPassword } });
+  if (!r.ok) { toast(r.error, 'error'); return; }
+  toast('密碼已重設', 'success');
+}
+
+async function deleteLeader(id, name) {
+  if (!confirm('確定刪除「' + name + '」？\n該帳號歷史工單會保留，但失去關聯。')) return;
+  const r = await api('/api/admin/leaders/' + id, { method: 'DELETE' });
+  if (!r.ok) { toast(r.error, 'error'); return; }
+  toast('已刪除', 'success');
+  loadLeaders();
+}
+
+function fmtDateTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const ymd = d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
+  const hm = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  return ymd + ' ' + hm;
+}
+
+// ──────────────────────────────────────────────────────────
+// 回收桶（三類整合：已刪除工單 / 已重設紀錄 / 已取消批次）
+// ──────────────────────────────────────────────────────────
+const RECOVERY_PAGE_SIZE = 10;
+const recoveryHints = {
+  deleted: '整張被刪掉的工單。按「救回」會還原工單 + 所有生產紀錄。',
+  reset: '工單仍使用中、但生產紀錄被「重設」軟刪除。按「救回紀錄」會還原那些被軟刪的工序與暫停。',
+  cancelled: '被取消的上傳批次。按「救回批次」會回填工單上傳欄位，但會跳過已被新批次填過的欄位。',
+};
+let recoveryState = {
+  tab: 'deleted',
+  page: { deleted: 1, reset: 1, cancelled: 1 },
+  data: { deleted: null, reset: null, cancelled: null },
+};
+
+async function loadRecovery() {
+  $('recoveryContent').innerHTML = '<div style="color:var(--muted);padding:8px 0;font-size:13px;">載入中...</div>';
+  const [trash, reset, batches] = await Promise.all([
+    api('/api/orders/trash'),
+    api('/api/admin/orders-with-soft-deleted-records'),
+    api('/api/admin/cancelled-upload-batches'),
+  ]);
+  recoveryState.data.deleted = trash.ok ? (trash.data.orders || []) : [];
+  recoveryState.data.reset = reset.ok ? (reset.data.orders || []) : [];
+  recoveryState.data.cancelled = batches.ok ? (batches.data.batches || []) : [];
+  // 各類依操作日期降冪排序
+  recoveryState.data.deleted.sort((a, b) => new Date(b.deletedAt) - new Date(a.deletedAt));
+  recoveryState.data.reset.sort((a, b) => new Date(b.lastDeletedAt || 0) - new Date(a.lastDeletedAt || 0));
+  recoveryState.data.cancelled.sort((a, b) => new Date(b.cancelledAt) - new Date(a.cancelledAt));
+  // 更新 tab 計數
+  document.querySelectorAll('.rec-tab').forEach(tabEl => {
+    const cnt = (recoveryState.data[tabEl.dataset.tab] || []).length;
+    tabEl.querySelector('.rec-count').textContent = '(' + cnt + ')';
+  });
+  renderRecovery();
+}
+
+function renderRecovery() {
+  const tab = recoveryState.tab;
+  const items = recoveryState.data[tab] || [];
+  $('recoveryHint').textContent = recoveryHints[tab];
+
+  if (items.length === 0) {
+    $('recoveryContent').innerHTML = '<div style="color:var(--muted);font-size:13px;padding:14px 0;text-align:center;">目前沒有可救回的項目</div>';
+    $('recoveryPager').innerHTML = '';
+    return;
+  }
+  // 分頁
+  const totalPages = Math.max(1, Math.ceil(items.length / RECOVERY_PAGE_SIZE));
+  if (recoveryState.page[tab] > totalPages) recoveryState.page[tab] = totalPages;
+  const page = recoveryState.page[tab];
+  const start = (page - 1) * RECOVERY_PAGE_SIZE;
+  const slice = items.slice(start, start + RECOVERY_PAGE_SIZE);
+
+  // 按操作日期分組（YYYY-MM-DD）
+  const dateOf = (it) => String(
+    tab === 'deleted' ? it.deletedAt :
+    tab === 'reset' ? it.lastDeletedAt :
+    it.cancelledAt
+  ).slice(0, 10);
+  const groups = {};
+  slice.forEach(it => { (groups[dateOf(it)] = groups[dateOf(it)] || []).push(it); });
+  const html = Object.keys(groups).sort().reverse().map(day => {
+    const rowsHtml = groups[day].map(it => recoveryRowHtml(tab, it)).join('');
+    return '<div class="rec-day-header">' + escapeHtml(day) + '（' + groups[day].length + ' 筆）</div>' + rowsHtml;
+  }).join('');
+  $('recoveryContent').innerHTML = html;
+
+  // 綁定按鈕
+  $('recoveryContent').querySelectorAll('[data-restore]').forEach(b => {
+    b.onclick = () => restoreOrder(b.dataset.restore);
+  });
+  $('recoveryContent').querySelectorAll('[data-restore-batch]').forEach(b => {
+    b.onclick = () => restoreBatch(b.dataset.restoreBatch, b.dataset.filename);
+  });
+  $('recoveryContent').querySelectorAll('[data-purge]').forEach(b => {
+    b.onclick = () => purgeOrder(b.dataset.purge);
+  });
+
+  // 分頁器
+  if (totalPages <= 1) {
+    $('recoveryPager').innerHTML = '';
+  } else {
+    $('recoveryPager').innerHTML =
+      '<button id="recPrev" ' + (page <= 1 ? 'disabled' : '') + ' style="padding:6px 14px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;' + (page <= 1 ? 'opacity:.4;cursor:not-allowed;' : '') + '">‹ 上一頁</button>' +
+      '<span style="font-size:13px;color:var(--muted);">第 ' + page + ' / ' + totalPages + ' 頁（共 ' + items.length + ' 筆）</span>' +
+      '<button id="recNext" ' + (page >= totalPages ? 'disabled' : '') + ' style="padding:6px 14px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;' + (page >= totalPages ? 'opacity:.4;cursor:not-allowed;' : '') + '">下一頁 ›</button>';
+    if ($('recPrev')) $('recPrev').onclick = () => { if (recoveryState.page[tab] > 1) { recoveryState.page[tab]--; renderRecovery(); } };
+    if ($('recNext')) $('recNext').onclick = () => { if (recoveryState.page[tab] < totalPages) { recoveryState.page[tab]++; renderRecovery(); } };
+  }
+}
+
+function recoveryRowHtml(tab, it) {
+  if (tab === 'deleted') {
+    const spec = [it.productSpec, it.moldSpec].filter(Boolean).join(' / ') || '—';
+    const time = String(it.deletedAt).slice(11, 16);
+    return '<div style="display:flex;align-items:center;gap:6px;padding:8px 6px;border-bottom:1px solid var(--border);font-size:13px;flex-wrap:wrap;">'
+      + '<span style="color:#666;min-width:48px;">' + time + '</span>'
+      + '<div style="flex:1;min-width:160px;"><strong>' + escapeHtml(it.orderNo) + '</strong>'
+      + '<div style="color:#888;font-size:12px;">' + escapeHtml(spec) + '</div></div>'
+      + '<button class="btn-primary" data-restore="' + escapeHtml(it.orderNo) + '" style="padding:6px 12px;font-size:12px;">救回</button>'
+      + '<button data-purge="' + escapeHtml(it.orderNo) + '" style="padding:6px 12px;font-size:12px;background:#1c1c1e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
+      + '</div>';
+  }
+  if (tab === 'reset') {
+    const spec = [it.productSpec, it.moldSpec].filter(Boolean).join(' / ') || '—';
+    const time = it.lastDeletedAt ? String(it.lastDeletedAt).slice(11, 16) : '—';
+    const detail = '工序 ' + (it.softDeletedEntries || 0) + ' 筆' + (it.softDeletedPauses ? '、暫停 ' + it.softDeletedPauses + ' 筆' : '');
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--border);font-size:13px;flex-wrap:wrap;">'
+      + '<span style="color:#666;min-width:48px;">' + time + '</span>'
+      + '<div style="flex:1;min-width:160px;"><strong>' + escapeHtml(it.orderNo) + '</strong>'
+      + ' <span style="color:#888;font-size:12px;">' + escapeHtml(it.machineNo || '—') + ' / ' + escapeHtml(spec) + '</span>'
+      + '<div style="color:#a98e44;font-size:11px;">' + escapeHtml(detail) + '</div></div>'
+      + '<button data-restore="' + escapeHtml(it.orderNo) + '" style="padding:6px 12px;font-size:12px;background:#f0ad4e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;">救回紀錄</button>'
+      + '</div>';
+  }
+  // cancelled
+  const time = String(it.cancelledAt).slice(11, 16);
+  return '<div style="display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--border);font-size:13px;flex-wrap:wrap;">'
+    + '<span style="color:#666;min-width:48px;">' + time + '</span>'
+    + '<div style="flex:1;min-width:160px;"><strong>' + escapeHtml(it.filename) + '</strong>'
+    + '<div style="color:#888;font-size:12px;">' + escapeHtml(it.uploadedByName || '—') + ' 上傳於 ' + fmtDateTime(it.uploadedAt) + ' / ' + (it.rowCount || 0) + ' 列 / ' + (it.orderNos || []).length + ' 張單</div></div>'
+    + '<button data-restore-batch="' + it.id + '" data-filename="' + escapeHtml(it.filename) + '" style="padding:6px 12px;font-size:12px;background:#f0ad4e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;">救回批次</button>'
+    + '</div>';
+}
+
+async function restoreBatch(id, filename) {
+  if (!confirm('救回上傳批次「' + filename + '」？\n會回填工單的上傳欄位，但會跳過已被新批次填過的欄位（不蓋新值）。')) return;
+  const r = await api('/api/orders/upload-batches/' + encodeURIComponent(id) + '/restore', { method: 'POST' });
+  if (!r.ok) { toast(r.error || '救回失敗', 'error'); return; }
+  toast('已救回 ' + filename + '（回填 ' + r.data.restored + ' 張、跳過 ' + r.data.skipped + ' 張）', 'success');
+  loadRecovery();
+  loadAuditLog();
+}
+
+// 兼容名稱：其他舊呼叫處（restoreOrder 內部會呼叫 loadTrash）統一導向 loadRecovery
+function loadTrash() { return loadRecovery(); }
+function loadResetRecords() { return loadRecovery(); }
+
+// 操作紀錄
+const ACTION_LABELS = {
+  delete_order: '刪除工單',
+  reset_production: '重設生產紀錄',
+  restore_order: '救回工單',
+  restore_records: '救回紀錄',
+  cancel_batch: '取消上傳批次',
+  restore_batch: '救回上傳批次',
+  auto_create_order: '自動建單',
+  delete_leader: '刪除帳號',
+  create_leader: '新增帳號',
+  reset_password: '重設密碼',
+  clear_production: '清除生產（舊）',
+};
+const ACTION_COLORS = {
+  delete_order: 'var(--brand)', reset_production: '#f0ad4e', cancel_batch: 'var(--brand)',
+  restore_order: 'var(--success)', restore_records: 'var(--success)', restore_batch: 'var(--success)',
+  auto_create_order: '#1f6feb',
+  delete_leader: 'var(--brand)', create_leader: 'var(--success)', reset_password: '#1f6feb',
+};
+
+const AUDIT_PAGE_SIZE = 10;
+let auditState = { logs: [], page: 1 };
+
+async function loadAuditLog() {
+  const days = $('auditDays').value || '7';
+  const r = await api('/api/admin/audit-log?days=' + encodeURIComponent(days));
+  if (!r.ok) { $('auditLog').textContent = r.error || '載入失敗'; return; }
+  auditState.logs = r.data.logs || [];
+  auditState.page = 1;
+  renderAuditLog();
+}
+
+function renderAuditLog() {
+  const days = $('auditDays').value || '7';
+  const logs = auditState.logs;
+  if (!logs.length) {
+    $('auditLog').innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0;">最近 ' + days + ' 天沒有任何操作紀錄</div>';
+    return;
+  }
+  const totalPages = Math.max(1, Math.ceil(logs.length / AUDIT_PAGE_SIZE));
+  if (auditState.page > totalPages) auditState.page = totalPages;
+  const start = (auditState.page - 1) * AUDIT_PAGE_SIZE;
+  const slice = logs.slice(start, start + AUDIT_PAGE_SIZE);
+
+  const groups = {};
+  slice.forEach(l => {
+    const day = String(l.createdAt).slice(0, 10);
+    (groups[day] = groups[day] || []).push(l);
+  });
+  const itemsHtml = Object.keys(groups).sort().reverse().map(day => {
+    const items = groups[day].map(l => {
+      const action = ACTION_LABELS[l.action] || l.action;
+      const color = ACTION_COLORS[l.action] || 'var(--muted)';
+      const time = String(l.createdAt).slice(11, 16);
+      const target = l.target ? ' <strong>' + escapeHtml(l.target) + '</strong>' : '';
+      const detail = l.detail ? '<span style="color:var(--muted);font-size:11px;margin-left:6px;">（' + escapeHtml(l.detail) + '）</span>' : '';
+      return '<div style="padding:6px 8px;border-bottom:1px solid var(--border);font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+        + '<span style="color:#666;min-width:48px;">' + time + '</span>'
+        + '<span style="color:#666;min-width:60px;">' + escapeHtml(l.actorName || '—') + '</span>'
+        + '<span style="color:' + color + ';font-weight:600;">' + escapeHtml(action) + '</span>'
+        + target + detail
+        + '</div>';
+    }).join('');
+    return '<div class="rec-day-header">' + escapeHtml(day) + '</div>' + items;
+  }).join('');
+
+  const pagerHtml = totalPages <= 1 ? '' :
+    '<div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-top:12px;">'
+    + '<button id="auditPrev" ' + (auditState.page <= 1 ? 'disabled' : '') + ' style="padding:6px 14px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;' + (auditState.page <= 1 ? 'opacity:.4;cursor:not-allowed;' : '') + '">‹ 上一頁</button>'
+    + '<span style="font-size:13px;color:var(--muted);">第 ' + auditState.page + ' / ' + totalPages + ' 頁（共 ' + logs.length + ' 筆）</span>'
+    + '<button id="auditNext" ' + (auditState.page >= totalPages ? 'disabled' : '') + ' style="padding:6px 14px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;' + (auditState.page >= totalPages ? 'opacity:.4;cursor:not-allowed;' : '') + '">下一頁 ›</button>'
+    + '</div>';
+  $('auditLog').innerHTML = itemsHtml + pagerHtml;
+  if ($('auditPrev')) $('auditPrev').onclick = () => { if (auditState.page > 1) { auditState.page--; renderAuditLog(); } };
+  if ($('auditNext')) $('auditNext').onclick = () => { if (auditState.page < totalPages) { auditState.page++; renderAuditLog(); } };
+}
+
+async function restoreOrder(orderNo) {
+  if (!confirm('確定救回工單「' + orderNo + '」？\n如果工單已被刪除，會還原工單；不論如何，所有被軟刪除的工序 / 暫停紀錄都會還原。')) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/restore', { method: 'POST' });
+  if (!r.ok) {
+    console.error('Restore failed:', { orderNo, status: r.status, error: r.error, data: r.data });
+    toast('救回失敗（' + (r.status || '?') + '）：' + (r.error || '未知錯誤'), 'error');
+    return;
+  }
+  const entries = r.data.entries || 0;
+  const pauses = r.data.pauses || 0;
+  const orderPart = r.data.orderRestored ? '工單' : '';
+  const detail = (entries || pauses) ? `（${orderPart ? orderPart + '＋' : ''}工序 ${entries} 筆、停機 ${pauses} 筆）` : (orderPart ? `（${orderPart}）` : '');
+  toast('已救回 ' + orderNo + detail, 'success');
+  loadRecovery();
+  loadAuditLog();
+  // 如果是從「查單號歷史」按的，重整查詢結果讓「救回紀錄」按鈕消失
+  if ($('findOrderResult').innerHTML) findOrderNo();
+}
+
+async function findOrderNo() {
+  const q = $('findOrderInput').value.trim().toUpperCase();
+  if (!q) { toast('請輸入單號（或部分）', 'error'); return; }
+  $('findOrderBtn').disabled = true;
+  const r = await api('/api/admin/find-orderno?q=' + encodeURIComponent(q));
+  $('findOrderBtn').disabled = false;
+  if (!r.ok) { $('findOrderResult').innerHTML = '<span style="color:var(--brand);">' + (r.error || '查詢失敗') + '</span>'; return; }
+  const orders = r.data.orders || [];
+  const uploadRows = r.data.uploadRows || [];
+  if (orders.length === 0 && uploadRows.length === 0) {
+    $('findOrderResult').innerHTML = '<div style="color:var(--muted);padding:8px 0;">查無此單號（DB 跟所有上傳批次裡都沒有）</div>';
+    return;
+  }
+  let html = '';
+  if (orders.length > 0) {
+    html += '<h3 style="margin:8px 0;font-size:13px;color:var(--muted);">工單表（' + orders.length + ' 筆）</h3>';
+    html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:10px;">';
+    html += '<table style="min-width:640px;"><thead><tr><th>工單號</th><th>機台 / 規格</th><th>狀態</th><th>建立 / 更新</th><th>操作</th></tr></thead><tbody>';
+    orders.forEach(o => {
+      const softCount = (o.softDeletedEntries || 0) + (o.softDeletedPauses || 0);
+      const status = o.deletedAt
+        ? '<span style="color:var(--brand);">已刪除 ' + fmtDateTime(o.deletedAt) + '</span>'
+        : '<span style="color:var(--success);">使用中</span>'
+          + (softCount > 0 ? '<br><span style="color:#a98e44;font-size:11px;">含 ' + (o.softDeletedEntries || 0) + ' 筆已刪工序、' + (o.softDeletedPauses || 0) + ' 筆已刪暫停</span>' : '');
+      const spec = [o.productSpec, o.moldSpec, o.material].filter(Boolean).join(' / ') || '—';
+      const machine = (o.machineNo || '—') + (o.plannedMachineNo && o.plannedMachineNo !== o.machineNo ? '（原計劃 ' + escapeHtml(o.plannedMachineNo) + '）' : '');
+      let action;
+      if (o.deletedAt) {
+        action = '<div style="display:flex;gap:4px;flex-wrap:wrap;">'
+          + '<button class="btn-secondary" data-restore="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;">救回</button>'
+          + '<button data-purge="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:#1c1c1e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
+          + '</div>';
+      } else {
+        const restoreRecBtn = softCount > 0
+          ? '<button data-restore="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:#f0ad4e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="把 reset 軟刪除的紀錄救回">救回紀錄 (' + softCount + ')</button>'
+          : '';
+        action = '<div style="display:flex;gap:4px;flex-wrap:wrap;">'
+          + restoreRecBtn
+          + '<button class="btn-danger" data-finddel="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;">刪除</button>'
+          + '<button data-purge="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:#1c1c1e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
+          + '</div>';
+      }
+      html += '<tr>'
+        + '<td><strong>' + escapeHtml(o.orderNo) + '</strong></td>'
+        + '<td><div>' + escapeHtml(machine) + '</div><div style="color:#888;font-size:12px;">' + escapeHtml(spec) + '</div></td>'
+        + '<td>' + status + '</td>'
+        + '<td style="font-size:12px;color:#666;">建：' + fmtDateTime(o.createdAt) + '<br>更：' + fmtDateTime(o.updatedAt) + '</td>'
+        + '<td>' + action + '</td>'
+        + '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+  if (uploadRows.length > 0) {
+    html += '<h3 style="margin:16px 0 8px;font-size:13px;color:var(--muted);">上傳記錄（' + uploadRows.length + ' 筆，含已取消批次）</h3>';
+    html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:10px;">';
+    html += '<table style="min-width:720px;"><thead><tr><th>檔名 / 上傳人</th><th>單號 / 規格</th><th>處理</th><th>批次狀態</th><th>批次時間</th></tr></thead><tbody>';
+    uploadRows.forEach(u => {
+      const b = u.batch || {};
+      const cancelled = b.cancelledAt
+        ? '<span style="color:var(--brand);white-space:nowrap;">已取消<br><span style="font-size:11px;">' + fmtDateTime(b.cancelledAt) + '</span></span>'
+        : '<span style="color:var(--success);white-space:nowrap;">有效</span>';
+      // status 簡化顯示：error 簡短標示「失敗」並用 title 帶完整訊息（hover 看）
+      let rowStatus;
+      if (u.status === 'error') {
+        const msg = String(u.errorMsg || '').slice(0, 200);
+        rowStatus = '<span style="color:var(--brand);font-size:11px;background:#fdf2f2;padding:2px 6px;border-radius:4px;" title="' + escapeHtml(msg) + '">失敗</span>';
+      } else if (u.status === 'created') {
+        rowStatus = '<span style="color:var(--success);font-size:11px;">新建</span>';
+      } else if (u.status === 'updated') {
+        rowStatus = '<span style="color:#1f6feb;font-size:11px;">更新</span>';
+      } else if (u.status === 'skipped') {
+        rowStatus = '<span style="color:#f0ad4e;font-size:11px;" title="' + escapeHtml(u.errorMsg || '') + '">跳過</span>';
+      } else {
+        rowStatus = '<span style="font-size:11px;">' + escapeHtml(u.status) + '</span>';
+      }
+      const spec = [u.productSpec, u.moldSpec, u.material].filter(Boolean).join(' / ') || '—';
+      html += '<tr>'
+        + '<td style="white-space:nowrap;"><div>' + escapeHtml(b.filename || '?') + '</div><div style="color:#888;font-size:12px;">' + escapeHtml(b.uploadedByName || '—') + '</div></td>'
+        + '<td><div><strong>' + escapeHtml(u.orderNo) + '</strong></div><div style="color:#888;font-size:12px;">' + escapeHtml(spec) + '</div></td>'
+        + '<td>' + rowStatus + '</td>'
+        + '<td>' + cancelled + '</td>'
+        + '<td style="font-size:12px;color:#666;white-space:nowrap;">' + fmtDateTime(b.uploadedAt) + '</td>'
+        + '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+  $('findOrderResult').innerHTML = html;
+  $('findOrderResult').querySelectorAll('[data-finddel]').forEach(b => {
+    b.onclick = () => deleteOrderFromFind(b.dataset.finddel);
+  });
+  $('findOrderResult').querySelectorAll('[data-restore]').forEach(b => {
+    b.onclick = () => restoreOrder(b.dataset.restore);
+  });
+  $('findOrderResult').querySelectorAll('[data-purge]').forEach(b => {
+    b.onclick = () => purgeOrder(b.dataset.purge);
+  });
+}
+
+async function purgeOrder(orderNo) {
+  // 兩段式 confirm 避免誤點
+  if (!confirm('⛔ 永久刪除工單「' + orderNo + '」？\n\n會從資料庫**完全抹除**，包含所有工序與暫停紀錄。\n**無法救回**。\n\n通常只用在清測試單。確定要繼續？')) return;
+  const typed = prompt('再次確認：請輸入工單號「' + orderNo + '」表示同意永久刪除');
+  if (!typed || typed.trim().toUpperCase() !== String(orderNo).toUpperCase()) {
+    toast('輸入不一致，已取消', 'error');
+    return;
+  }
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/purge', { method: 'POST' });
+  if (!r.ok) { toast(r.error || '永久刪除失敗', 'error'); return; }
+  const detail = (r.data.entries || r.data.pauses) ? '（含工序 ' + (r.data.entries || 0) + ' 筆、停機 ' + (r.data.pauses || 0) + ' 筆）' : '';
+  toast('已永久刪除 ' + orderNo + detail, 'success');
+  if ($('findOrderResult').innerHTML) findOrderNo();
+  if (typeof loadRecovery === 'function') loadRecovery();
+  if (typeof loadAuditLog === 'function') loadAuditLog();
+}
+
+async function deleteOrderFromFind(orderNo) {
+  if (!confirm('確定刪除工單「' + orderNo + '」？\n\n會連同所有生產紀錄一起軟刪除，可從「已刪除工單」區塊救回完整狀態。')) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '?force=true', { method: 'DELETE' });
+  if (!r.ok) { toast(r.error || '刪除失敗', 'error'); return; }
+  const detail = (r.data.entries || r.data.pauses)
+    ? '（含工序 ' + (r.data.entries || 0) + ' 筆、停機 ' + (r.data.pauses || 0) + ' 筆）'
+    : '';
+  toast('已刪除 ' + orderNo + detail, 'success');
+  findOrderNo();
+  loadRecovery();
+  loadAuditLog();
+}
+
+$('findOrderBtn').onclick = findOrderNo;
+$('findOrderInput').addEventListener('keydown', e => { if (e.key === 'Enter') findOrderNo(); });
+
+$('migrateDatesBtn').onclick = async () => {
+  if (!confirm('遷移 productionDate → plannedDate + actualStartDate？\n\n會掃所有工單，依第一筆活動算實際日期、依最早未取消批次算計畫日期。\n建議備份 DB 後再執行。')) return;
+  $('migrateDatesBtn').disabled = true;
+  $('migrateDatesBtn').textContent = '遷移中...';
+  const r = await api('/api/admin/migrate-dates', { method: 'POST', body: {} });
+  $('migrateDatesBtn').disabled = false;
+  $('migrateDatesBtn').textContent = '遷移：拆分計畫日期 / 實際開始日期';
+  if (!r.ok) { toast(r.error || '遷移失敗', 'error'); return; }
+  $('migrateDatesResult').innerHTML = '<span style="color:var(--success);font-weight:600;">✓ 完成：共 ' + r.data.total + ' 張工單，更新 ' + r.data.updated + ' 張</span>';
+  toast('遷移完成', 'success');
+};
+
+$('fixDatesBtn').onclick = async () => {
+  if (!confirm('確定修正所有工單的生產日期？\n\n將根據第一筆實際活動時間重新設定。')) return;
+  $('fixDatesBtn').disabled = true;
+  $('fixDatesBtn').textContent = '修正中...';
+  const r = await api('/api/fix-dates', { method: 'POST', body: {} });
+  $('fixDatesBtn').disabled = false;
+  $('fixDatesBtn').textContent = '修正所有工單生產日期';
+  if (!r.ok) { toast(r.error || '修正失敗', 'error'); return; }
+  $('fixDatesResult').innerHTML = `<span style="color:var(--success);font-weight:600;">✓ 完成：共 ${r.data.total} 筆工單，修正了 ${r.data.fixed} 筆</span>`;
+  toast('修正完成', 'success');
+};
+
+$('auditDays').onchange = () => loadAuditLog();
+
+// 回收桶 tab 切換
+document.querySelectorAll('.rec-tab').forEach(tabEl => {
+  tabEl.onclick = () => {
+    document.querySelectorAll('.rec-tab').forEach(b => b.classList.remove('active'));
+    tabEl.classList.add('active');
+    recoveryState.tab = tabEl.dataset.tab;
+    renderRecovery();
+  };
+});
+
+if (API_URL.startsWith('PASTE_')) {
+  toast('尚未設定 API_URL，請先部署後端', 'error');
+} else {
+  loadLeaders();
+  loadRecovery();
+  loadAuditLog();
+}
+</script>
+</body>
+</html>
