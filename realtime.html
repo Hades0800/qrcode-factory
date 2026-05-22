@@ -496,7 +496,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520r"></script>
+<script src="utils.js?v=20260520s"></script>
 <script>
 const MACHINES = [
   { id: 'No1-350', num: 'No1', spec: '350' },
@@ -1146,14 +1146,57 @@ const RT_EP_FIELDS = [
   ['cutterStroke', '大刀座行程'],
   ['strokeUpdateFreq', '行程更新頻度'],
 ];
-function renderRtEquipment(ep) {
-  if (!ep) return '<div style="color:var(--muted);font-size:12px;text-align:center;padding:6px;">尚未上傳設備參數</div>';
-  const rows = RT_EP_FIELDS.map(([k, label]) => {
-    const v = ep[k];
-    const val = (v == null || v === '') ? '<span style="color:var(--muted);">—</span>' : escapeHtml(String(v));
-    return `<tr><td style="padding:3px 6px;color:var(--muted);font-size:11px;width:40%;">${label}</td><td style="padding:3px 6px;font-size:12px;font-weight:600;">${val}</td></tr>`;
+function renderRtEquipment(ep, orderNo) {
+  const fields = RT_EP_FIELDS.map(([k, label]) => {
+    const v = ep ? (ep[k] ?? '') : '';
+    const isNum = (k === 'machineSPM' || k === 'bladeCount');
+    const type = isNum ? 'number' : 'text';
+    const step = (k === 'machineSPM') ? ' step="0.1" min="0"' : (isNum ? ' min="0"' : '');
+    return `<div style="display:grid;grid-template-columns:88px 1fr;align-items:center;gap:6px;padding:3px 0;">
+      <label style="color:var(--muted);font-size:11px;">${label}</label>
+      <input type="${type}"${step} data-ep-field="${k}" value="${escapeHtml(String(v))}" maxlength="200" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;width:100%;background:#fff;">
+    </div>`;
   }).join('');
-  return `<table style="width:100%;border-collapse:collapse;">${rows}</table>`;
+  const placeholder = ep ? '' : '<div style="color:var(--muted);font-size:11px;text-align:center;padding:4px 0 6px;">尚未上傳，請填寫後儲存</div>';
+  return `
+    <div data-ep-order="${escapeHtml(orderNo)}">
+      ${placeholder}
+      ${fields}
+      <button onclick="saveRtEquipment('${escapeHtml(orderNo)}', this)" style="margin-top:8px;padding:8px 12px;background:var(--brand);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;width:100%;">儲存設備參數</button>
+      <div class="ep-result" style="font-size:11px;text-align:center;margin-top:4px;min-height:14px;"></div>
+    </div>
+  `;
+}
+async function saveRtEquipment(orderNo, btn) {
+  const wrap = btn.closest('[data-ep-order]');
+  if (!wrap) return;
+  const body = {};
+  wrap.querySelectorAll('[data-ep-field]').forEach(input => {
+    const k = input.dataset.epField;
+    let v = (input.value || '').trim();
+    if (v === '') { body[k] = null; return; }
+    if (k === 'machineSPM' || k === 'bladeCount') {
+      const n = Number(v);
+      body[k] = Number.isFinite(n) ? n : null;
+    } else {
+      body[k] = v;
+    }
+  });
+  btn.disabled = true;
+  const r = await api('/api/equipment-params/' + encodeURIComponent(orderNo), {
+    method: 'POST',
+    body,
+  });
+  btn.disabled = false;
+  const res = wrap.querySelector('.ep-result');
+  if (!r.ok) {
+    res.style.color = 'var(--brand)';
+    res.textContent = '✗ ' + (r.error || '儲存失敗');
+    return;
+  }
+  res.style.color = 'var(--success)';
+  res.textContent = '✓ 已儲存';
+  toast('已儲存設備參數', 'success');
 }
 async function toggleRtEquipment(orderNo, btn) {
   const wrap = document.querySelector('.rt-equipment-' + CSS.escape(orderNo));
@@ -1169,7 +1212,7 @@ async function toggleRtEquipment(orderNo, btn) {
     wrap.innerHTML = '<div style="color:var(--brand);font-size:12px;">' + (r.error || '載入失敗') + '</div>';
     return;
   }
-  wrap.innerHTML = renderRtEquipment(r.data.equipmentParam);
+  wrap.innerHTML = renderRtEquipment(r.data.equipmentParam, orderNo);
 }
 
 initDropdownMenu();
