@@ -114,12 +114,23 @@ model EquipmentParam {
   paramFileAttr    String?  // 參數檔案屬性
   productSpecAttr  String?  // 生產規格屬性
 
+  // 參數值（實際使用值）
   moldSpec         String?  // 模具規格
   machineSPM       Float?   // 機器SPM
   bladeCount       Int?     // 生產刀數
   feedSetting      String?  // 送料設定
   cutterStroke     String?  // 大刀座行程
   strokeUpdateFreq String?  // 行程更新頻度
+
+  // 基礎參數（標準/基準值）
+  baseParamFileName    String?
+  baseParamFileAttr    String?
+  baseMoldSpec         String?
+  baseMachineSPM       Float?
+  baseBladeCount       Int?
+  baseFeedSetting      String?
+  baseCutterStroke     String?
+  baseStrokeUpdateFreq String?
 
   createdBy        Int?
   createdByName    String?

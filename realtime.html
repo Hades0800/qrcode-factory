@@ -465,6 +465,10 @@
     .machine-tab { padding: 7px 12px; min-width: 56px; }
     .machine-tab .mt-num { font-size: 14px; }
   }
+  /* 設備參數：桌機並排，手機改成單欄上下排 */
+  @media (max-width: 700px) {
+    .ep-grid { grid-template-columns: 1fr !important; }
+  }
 </style>
 </head>
 <body>
@@ -496,7 +500,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520x"></script>
+<script src="utils.js?v=20260520y"></script>
 <script>
 const MACHINES = [
   { id: 'No1-350', num: 'No1', spec: '350' },
@@ -1147,23 +1151,36 @@ const RT_EP_FIELDS = [
   ['cutterStroke', '大刀座行程'],
   ['strokeUpdateFreq', '行程更新頻度'],
 ];
-function renderRtEquipment(ep, orderNo) {
-  const fields = RT_EP_FIELDS.map(([k, label]) => {
-    const v = ep ? (ep[k] ?? '') : '';
+function renderRtEquipmentColumn(ep, prefix) {
+  // prefix='' 表示參數值；prefix='base' 表示基礎參數
+  return RT_EP_FIELDS.map(([k, label]) => {
+    const fieldKey = prefix ? prefix + k[0].toUpperCase() + k.slice(1) : k;
+    const v = ep ? (ep[fieldKey] ?? '') : '';
     const isNum = (k === 'machineSPM' || k === 'bladeCount');
     const type = isNum ? 'number' : 'text';
     const step = (k === 'machineSPM') ? ' step="0.1" min="0"' : (isNum ? ' min="0"' : '');
     return `<div style="display:grid;grid-template-columns:88px 1fr;align-items:center;gap:6px;padding:3px 0;">
       <label style="color:var(--muted);font-size:11px;">${label}</label>
-      <input type="${type}"${step} data-ep-field="${k}" value="${escapeHtml(String(v))}" maxlength="200" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;width:100%;background:#fff;">
+      <input type="${type}"${step} data-ep-field="${fieldKey}" value="${escapeHtml(String(v))}" maxlength="200" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;width:100%;background:#fff;">
     </div>`;
   }).join('');
+}
+function renderRtEquipment(ep, orderNo) {
   const placeholder = ep ? '' : '<div style="color:var(--muted);font-size:11px;text-align:center;padding:4px 0 6px;">尚未上傳，請填寫後儲存</div>';
   return `
     <div data-ep-order="${escapeHtml(orderNo)}">
       ${placeholder}
-      ${fields}
-      <button onclick="saveRtEquipment('${escapeHtml(orderNo)}', this)" style="margin-top:8px;padding:8px 12px;background:var(--brand);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;width:100%;">儲存設備參數</button>
+      <div class="ep-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--brand);margin-bottom:6px;border-bottom:1.5px solid var(--brand-soft);padding-bottom:3px;">基礎參數</div>
+          ${renderRtEquipmentColumn(ep, 'base')}
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#1f6feb;margin-bottom:6px;border-bottom:1.5px solid #e7f0ff;padding-bottom:3px;">參數值</div>
+          ${renderRtEquipmentColumn(ep, '')}
+        </div>
+      </div>
+      <button onclick="saveRtEquipment('${escapeHtml(orderNo)}', this)" style="margin-top:10px;padding:8px 12px;background:var(--brand);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;width:100%;">儲存設備參數</button>
       <div class="ep-result" style="font-size:11px;text-align:center;margin-top:4px;min-height:14px;"></div>
     </div>
   `;
