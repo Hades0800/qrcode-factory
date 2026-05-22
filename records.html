@@ -514,7 +514,7 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520p"></script>
+<script src="utils.js?v=20260520q"></script>
 <script>
 const me = getMe();
 let allOrders = [];
@@ -526,7 +526,7 @@ $('meShow').textContent = me ? (me.displayName + (me.isAdmin ? '（管理員）'
 if (me && me.isAdmin) {
   $('adminLink').style.display = 'flex';
 }
-if (me && (me.isAdmin || me.isPlanner)) $('uploadLink').style.display = 'flex';
+if (me) $('uploadLink').style.display = 'flex';
 initDropdownMenu();
 $('logoutLink').onclick = e => {
   e.preventDefault();
