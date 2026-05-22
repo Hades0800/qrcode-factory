@@ -305,10 +305,23 @@ function renderOrderStatusBadge(statusKey) {
 // 更換範圍符號 → 顯示文字
 function scopeLabel(s) {
   if (s === '@') return '原料更換';
-  if (s === '#') return '模刀具更換';
-  if (s === '@#') return '原料與模刀具更換';
-  if (s === 'same') return '料模刀沿用前工單';
+  if (s === '#') return '模具';
+  if (s === '@#') return '原料與模具更換';
+  if (s === 'same') return '沿用前單';
   return s || '';
+}
+
+// 輔助設備 key → 顯示文字
+const AUX_EQUIPMENT_LABELS = {
+  flat:    '軋平機',
+  leveler: '整平機',
+  slitter: '分條機',
+  wave:    '波浪機',
+  rewind:  '收料機',
+  other:   '其他設備',
+};
+function auxEquipmentLabel(k) {
+  return AUX_EQUIPMENT_LABELS[k] || '';
 }
 
 function fmtHHMM(sec) {

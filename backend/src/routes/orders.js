@@ -131,6 +131,7 @@ function serializeOrder(o) {
     newSpecAspects: o.newSpecAspects ? String(o.newSpecAspects).split(',').filter(Boolean) : [],
     changeScope: o.changeScope || null,      // '@' | '#' | '@#' | null
     materialType: o.materialType || null,    // 'coil'(1.0) | 'plate'(1.2) | null
+    auxEquipment: o.auxEquipment || null,    // flat/leveler/slitter/wave/rewind/other | null
     productSpec: o.productSpec || '',
     moldSpec: o.moldSpec || '', material: o.material || '',
     dispatchQty: o.dispatchQty, bladeCount: o.bladeCount,
@@ -545,6 +546,35 @@ export default async function orderRoutes(fastify) {
       return { ok: true, materialType };
     } catch (e) {
       request.log.error(e, 'material-type failed');
+      return reply.code(500).send({
+        error: '設定失敗：' + (e.message || String(e)),
+        code: e.code || null,
+      });
+    }
+  });
+
+  // 設定輔助設備（flat / leveler / slitter / wave / rewind / other / null）
+  fastify.post('/:orderNo/aux-equipment', async (request, reply) => {
+    try {
+      const orderNo = String(request.params.orderNo || '').toUpperCase();
+      const { auxEquipment } = request.body || {};
+      const ALLOWED = ['flat', 'leveler', 'slitter', 'wave', 'rewind', 'other'];
+      if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
+      if (auxEquipment !== null && !ALLOWED.includes(auxEquipment)) {
+        return reply.code(400).send({ error: '無效的輔助設備' });
+      }
+      await fastify.prisma.$executeRawUnsafe(
+        'ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "auxEquipment" TEXT'
+      );
+      const result = await fastify.prisma.$executeRaw`
+        UPDATE "Order"
+        SET "auxEquipment" = ${auxEquipment}
+        WHERE "orderNo" = ${orderNo}
+      `;
+      if (result === 0) return reply.code(404).send({ error: '找不到工單' });
+      return { ok: true, auxEquipment };
+    } catch (e) {
+      request.log.error(e, 'aux-equipment failed');
       return reply.code(500).send({
         error: '設定失敗：' + (e.message || String(e)),
         code: e.code || null,

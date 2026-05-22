@@ -496,7 +496,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520t"></script>
+<script src="utils.js?v=20260520u"></script>
 <script>
 const MACHINES = [
   { id: 'No1-350', num: 'No1', spec: '350' },
@@ -794,6 +794,7 @@ function renderContent() {
             <span class="oi-item"><span class="oi-icon">${icon('user', 14)}</span><span class="oi-label">小組長</span><span class="oi-value">${escapeHtml(o.leaderName || '—')}</span></span>
             ${o.specType ? `<span class="oi-item"><span class="oi-icon">${icon(o.specType === 'new' ? 'sparkles' : 'box', 14)}</span><span class="oi-label">規格</span><span class="oi-value">${o.specType === 'new' ? escapeHtml(formatNewSpecLabel(o.newSpecAspects)) : '量產規格'}</span></span>` : ''}
             ${o.materialType ? `<span class="oi-item"><span class="oi-icon">${icon('layers', 14)}</span><span class="oi-label">原料</span><span class="oi-value">${o.materialType === 'coil' ? '捲料' : '板料'}</span></span>` : ''}
+            ${o.auxEquipment ? `<span class="oi-item"><span class="oi-icon">${icon('gear', 14)}</span><span class="oi-label">輔助設備</span><span class="oi-value">${escapeHtml(auxEquipmentLabel(o.auxEquipment))}</span></span>` : ''}
           </div>
           <h3 style="margin:0 0 8px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;">生產實態</h3>
           <ul class="timeline">${timeline}</ul>

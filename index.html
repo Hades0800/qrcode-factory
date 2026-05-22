@@ -756,12 +756,26 @@
   <div class="card" id="scopeCard" style="display:none;">
     <h2>設置準備 <span class="required">第三步</span></h2>
     <div style="display:flex;flex-direction:column;gap:8px;">
+      <button class="scope-choice" data-scope="same" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:15px;">沿用前單</button>
       <button class="scope-choice" data-scope="@" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:15px;">原料更換</button>
-      <button class="scope-choice" data-scope="#" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:15px;">模刀具更換</button>
-      <button class="scope-choice" data-scope="@#" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:15px;">原料與模刀具更換</button>
-      <button class="scope-choice" data-scope="same" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:15px;">料模刀沿用前工單</button>
+      <button class="scope-choice" data-scope="#" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:15px;">模具</button>
+      <button class="scope-choice" data-scope="@#" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:15px;">原料與模具更換</button>
       <button class="scope-choice" data-scope="" style="padding:10px;border:1.5px solid var(--border);border-radius:10px;background:#f8f8fa;cursor:pointer;font-weight:600;font-size:13px;color:var(--muted);">清除</button>
     </div>
+  </div>
+
+  <!-- 輔助設備（新增） -->
+  <div class="card" id="auxCard" style="display:none;">
+    <h2>輔助設備</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <button class="aux-choice" data-aux="flat" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:14px;">軋平機</button>
+      <button class="aux-choice" data-aux="leveler" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:14px;">整平機</button>
+      <button class="aux-choice" data-aux="slitter" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:14px;">分條機</button>
+      <button class="aux-choice" data-aux="wave" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:14px;">波浪機</button>
+      <button class="aux-choice" data-aux="rewind" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:14px;">收料機</button>
+      <button class="aux-choice" data-aux="other" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:14px;">其他設備</button>
+    </div>
+    <button class="scope-choice" data-aux="" style="margin-top:8px;width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:#f8f8fa;cursor:pointer;font-weight:600;font-size:13px;color:var(--muted);" id="auxClearBtn">清除</button>
   </div>
 
   <!-- 原料（第四步） -->
@@ -823,7 +837,7 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520t"></script>
+<script src="utils.js?v=20260520u"></script>
 <script>
 // 作業準備（21/22）已停用；保留空陣列給歷史資料 fallback lookup
 const PRE_STEPS = [];
@@ -1110,17 +1124,20 @@ async function setOrder(no) {
   renderSpecType();
   renderChangeScope();
   renderMaterialType();
+  renderAuxEquipment();
   updateStepGates();
   saveState();
   renderSteps();
 }
 
 // 第二～四步的可見性瀑布：前一步沒完成，後面全部關掉
+// 輔助設備（auxCard）為選填，第三步完成後即顯示，不影響後續解鎖
 function updateStepGates() {
   const ok2 = !!(order && order.specType);                    // Step 2 完成 = 規格類型已設
   const ok3 = ok2 && !!(order && order.changeScope);          // Step 3 完成 = 符號已選
   const ok4 = ok3 && !!(order && order.materialType);         // Step 4 完成 = 原料類型已選
   $('scopeCard').style.display    = ok2 ? 'block' : 'none';
+  $('auxCard').style.display      = ok3 ? 'block' : 'none';
   $('materialCard').style.display = ok3 ? 'block' : 'none';
   $('stepsArea').style.display    = ok4 ? 'block' : 'none';
   if (!ok4) $('bottomBar').classList.remove('show');
@@ -1222,6 +1239,48 @@ document.querySelectorAll('.mat-choice').forEach(b => {
     }
   };
 });
+
+// ── 輔助設備 ──
+function renderAuxEquipment() {
+  const current = (order && order.auxEquipment) || '';
+  document.querySelectorAll('.aux-choice').forEach(b => {
+    const val = b.getAttribute('data-aux');
+    const isSelected = val === current && val !== '';
+    b.style.background = isSelected ? 'var(--brand)' : '#fff';
+    b.style.color = isSelected ? '#fff' : 'var(--ink)';
+    b.style.borderColor = isSelected ? 'var(--brand)' : 'var(--border)';
+  });
+}
+document.querySelectorAll('.aux-choice').forEach(b => {
+  b.onclick = async () => {
+    if (!order || !orderNo) { toast('請先載入工單', 'error'); return; }
+    const val = b.getAttribute('data-aux') || null;
+    const old = order.auxEquipment || null;
+    if (val === old) return;
+    order.auxEquipment = val;
+    renderAuxEquipment();
+    const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/aux-equipment', {
+      method: 'POST',
+      body: { auxEquipment: val },
+    });
+    if (!r.ok) {
+      order.auxEquipment = old;
+      renderAuxEquipment();
+      toast(r.error || '設定失敗，已還原', 'error');
+    }
+  };
+});
+$('auxClearBtn').onclick = async () => {
+  if (!order || !orderNo) return;
+  const old = order.auxEquipment || null;
+  if (old == null) return;
+  order.auxEquipment = null;
+  renderAuxEquipment();
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/aux-equipment', {
+    method: 'POST', body: { auxEquipment: null },
+  });
+  if (!r.ok) { order.auxEquipment = old; renderAuxEquipment(); toast(r.error || '清除失敗', 'error'); }
+};
 
 $('setOrderBtn').onclick = () => setOrder($('orderInput').value);
 $('orderInput').addEventListener('keydown', e => { if (e.key === 'Enter') setOrder($('orderInput').value); });
