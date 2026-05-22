@@ -320,8 +320,14 @@ const AUX_EQUIPMENT_LABELS = {
   rewind:  '收料機',
   other:   '其他設備',
 };
-function auxEquipmentLabel(k) {
-  return AUX_EQUIPMENT_LABELS[k] || '';
+// codes: 逗號字串、陣列、或單一 key；custom: 使用者自訂名稱
+function auxEquipmentLabel(codes, custom) {
+  let arr = [];
+  if (Array.isArray(codes)) arr = codes;
+  else if (typeof codes === 'string' && codes) arr = codes.split(',');
+  const names = arr.map(c => AUX_EQUIPMENT_LABELS[String(c).trim()]).filter(Boolean);
+  if (custom && String(custom).trim()) names.push(String(custom).trim());
+  return names.join('、');
 }
 
 function fmtHHMM(sec) {

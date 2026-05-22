@@ -764,9 +764,9 @@
     </div>
   </div>
 
-  <!-- 輔助設備（新增） -->
+  <!-- 輔助設備（可複選 + 自訂） -->
   <div class="card" id="auxCard" style="display:none;">
-    <h2>輔助設備</h2>
+    <h2>輔助設備 <span style="color:var(--muted);font-size:12px;font-weight:500;">可複選</span></h2>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
       <button class="aux-choice" data-aux="flat" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:14px;">軋平機</button>
       <button class="aux-choice" data-aux="leveler" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:14px;">整平機</button>
@@ -775,7 +775,8 @@
       <button class="aux-choice" data-aux="rewind" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:14px;">收料機</button>
       <button class="aux-choice" data-aux="other" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:14px;">其他設備</button>
     </div>
-    <button class="scope-choice" data-aux="" style="margin-top:8px;width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:#f8f8fa;cursor:pointer;font-weight:600;font-size:13px;color:var(--muted);" id="auxClearBtn">清除</button>
+    <input type="text" id="auxCustomInput" maxlength="100" placeholder="其他設備（可自填名稱）" autocomplete="off" style="margin-top:10px;width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-size:14px;background:#fff;box-sizing:border-box;">
+    <button style="margin-top:8px;width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:#f8f8fa;cursor:pointer;font-weight:600;font-size:13px;color:var(--muted);" id="auxClearBtn">清除全部</button>
   </div>
 
   <!-- 原料（第四步） -->
@@ -864,7 +865,7 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520ab"></script>
+<script src="utils.js?v=20260522a"></script>
 <script>
 // 作業準備（21/22）已停用；保留空陣列給歷史資料 fallback lookup
 const PRE_STEPS = [];
@@ -1337,46 +1338,95 @@ function renderOperationInfo() {
   }
 }
 
-// ── 輔助設備 ──
+// ── 輔助設備（可複選 + 自訂）──
+function parseAuxList(v) {
+  if (Array.isArray(v)) return v.filter(Boolean);
+  if (typeof v === 'string' && v) return v.split(',').map(s => s.trim()).filter(Boolean);
+  return [];
+}
 function renderAuxEquipment() {
-  const current = (order && order.auxEquipment) || '';
+  const selected = parseAuxList(order && order.auxEquipment);
   document.querySelectorAll('.aux-choice').forEach(b => {
     const val = b.getAttribute('data-aux');
-    const isSelected = val === current && val !== '';
+    const isSelected = selected.includes(val);
     b.style.background = isSelected ? 'var(--brand)' : '#fff';
     b.style.color = isSelected ? '#fff' : 'var(--ink)';
     b.style.borderColor = isSelected ? 'var(--brand)' : 'var(--border)';
   });
+  const custom = $('auxCustomInput');
+  if (custom && document.activeElement !== custom) {
+    custom.value = (order && order.auxEquipmentCustom) || '';
+  }
 }
 document.querySelectorAll('.aux-choice').forEach(b => {
   b.onclick = async () => {
     if (!order || !orderNo) { toast('請先載入工單', 'error'); return; }
-    const val = b.getAttribute('data-aux') || null;
-    const old = order.auxEquipment || null;
-    if (val === old) return;
-    order.auxEquipment = val;
+    const val = b.getAttribute('data-aux');
+    if (!val) return;
+    const oldList = parseAuxList(order.auxEquipment);
+    const newList = oldList.includes(val) ? oldList.filter(x => x !== val) : [...oldList, val];
+    const oldStr = order.auxEquipment || null;
+    order.auxEquipment = newList.length ? newList.join(',') : null;
     renderAuxEquipment();
     const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/aux-equipment', {
       method: 'POST',
-      body: { auxEquipment: val },
+      body: { auxEquipment: newList },
     });
     if (!r.ok) {
-      order.auxEquipment = old;
+      order.auxEquipment = oldStr;
       renderAuxEquipment();
       toast(r.error || '設定失敗，已還原', 'error');
     }
   };
 });
+{
+  const customInput = $('auxCustomInput');
+  if (customInput) {
+    let saveTimer = null;
+    const commit = async () => {
+      if (!order || !orderNo) return;
+      const val = (customInput.value || '').trim();
+      const next = val === '' ? null : val;
+      const old = order.auxEquipmentCustom || null;
+      if (next === old) return;
+      order.auxEquipmentCustom = next;
+      const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/aux-equipment', {
+        method: 'POST',
+        body: { auxEquipmentCustom: next },
+      });
+      if (!r.ok) {
+        order.auxEquipmentCustom = old;
+        renderAuxEquipment();
+        toast(r.error || '儲存失敗，已還原', 'error');
+      }
+    };
+    customInput.addEventListener('input', () => {
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(commit, 600);
+    });
+    customInput.addEventListener('blur', () => {
+      if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+      commit();
+    });
+  }
+}
 $('auxClearBtn').onclick = async () => {
   if (!order || !orderNo) return;
-  const old = order.auxEquipment || null;
-  if (old == null) return;
+  const oldStr = order.auxEquipment || null;
+  const oldCustom = order.auxEquipmentCustom || null;
+  if (oldStr == null && oldCustom == null) return;
   order.auxEquipment = null;
+  order.auxEquipmentCustom = null;
   renderAuxEquipment();
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/aux-equipment', {
-    method: 'POST', body: { auxEquipment: null },
+    method: 'POST', body: { auxEquipment: null, auxEquipmentCustom: null },
   });
-  if (!r.ok) { order.auxEquipment = old; renderAuxEquipment(); toast(r.error || '清除失敗', 'error'); }
+  if (!r.ok) {
+    order.auxEquipment = oldStr;
+    order.auxEquipmentCustom = oldCustom;
+    renderAuxEquipment();
+    toast(r.error || '清除失敗', 'error');
+  }
 };
 
 $('setOrderBtn').onclick = () => setOrder($('orderInput').value);

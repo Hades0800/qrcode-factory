@@ -48,9 +48,10 @@ model Order {
   newSpecAspects   String?  // 新製規格的差異項目，逗號字串：raw=原料 / mold=模具 / dim=長寬，例：'raw,mold'
   changeScope      String?  // '@' = 僅換原料 / '#' = 僅換模刀具 / '@#' = 兩者都換
   materialType     String?  // 'coil' = 捲料（係數 1.0）/ 'plate' = 板料（係數 1.2）
-  auxEquipment     String?  // 輔助設備：flat/leveler/slitter/wave/rewind/other
-  operatorName     String?  // 設備操作人員姓名（第五步）
-  totalWorkers     Int?     // 全部作業人數（第五步）
+  auxEquipment       String?  // 輔助設備：逗號字串（flat/leveler/slitter/wave/rewind/other 可多選）
+  auxEquipmentCustom String?  // 輔助設備自訂名稱（使用者自填）
+  operatorName       String?  // 設備操作人員姓名（第五步）
+  totalWorkers       Int?     // 全部作業人數（第五步）
   productSpec    String?
   moldSpec       String?
   material       String?

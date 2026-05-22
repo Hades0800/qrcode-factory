@@ -514,7 +514,7 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520ab"></script>
+<script src="utils.js?v=20260522a"></script>
 <script>
 const me = getMe();
 let allOrders = [];
@@ -812,7 +812,7 @@ function render() {
           <span>日期 ${o.productionDate ? String(o.productionDate).slice(0,10) : '—'}${o.actualStartDate && o.plannedDate && String(o.actualStartDate).slice(0,10) !== String(o.plannedDate).slice(0,10) ? `<span style="color:#a98e44;font-size:11px;margin-left:4px;">（計畫 ${escapeHtml(String(o.plannedDate).slice(0,10))}）</span>` : ''}</span>
           ${o.specType ? `<span>規格 <strong style="display:inline-flex;align-items:center;gap:4px;">${icon(o.specType === 'new' ? 'sparkles' : 'box', 13)}${o.specType === 'new' ? escapeHtml(formatNewSpecLabel(o.newSpecAspects)) : '量產規格'}</strong></span>` : ''}
           ${o.materialType ? `<span>原料 <strong>${o.materialType === 'coil' ? '捲料' : '板料'}</strong></span>` : ''}
-          ${o.auxEquipment ? `<span>輔助設備 <strong>${escapeHtml(auxEquipmentLabel(o.auxEquipment))}</strong></span>` : ''}
+          ${(o.auxEquipment || o.auxEquipmentCustom) ? `<span>輔助設備 <strong>${escapeHtml(auxEquipmentLabel(o.auxEquipment, o.auxEquipmentCustom))}</strong></span>` : ''}
         </div>
         <div class="rc-expand" style="margin-top:10px;cursor:pointer;display:flex;align-items:center;gap:6px;width:fit-content;" onclick="toggleDetail(${idx})"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>展開工單明細</div>
         <div class="rc-detail" id="detail-${idx}">
