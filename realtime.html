@@ -469,6 +469,16 @@
   @media (max-width: 700px) {
     .ep-grid { grid-template-columns: 1fr !important; }
   }
+  /* 設備參數收合：桌機永遠展開、手機可點 header 收合 */
+  .ep-collapsible > .ep-header { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; }
+  .ep-collapsible > .ep-header .ep-chev { display: inline-block; transition: transform .15s; font-size: 10px; color: var(--muted); }
+  .ep-collapsible.ep-closed > .ep-header .ep-chev { transform: rotate(-90deg); }
+  .ep-collapsible.ep-closed > .ep-body { display: none !important; }
+  @media (min-width: 701px) {
+    .ep-collapsible > .ep-header { cursor: default; }
+    .ep-collapsible > .ep-header .ep-chev { display: none; }
+    .ep-collapsible.ep-closed > .ep-body { display: block !important; }
+  }
 </style>
 </head>
 <body>
@@ -500,7 +510,7 @@
 </div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520y"></script>
+<script src="utils.js?v=20260520z"></script>
 <script>
 const MACHINES = [
   { id: 'No1-350', num: 'No1', spec: '350' },
@@ -800,8 +810,12 @@ function renderContent() {
             ${o.materialType ? `<span class="oi-item"><span class="oi-icon">${icon('layers', 14)}</span><span class="oi-label">原料</span><span class="oi-value">${o.materialType === 'coil' ? '捲料' : '板料'}</span></span>` : ''}
             ${o.auxEquipment ? `<span class="oi-item"><span class="oi-icon">${icon('gear', 14)}</span><span class="oi-label">輔助設備</span><span class="oi-value">${escapeHtml(auxEquipmentLabel(o.auxEquipment))}</span></span>` : ''}
           </div>
-          <h3 style="margin:14px 0 6px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;">設備參數</h3>
-          <div class="rt-equipment-${escapeHtml(o.orderNo)}" style="background:var(--bg);border-radius:8px;padding:10px;"><div style="color:var(--muted);font-size:12px;">載入中...</div></div>
+          <div class="ep-collapsible" style="margin-top:14px;">
+            <h3 class="ep-header" style="margin:0 0 6px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;" onclick="this.parentNode.classList.toggle('ep-closed')"><span class="ep-chev">▼</span>設備參數</h3>
+            <div class="ep-body">
+              <div class="rt-equipment-${escapeHtml(o.orderNo)}" style="background:var(--bg);border-radius:8px;padding:10px;"><div style="color:var(--muted);font-size:12px;">載入中...</div></div>
+            </div>
+          </div>
           <h3 style="margin:14px 0 8px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;">生產實態</h3>
           <ul class="timeline">${timeline}</ul>
         </div>
@@ -1171,13 +1185,13 @@ function renderRtEquipment(ep, orderNo) {
     <div data-ep-order="${escapeHtml(orderNo)}">
       ${placeholder}
       <div class="ep-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-        <div>
-          <div style="font-size:11px;font-weight:700;color:var(--brand);margin-bottom:6px;border-bottom:1.5px solid var(--brand-soft);padding-bottom:3px;">基礎參數</div>
-          ${renderRtEquipmentColumn(ep, 'base')}
+        <div class="ep-collapsible">
+          <div class="ep-header" style="font-size:11px;font-weight:700;color:var(--brand);margin-bottom:6px;border-bottom:1.5px solid var(--brand-soft);padding-bottom:3px;" onclick="this.parentNode.classList.toggle('ep-closed')"><span class="ep-chev">▼</span>基礎參數</div>
+          <div class="ep-body">${renderRtEquipmentColumn(ep, 'base')}</div>
         </div>
-        <div>
-          <div style="font-size:11px;font-weight:700;color:#1f6feb;margin-bottom:6px;border-bottom:1.5px solid #e7f0ff;padding-bottom:3px;">參數值</div>
-          ${renderRtEquipmentColumn(ep, '')}
+        <div class="ep-collapsible">
+          <div class="ep-header" style="font-size:11px;font-weight:700;color:#1f6feb;margin-bottom:6px;border-bottom:1.5px solid #e7f0ff;padding-bottom:3px;" onclick="this.parentNode.classList.toggle('ep-closed')"><span class="ep-chev">▼</span>參數值</div>
+          <div class="ep-body">${renderRtEquipmentColumn(ep, '')}</div>
         </div>
       </div>
       <button onclick="saveRtEquipment('${escapeHtml(orderNo)}', this)" style="margin-top:10px;padding:8px 12px;background:var(--brand);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;width:100%;">儲存設備參數</button>
