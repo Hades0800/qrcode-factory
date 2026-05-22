@@ -514,7 +514,7 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260520o"></script>
+<script src="utils.js?v=20260520p"></script>
 <script>
 const me = getMe();
 let allOrders = [];
@@ -813,12 +813,12 @@ function render() {
           ${o.specType ? `<span>規格 <strong style="display:inline-flex;align-items:center;gap:4px;">${icon(o.specType === 'new' ? 'sparkles' : 'box', 13)}${o.specType === 'new' ? escapeHtml(formatNewSpecLabel(o.newSpecAspects)) : '量產規格'}</strong></span>` : ''}
           ${o.materialType ? `<span>原料 <strong>${o.materialType === 'coil' ? '捲料' : '板料'}</strong></span>` : ''}
         </div>
-        <div class="rc-expand" style="margin-top:10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;" onclick="toggleDetail(${idx})"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>展開工單明細</div>
+        <div class="rc-expand" style="margin-top:10px;cursor:pointer;display:flex;align-items:center;gap:6px;width:fit-content;" onclick="toggleDetail(${idx})"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>展開工單明細</div>
         <div class="rc-detail" id="detail-${idx}">
           ${infoHtml}
           ${eventsHtml}
         </div>
-        <div class="rc-expand" style="margin-top:6px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;" onclick="toggleEquipment(${idx}, '${escapeHtml(o.orderNo)}')"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>展開設備參數</div>
+        <div class="rc-expand" style="margin-top:6px;cursor:pointer;display:flex;align-items:center;gap:6px;width:fit-content;" onclick="toggleEquipment(${idx}, '${escapeHtml(o.orderNo)}')"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>展開設備參數</div>
         <div class="rc-detail" id="equipment-${idx}"></div>
         <ul class="rc-timeline">${stepsHtml}</ul>
       </div>
