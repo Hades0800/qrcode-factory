@@ -625,8 +625,38 @@ function isExcludedPause(e) {
   return false;
 }
 
+function getFirstActivityTime(o) {
+  // 回傳工單第一次有動作的時間（毫秒），尚未開始則為 null
+  let min = null;
+  const consider = t => {
+    if (!t) return;
+    const v = new Date(t).getTime();
+    if (isNaN(v)) return;
+    if (min === null || v < min) min = v;
+  };
+  ['step1At','step2At','step3At','step4At','step5At','step6At','step7At','step11At','step21At','step22At','step23At']
+    .forEach(k => consider(o[k]));
+  (o.stepEntries || []).forEach(e => consider(e.recordedAt));
+  ((o.pause12 && o.pause12.history) || []).forEach(e => { consider(e.startAt); consider(e.endAt); });
+  ((o.pause13 && o.pause13.history) || []).forEach(e => { consider(e.startAt); consider(e.endAt); });
+  return min;
+}
+
+function sortByProductionOrder(list) {
+  // 依實際生產順位：第一次有動作的時間，由早到晚
+  // 尚未開始的排到最後（依 updatedAt 由新到舊）
+  return list.slice().sort((a, b) => {
+    const aFirst = getFirstActivityTime(a);
+    const bFirst = getFirstActivityTime(b);
+    if (aFirst === null && bFirst === null) return new Date(b.updatedAt) - new Date(a.updatedAt);
+    if (aFirst === null) return 1;
+    if (bFirst === null) return -1;
+    return aFirst - bFirst;
+  });
+}
+
 function render() {
-  const filtered = applyFilters(allOrders);
+  const filtered = sortByProductionOrder(applyFilters(allOrders));
 
   // 統計（已完成 = 按過「工單完成與結束」）
   const total = filtered.length;
@@ -882,7 +912,7 @@ async function toggleDetail(idx) {
   if (!specArea || specArea.dataset.loaded) return;
   specArea.dataset.loaded = '1';
 
-  const o = applyFilters(allOrders)[idx];
+  const o = sortByProductionOrder(applyFilters(allOrders))[idx];
   if (!o) return;
 
   const r = await api('/api/orders/' + encodeURIComponent(o.orderNo) + '/upload-rows');
