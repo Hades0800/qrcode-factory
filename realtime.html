@@ -634,6 +634,23 @@ async function loadOrders() {
 
 // 上次 render 的資料指紋；相同代表畫面無需重畫，避免每 30 秒自動 refresh 導致畫面閃動 / scroll 位置重設
 let lastRenderHash = '';
+
+// 摺疊區塊狀態（橫跨重畫保留）：key 為 data-coll-id，value = 是否摺疊
+const savedCollStates = {};
+function snapshotCollapseStates(root) {
+  (root || document).querySelectorAll('[data-coll-id]').forEach(el => {
+    const cls = el.dataset.collClass || 'ep-closed';
+    savedCollStates[el.dataset.collId] = el.classList.contains(cls);
+  });
+}
+function applyCollapseStates(root) {
+  (root || document).querySelectorAll('[data-coll-id]').forEach(el => {
+    const id = el.dataset.collId;
+    if (!(id in savedCollStates)) return;
+    const cls = el.dataset.collClass || 'ep-closed';
+    el.classList.toggle(cls, !!savedCollStates[id]);
+  });
+}
 function renderContent() {
   const content = $('content');
   if (!activeMachine) {
@@ -734,7 +751,7 @@ function renderContent() {
 
   // Stats
   html += `
-    <div class="card overview-card" id="overviewCard">
+    <div class="card overview-card" id="overviewCard" data-coll-id="overview" data-coll-class="collapsed">
       <div class="overview-toggle" onclick="document.getElementById('overviewCard').classList.toggle('collapsed')">
         <h3 style="margin-bottom:0;">機台概覽</h3>
         <span class="toggle-icon">▲</span>
@@ -820,11 +837,11 @@ function renderContent() {
             ${o.materialType ? `<span class="oi-item"><span class="oi-icon">${icon('layers', 14)}</span><span class="oi-label">原料</span><span class="oi-value">${o.materialType === 'coil' ? '捲料' : '板料'}</span></span>` : ''}
             ${(o.auxEquipment || o.auxEquipmentCustom) ? `<span class="oi-item"><span class="oi-icon">${icon('gear', 14)}</span><span class="oi-label">輔助設備</span><span class="oi-value">${escapeHtml(auxEquipmentLabel(o.auxEquipment, o.auxEquipmentCustom))}</span></span>` : ''}
           </div>
-          <div class="rt-ep-section ep-closed" style="margin-top:14px;background:var(--bg);border-radius:8px;padding:10px;">
+          <div class="rt-ep-section ep-closed" data-coll-id="equip-${escapeHtml(o.orderNo)}" style="margin-top:14px;background:var(--bg);border-radius:8px;padding:10px;">
             <h3 class="ep-header" style="margin:0 0 8px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;" onclick="this.parentNode.classList.toggle('ep-closed')"><span class="ep-chev">▼</span>設備參數</h3>
             <div class="ep-body rt-equipment-${escapeHtml(o.orderNo)}"><div style="color:var(--muted);font-size:12px;">載入中...</div></div>
           </div>
-          <div class="ep-collapsible" style="margin-top:14px;">
+          <div class="ep-collapsible" data-coll-id="timeline-${escapeHtml(o.orderNo)}" style="margin-top:14px;">
             <h3 class="ep-header" style="margin:0 0 8px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;" onclick="this.parentNode.classList.toggle('ep-closed')"><span class="ep-chev">▼</span>生產實態</h3>
             <div class="ep-body"><ul class="timeline">${timeline}</ul></div>
           </div>
@@ -833,10 +850,12 @@ function renderContent() {
     });
   }
 
-  // 保留捲動位置：30 秒自動 refresh 後若資料有變動，畫面雖會重畫，但讓使用者停在原本看的地方
+  // 保留捲動位置 + 摺疊狀態：30 秒自動 refresh 後若資料有變動，畫面雖會重畫，但讓使用者停在原本看的位置、保持原本的展開／收折
+  snapshotCollapseStates(content);
   const prevScrollTop = content.scrollTop;
   content.innerHTML = html;
   content.scrollTop = prevScrollTop;
+  applyCollapseStates(content);
 
   // 刪除單筆實態按鈕事件
   content.querySelectorAll('[data-del-entry]').forEach(b => {
@@ -1214,11 +1233,11 @@ function renderRtEquipment(ep, orderNo) {
     <div data-ep-order="${escapeHtml(orderNo)}">
       ${placeholder}
       <div class="ep-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-        <div class="ep-collapsible">
+        <div class="ep-collapsible" data-coll-id="equip-base-${escapeHtml(orderNo)}">
           <div class="ep-header" style="font-size:11px;font-weight:700;color:var(--brand);margin-bottom:6px;border-bottom:1.5px solid var(--brand-soft);padding-bottom:3px;" onclick="this.parentNode.classList.toggle('ep-closed')"><span class="ep-chev">▼</span>製造參數</div>
           <div class="ep-body">${renderRtEquipmentColumn(ep, 'base')}</div>
         </div>
-        <div class="ep-collapsible">
+        <div class="ep-collapsible" data-coll-id="equip-orig-${escapeHtml(orderNo)}">
           <div class="ep-header" style="font-size:11px;font-weight:700;color:#1f6feb;margin-bottom:6px;border-bottom:1.5px solid #e7f0ff;padding-bottom:3px;" onclick="this.parentNode.classList.toggle('ep-closed')"><span class="ep-chev">▼</span>原始參數</div>
           <div class="ep-body">${renderRtEquipmentColumn(ep, '')}</div>
         </div>
@@ -1270,6 +1289,7 @@ async function loadRtEquipment(orderNo) {
     return;
   }
   wrap.innerHTML = renderRtEquipment(r.data.equipmentParam, orderNo);
+  applyCollapseStates(wrap);
 }
 
 initDropdownMenu();
