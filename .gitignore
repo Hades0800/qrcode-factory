@@ -11,6 +11,7 @@ __pycache__/
 .venv/
 venv/
 env/
+qr_project/
 *.egg-info/
 .pytest_cache/
 .mypy_cache/

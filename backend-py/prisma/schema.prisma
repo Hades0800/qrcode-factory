@@ -1,0 +1,263 @@
+generator client {
+  provider             = "prisma-client-py"
+  interface            = "asyncio"
+  recursive_type_depth = 5
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────────
+// 帳號管理
+// ───────────────────────────────
+
+model Leader {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  passwordHash String
+  displayName  String
+  isAdmin      Boolean   @default(false)
+  isPlanner    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  deletedAt    DateTime?
+
+  orders Order[]
+
+  @@index([deletedAt])
+}
+
+// ───────────────────────────────
+// 工單
+// ───────────────────────────────
+
+model Order {
+  id                Int      @id @default(autoincrement())
+  orderNo           String   @unique
+  machineNo         String?
+  plannedMachineNo  String?
+  leaderId          Int?
+  leader            Leader?  @relation(fields: [leaderId], references: [id])
+
+  productionDate DateTime?
+  plannedDate    DateTime?
+  actualStartDate DateTime?
+  specType         String?
+  difficultyFactor Float?
+  newSpecAspects   String?
+  changeScope      String?
+  materialType     String?
+  auxEquipment       String?
+  auxEquipmentCustom String?
+  operatorName       String?
+  totalWorkers       Int?
+  productSpec    String?
+  moldSpec       String?
+  material       String?
+  dispatchQty    Int?
+  bladeCount     Int?
+  machineSPM     Int?
+  unitWeight     Float?
+  totalWeight    Float?
+
+  step21At DateTime?
+  step22At DateTime?
+  step23At DateTime?
+
+  step1At  DateTime?
+  step2At  DateTime?
+  step3At  DateTime?
+  step4At  DateTime?
+  step4Note String?
+  step5At  DateTime?
+  step6At  DateTime?
+  step7At  DateTime?
+  step7Note String?
+
+  step11At   DateTime?
+  step11Note String?
+  step11QcActualQty Int?
+  step12At   DateTime?
+  step12Note String?
+  step13At   DateTime?
+  step13Note String?
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  deletedAt   DateTime?
+  pauseEvents PauseEvent[]
+  stepEntries StepEntry[]
+  equipmentParam EquipmentParam?
+
+  @@index([orderNo])
+  @@index([productionDate])
+  @@index([plannedDate])
+  @@index([actualStartDate])
+  @@index([machineNo])
+  @@index([updatedAt])
+  @@index([deletedAt])
+}
+
+// ───────────────────────────────
+// 設備參數
+// ───────────────────────────────
+
+model EquipmentParam {
+  id              Int       @id @default(autoincrement())
+  orderId         Int       @unique
+  order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderNo         String
+
+  operation        String?
+  totalWorkers     Int?
+  paramFileName    String?
+  paramFileAttr    String?
+  productSpecAttr  String?
+
+  moldSpec         String?
+  machineSPM       Float?
+  bladeCount       Int?
+  feedSetting      String?
+  cutterStroke     String?
+  strokeUpdateFreq String?
+
+  baseParamFileName    String?
+  baseParamFileAttr    String?
+  baseMoldSpec         String?
+  baseMachineSPM       Float?
+  baseBladeCount       Int?
+  baseFeedSetting      String?
+  baseCutterStroke     String?
+  baseStrokeUpdateFreq String?
+
+  createdBy        Int?
+  createdByName    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  @@index([orderNo])
+  @@index([deletedAt])
+}
+
+// ───────────────────────────────
+// 工序紀錄
+// ───────────────────────────────
+
+model StepEntry {
+  id         Int       @id @default(autoincrement())
+  orderId    Int
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  stepNo     String
+  seq        Int
+  recordedAt DateTime  @default(now())
+  isManual   Boolean   @default(false)
+  note       String?
+  qcActualQty Int?
+  leaderId   Int?
+  leaderName String?
+  deletedAt  DateTime?
+
+  @@index([orderId])
+  @@index([orderId, stepNo])
+  @@index([deletedAt])
+}
+
+// ───────────────────────────────
+// 暫停 / 異常事件
+// ───────────────────────────────
+
+model PauseEvent {
+  id         Int       @id @default(autoincrement())
+  orderId    Int
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type       String
+  activeStep String?
+  startAt    DateTime  @default(now())
+  endAt      DateTime?
+  duration   Int?
+  note       String?
+  qcActualQty Int?
+  deletedAt  DateTime?
+
+  @@index([orderId])
+  @@index([deletedAt])
+}
+
+// ───────────────────────────────
+// 上傳批次
+// ───────────────────────────────
+
+model UploadBatch {
+  id             Int         @id @default(autoincrement())
+  filename       String
+  uploadedBy     Int?
+  uploadedByName String?
+  rowCount       Int
+  productionDate DateTime?
+  orderNos       String[]
+  uploadedAt     DateTime    @default(now())
+  cancelledAt    DateTime?
+  rows           UploadRow[]
+
+  @@index([uploadedAt])
+}
+
+model UploadRow {
+  id            Int         @id @default(autoincrement())
+  batchId       Int
+  batch         UploadBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  orderNo       String
+  productSpec   String?
+  moldSpec      String?
+  material      String?
+  machineNo     String?
+  dispatchQty   Int?
+  bladeCount    Int?
+  machineSPM    Int?
+  unitWeight    Float?
+  totalWeight   Float?
+  status        String      @default("created")
+  errorMsg      String?
+
+  @@index([batchId])
+  @@index([orderNo])
+}
+
+// ───────────────────────────────
+// 無工令事件
+// ───────────────────────────────
+
+model IdleEvent {
+  id         Int       @id @default(autoincrement())
+  machineNo  String
+  leaderId   Int?
+  leaderName String?
+  note       String?
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+
+  @@index([createdAt])
+  @@index([machineNo])
+  @@index([deletedAt])
+}
+
+// ───────────────────────────────
+// 稽核日誌
+// ───────────────────────────────
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  actorId   Int?
+  actorName String?
+  action    String
+  target    String?
+  detail    String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId])
+  @@index([action])
+}
