@@ -702,12 +702,15 @@ function render() {
     const allItems = [];
     const entryLabels = {'1':'原料準備','2':'模刀具','3':'試模確認','4':'穩定生產-無中斷','5':'穩定生產-中斷調整','8':'穩定生產-中斷多次','6':'後工程','7':'其他作業','21':'設備啓動','22':'準備完成','23':'無工令'};
 
-    // 舊格式 stepXAt — step 11 帶上備註（含/不含附屬設備 + 主/附獨立運作）
+    // 舊格式 stepXAt — step 11 帶上備註（含/不含附屬設備 + 主/附獨立運作）+ QC 數量
     STEP_NAMES.forEach(s => {
       if (o[s.key]) {
         let label = s.label;
         if (s.key === 'step11At' && o.step11Note) {
           label += '（' + escapeHtml(o.step11Note) + '）';
+        }
+        if (s.key === 'step11At' && o.step11QcActualQty != null) {
+          label += ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">QC ${o.step11QcActualQty}</span>`;
         }
         allItems.push({ time: new Date(o[s.key]), label, style: 'done' });
       }
@@ -716,7 +719,8 @@ function render() {
     (o.stepEntries || []).forEach(e => {
       if (e.stepNo === '30') {
         const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
-        allItems.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + manual, style: 'spec-change' });
+        const qcTag = (e.qcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">QC ${e.qcActualQty}</span>` : '';
+        allItems.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + qcTag + manual, style: 'spec-change' });
         return;
       }
       const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
@@ -733,7 +737,8 @@ function render() {
     // 暫停事件
     ((o.pause12 && o.pause12.history) || []).forEach((e, i) => {
       const isLunch = (e.note || '').includes('中午') || (e.note || '').includes('午休') || (e.note || '').includes('午餐');
-      allItems.push({ time: new Date(e.startAt), label: icon('pause', 13) + ' 暫停' + (e.note ? '（'+escapeHtml(e.note)+'）' : ''), style: 'pause' });
+      const qcTag = (e.qcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">QC ${e.qcActualQty}</span>` : '';
+      allItems.push({ time: new Date(e.startAt), label: icon('pause', 13) + ' 暫停' + (e.note ? '（'+escapeHtml(e.note)+'）' : '') + qcTag, style: 'pause' });
       if (e.endAt) {
         const dur = e.duration ? fmtDur(e.duration) : '';
         const resumeLabel = isLunch ? icon('play', 13) + ' 午後恢復生產' : icon('play', 13) + ' 恢復生產' + (dur ? '（暫停 ' + dur + '）' : '');
@@ -1077,6 +1082,7 @@ $('exportBtn').onclick = () => {
     '小組長',
     '21.設備啓動','22.準備完成','23.無工令',
     '01.原料準備','02.模刀具','03.試模確認','04.穩定生產-無中斷','05.穩定生產-中斷調整','06.穩定生產-中斷多次','07.後工程','08.其他作業','11.完成',
+    '完成QC數量','規格切換QC明細','下班QC明細',
     '暫停次數','暫停秒數','異常次數','異常秒數','最後更新',
   ];
   // 從 stepEntries 取各步驟第一次紀錄時間（優先），fallback 到舊格式 stepXAt
@@ -1105,6 +1111,11 @@ $('exportBtn').onclick = () => {
     getAllStepTimes(o, '21', 'step21At'), getAllStepTimes(o, '22', 'step22At'), getAllStepTimes(o, '23', 'step23At'),
     getAllStepTimes(o, '1', 'step1At'), getAllStepTimes(o, '2', 'step2At'), getAllStepTimes(o, '3', 'step3At'), getAllStepTimes(o, '4', 'step4At'),
     getAllStepTimes(o, '5', 'step5At'), getAllStepTimes(o, '8', null), getAllStepTimes(o, '6', 'step6At'), getAllStepTimes(o, '7', 'step7At'), fmtTime(o.step11At),
+    o.step11QcActualQty != null ? o.step11QcActualQty : '',
+    (o.stepEntries || []).filter(e => e.stepNo === '30' && e.qcActualQty != null)
+      .map(e => `${e.note || ''}=${e.qcActualQty}`).join(' / '),
+    ((o.pause12 && o.pause12.history) || []).filter(e => e.qcActualQty != null)
+      .map(e => `${fmtTime(e.startAt)}=${e.qcActualQty}`).join(' / '),
     ((o.pause12 && o.pause12.history) || []).filter(e => !isExcludedPause(e)).length,
     ((o.pause12 && o.pause12.history) || []).filter(e => !isExcludedPause(e)).reduce((s, e) => s + (e.duration || 0), 0),
     ((o.pause13 && o.pause13.history) || []).filter(e => !isExcludedPause(e)).length,

@@ -1090,12 +1090,15 @@ function buildTimeline(o, isAdmin) {
   const stepNameMap = {};
   STEP_LABELS.forEach(s => stepNameMap[s.key] = s.label);
 
-  // 舊格式 stepXAt — step 11 帶上備註（含/不含附屬設備 + 主/附獨立運作）
+  // 舊格式 stepXAt — step 11 帶上備註（含/不含附屬設備 + 主/附獨立運作）+ QC 數量
   STEP_LABELS.forEach(s => {
     if (o[s.key]) {
       let label = s.label;
       if (s.key === 'step11At' && o.step11Note) {
         label += '（' + escapeHtml(o.step11Note) + '）';
+      }
+      if (s.key === 'step11At' && o.step11QcActualQty != null) {
+        label += ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">QC ${o.step11QcActualQty}</span>`;
       }
       items.push({ time: new Date(o[s.key]), label, type: 'step', entryId: null });
     }
@@ -1105,7 +1108,8 @@ function buildTimeline(o, isAdmin) {
   (o.stepEntries || []).forEach(e => {
     if (e.stepNo === '30') {
       const suffix = (e.isManual ? '（補登）' : '');
-      items.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + suffix, type: 'spec-change', entryId: e.id });
+      const qcTxt = (e.qcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">QC ${e.qcActualQty}</span>` : '';
+      items.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + qcTxt + suffix, type: 'spec-change', entryId: e.id });
       return;
     }
     const suffix = (e.isManual ? '（補登）' : '');
@@ -1128,10 +1132,11 @@ function buildTimeline(o, isAdmin) {
   ];
   pauseEvents.forEach(e => {
     const note = e.note ? '（' + escapeHtml(e.note) + '）' : '';
+    const qcTxt = (e.qcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">QC ${e.qcActualQty}</span>` : '';
     const ico = e.pauseType === '13' ? icon('alert', 13) : icon('pause', 13);
     items.push({
       time: new Date(e.startAt),
-      label: ico + ' ' + e.pauseLabel + note,
+      label: ico + ' ' + e.pauseLabel + note + qcTxt,
       type: e.pauseType === '13' ? 'abnormal' : 'pause',
     });
     if (e.endAt) {

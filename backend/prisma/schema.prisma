@@ -80,6 +80,7 @@ model Order {
   // 完成/暫停/異常
   step11At   DateTime?
   step11Note String?    // 完成備註：含附屬設備 / 不含附屬設備
+  step11QcActualQty Int?     // QC 實際生產數量（完成時填）：單一規格=工單總量；多規格=最後一段規格的量
   step12At   DateTime?  // 已棄用（改用 PauseEvent）
   step12Note String?    // 已棄用
   step13At   DateTime?  // 已棄用（改用 PauseEvent）
@@ -158,6 +159,7 @@ model StepEntry {
   recordedAt DateTime  @default(now())
   isManual   Boolean   @default(false) // 補登
   note       String?   // stepNo="30" 時存規格描述
+  qcActualQty Int?     // QC 實際生產數量：stepNo="30"（前一段規格的量）才會有
   leaderId   Int?
   leaderName String?
   deletedAt  DateTime?
@@ -181,6 +183,7 @@ model PauseEvent {
   endAt      DateTime?
   duration   Int?
   note       String?
+  qcActualQty Int?     // QC 實際生產數量：type="12" 且 note 含「下班」（隔日生產）才會有
   deletedAt  DateTime?
 
   @@index([orderId])

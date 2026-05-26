@@ -104,7 +104,7 @@ function serializeOrder(o) {
       active: active ? { id: active.id, startAt: active.startAt, note: active.note, activeStep: active.activeStep } : null,
       history: items.map(e => ({
         id: e.id, activeStep: e.activeStep, startAt: e.startAt, endAt: e.endAt,
-        duration: e.duration, note: e.note,
+        duration: e.duration, note: e.note, qcActualQty: e.qcActualQty ?? null,
       })),
     };
   };
@@ -118,6 +118,7 @@ function serializeOrder(o) {
     step1At: o.step1At, step2At: o.step2At, step3At: o.step3At,
     step4At: o.step4At, step5At: o.step5At, step6At: o.step6At,
     step7At: o.step7At, step11At: o.step11At, step11Note: o.step11Note || null,
+    step11QcActualQty: o.step11QcActualQty ?? null,
     // 三個日期：
     //   plannedDate     = 上傳的計畫日（生管說「這張要 X 做」）
     //   actualStartDate = 第一筆活動的台灣日期（現場第一次掃 QR 那天）
@@ -145,6 +146,7 @@ function serializeOrder(o) {
       id: e.id, stepNo: e.stepNo, seq: e.seq,
       recordedAt: e.recordedAt, isManual: e.isManual || false,
       note: e.note || null,
+      qcActualQty: e.qcActualQty ?? null,
       leaderName: e.leaderName,
     })),
     // 同機台上一張已完成工單的結束時間（強制接續用；由 caller 預先附上）
@@ -317,16 +319,24 @@ export default async function orderRoutes(fastify) {
   // 記錄工序（可重複，日誌式；支援補登自訂時間）
   fastify.post('/:orderNo/step-entries', async (request, reply) => {
     const orderNo = String(request.params.orderNo || '').toUpperCase();
-    const { stepNo, recordedAt: manualTime, note: rawNote } = request.body || {};
+    const { stepNo, recordedAt: manualTime, note: rawNote, qcActualQty: rawQc } = request.body || {};
     if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
     const validSteps = ['1','2','3','4','5','6','7','8','21','22','23','12','13','30','40','41'];
     if (!validSteps.includes(stepNo)) {
       return reply.code(400).send({ error: '無效工序編號' });
     }
-    // stepNo=30 (更換規格) 必須帶文字描述
+    // stepNo=30 (更換規格) 必須帶文字描述 + QC 實際生產數量
     const note = typeof rawNote === 'string' ? rawNote.trim().slice(0, 200) : null;
     if (stepNo === '30' && !note) {
       return reply.code(400).send({ error: '更換規格需填入規格描述' });
+    }
+    let qcActualQty = null;
+    if (stepNo === '30') {
+      const n = Number(rawQc);
+      if (!Number.isInteger(n) || n < 0) {
+        return reply.code(400).send({ error: '請填入此規格實際生產數量（非負整數）' });
+      }
+      qcActualQty = n;
     }
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) return reply.code(404).send({ error: '找不到工單' });
@@ -427,6 +437,7 @@ export default async function orderRoutes(fastify) {
         recordedAt: time,
         isManual: isManual || forcedFromPrev,
         note,
+        qcActualQty,
         leaderId: request.user.id,
         leaderName: request.user.displayName || null,
       },
@@ -714,10 +725,19 @@ export default async function orderRoutes(fastify) {
   fastify.post('/:orderNo/steps/:step', async (request, reply) => {
     const orderNo = String(request.params.orderNo || '').toUpperCase();
     const { step } = request.params;
-    const { note, recordedAt: manualTime } = request.body || {};
+    const { note, recordedAt: manualTime, qcActualQty: rawQc } = request.body || {};
     if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
     const cols = STEP_COLS[step];
     if (!cols) return reply.code(400).send({ error: '無效步驟' });
+    // step 11（生產完成）必須帶 QC 實際生產數量
+    let qcActualQty = null;
+    if (step === '11') {
+      const n = Number(rawQc);
+      if (!Number.isInteger(n) || n < 0) {
+        return reply.code(400).send({ error: '請填入此工單／最後規格的實際生產數量（非負整數）' });
+      }
+      qcActualQty = n;
+    }
 
     let order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) {
@@ -755,6 +775,7 @@ export default async function orderRoutes(fastify) {
       leaderId: request.user.id,
     };
     if (cols.note && note) updateData[cols.note] = clipStr(note, 500);
+    if (step === '11') updateData.step11QcActualQty = qcActualQty;
 
     const updated = await fastify.prisma.order.update({
       where: { orderNo },
@@ -789,7 +810,7 @@ export default async function orderRoutes(fastify) {
   // 開始暫停 / 異常
   fastify.post('/:orderNo/pause', async (request, reply) => {
     const orderNo = String(request.params.orderNo || '').toUpperCase();
-    const { type, note, activeStep } = request.body || {};
+    const { type, note, activeStep, qcActualQty: rawQc } = request.body || {};
     if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
     if (!['12', '13'].includes(type)) return reply.code(400).send({ error: '無效類型' });
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
@@ -798,10 +819,20 @@ export default async function orderRoutes(fastify) {
       where: { orderId: order.id, type, endAt: null },
     });
     if (active) return reply.code(409).send({ error: '已在暫停中，請先恢復' });
+    // 下班時間／隔日生產（type=12 且 note 含「下班」）必須帶 QC 實際生產數量
+    let qcActualQty = null;
+    const isOffWork = type === '12' && typeof note === 'string' && note.includes('下班');
+    if (isOffWork) {
+      const n = Number(rawQc);
+      if (!Number.isInteger(n) || n < 0) {
+        return reply.code(400).send({ error: '請填入此規格實際生產數量（非負整數）' });
+      }
+      qcActualQty = n;
+    }
     const pauseStart = new Date();
     await setActualStartDate(fastify, order, pauseStart);
     await fastify.prisma.pauseEvent.create({
-      data: { orderId: order.id, type, note: clipStr(note, 500), activeStep: clipStr(activeStep, 100) },
+      data: { orderId: order.id, type, note: clipStr(note, 500), activeStep: clipStr(activeStep, 100), qcActualQty },
     });
     const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
     return { order: await serializeWithPrev(fastify.prisma, updated) };
@@ -834,7 +865,7 @@ export default async function orderRoutes(fastify) {
   // 補登暫停（已結束的暫停事件）
   fastify.post('/:orderNo/pause-backfill', async (request, reply) => {
     const orderNo = String(request.params.orderNo || '').toUpperCase();
-    const { type, note, startAt: startStr, endAt: endStr } = request.body || {};
+    const { type, note, startAt: startStr, endAt: endStr, qcActualQty: rawQc } = request.body || {};
     if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
     if (!['12', '13'].includes(type)) return reply.code(400).send({ error: '無效類型' });
     if (!startStr || !endStr) return reply.code(400).send({ error: '請填寫開始和結束時間' });
@@ -847,9 +878,16 @@ export default async function orderRoutes(fastify) {
     if (!order) return reply.code(404).send({ error: '找不到工單' });
     const duration = Math.round((endAt - startAt) / 1000);
     const backfillNote = '【補登】' + (note || '');
+    // 補登暫停的 QC 實際生產數量：選填（事後補登可能已不知道）
+    let qcActualQty = null;
+    if (rawQc !== undefined && rawQc !== null && rawQc !== '') {
+      const n = Number(rawQc);
+      if (!Number.isInteger(n) || n < 0) return reply.code(400).send({ error: 'QC 數量必須是非負整數' });
+      qcActualQty = n;
+    }
     await setActualStartDate(fastify, order, startAt);
     await fastify.prisma.pauseEvent.create({
-      data: { orderId: order.id, type, note: clipStr(backfillNote, 500), startAt, endAt, duration },
+      data: { orderId: order.id, type, note: clipStr(backfillNote, 500), startAt, endAt, duration, qcActualQty },
     });
     const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
     return { ok: true, order: await serializeWithPrev(fastify.prisma, updated) };
