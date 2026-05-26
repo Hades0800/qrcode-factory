@@ -331,7 +331,10 @@ export default async function orderRoutes(fastify) {
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) return reply.code(404).send({ error: '找不到工單' });
     // 規則：step 41（生產開始）之後不能再按 step 40（生產準備），
-    // 除非有 step 30（切換規格）或 pause 13（異常中斷）介入。
+    // 除非下列任一介入：
+    //   - step 30（切換規格）
+    //   - pause 13（異常中斷）開始時間
+    //   - pause 12 中的「中午休息／下班時間」已結束（取 endAt）
     if (stepNo === '40') {
       const lastStep41 = await fastify.prisma.stepEntry.findFirst({
         where: { orderId: order.id, stepNo: '41' },
@@ -346,14 +349,32 @@ export default async function orderRoutes(fastify) {
           where: { orderId: order.id, type: '13' },
           orderBy: { startAt: 'desc' },
         });
+        // 中午休息／下班（pause 12，note 含「中午」「午休」「午餐」「下班」）已結束
+        const lunchCandidates = await fastify.prisma.pauseEvent.findMany({
+          where: {
+            orderId: order.id,
+            type: '12',
+            endAt: { not: null },
+            OR: [
+              { note: { contains: '中午' } },
+              { note: { contains: '午休' } },
+              { note: { contains: '午餐' } },
+              { note: { contains: '下班' } },
+            ],
+          },
+          orderBy: { endAt: 'desc' },
+          take: 1,
+        });
+        const lastLunchEnd = lunchCandidates[0] || null;
         const lastStep41Ms = new Date(lastStep41.recordedAt).getTime();
         const lastReleaseMs = Math.max(
           lastStep30 ? new Date(lastStep30.recordedAt).getTime() : 0,
           lastAbn ? new Date(lastAbn.startAt).getTime() : 0,
+          lastLunchEnd ? new Date(lastLunchEnd.endAt).getTime() : 0,
         );
         if (lastStep41Ms >= lastReleaseMs) {
           return reply.code(400).send({
-            error: '生產開始後不能再按生產準備（需先「切換規格」或「異常中斷」才能重新準備）',
+            error: '生產開始後不能再按生產準備（需先「切換規格」、「異常中斷」或「中午休息結束後」才能重新準備）',
           });
         }
       }
