@@ -65,6 +65,7 @@ export default async function equipmentParamRoutes(fastify) {
       // 補上基礎參數欄位（後加的，使用 ALTER 保證舊環境有）
       await fastify.prisma.$executeRawUnsafe(`
         ALTER TABLE "EquipmentParam"
+          ADD COLUMN IF NOT EXISTS "baseProductSpecAttr" TEXT,
           ADD COLUMN IF NOT EXISTS "baseParamFileName" TEXT,
           ADD COLUMN IF NOT EXISTS "baseParamFileAttr" TEXT,
           ADD COLUMN IF NOT EXISTS "baseMoldSpec" TEXT,
@@ -125,6 +126,7 @@ export default async function equipmentParamRoutes(fastify) {
       cutterStroke:     clipStr(b.cutterStroke, 200),
       strokeUpdateFreq: clipStr(b.strokeUpdateFreq, 200),
       // 基礎參數
+      baseProductSpecAttr:  clipStr(b.baseProductSpecAttr, 200),
       baseParamFileName:    clipStr(b.baseParamFileName, 200),
       baseParamFileAttr:    clipStr(b.baseParamFileAttr, 200),
       baseMoldSpec:         clipStr(b.baseMoldSpec, 200),
@@ -141,14 +143,14 @@ export default async function equipmentParamRoutes(fastify) {
         "orderId", "orderNo", "operation", "totalWorkers", "paramFileName",
         "paramFileAttr", "productSpecAttr", "moldSpec", "machineSPM", "bladeCount",
         "feedSetting", "cutterStroke", "strokeUpdateFreq",
-        "baseParamFileName", "baseParamFileAttr", "baseMoldSpec", "baseMachineSPM", "baseBladeCount",
+        "baseProductSpecAttr", "baseParamFileName", "baseParamFileAttr", "baseMoldSpec", "baseMachineSPM", "baseBladeCount",
         "baseFeedSetting", "baseCutterStroke", "baseStrokeUpdateFreq",
         "createdBy", "createdByName", "createdAt", "updatedAt"
       ) VALUES (
         ${order.id}, ${orderNo}, ${data.operation}, ${data.totalWorkers}, ${data.paramFileName},
         ${data.paramFileAttr}, ${data.productSpecAttr}, ${data.moldSpec}, ${data.machineSPM}, ${data.bladeCount},
         ${data.feedSetting}, ${data.cutterStroke}, ${data.strokeUpdateFreq},
-        ${data.baseParamFileName}, ${data.baseParamFileAttr}, ${data.baseMoldSpec}, ${data.baseMachineSPM}, ${data.baseBladeCount},
+        ${data.baseProductSpecAttr}, ${data.baseParamFileName}, ${data.baseParamFileAttr}, ${data.baseMoldSpec}, ${data.baseMachineSPM}, ${data.baseBladeCount},
         ${data.baseFeedSetting}, ${data.baseCutterStroke}, ${data.baseStrokeUpdateFreq},
         ${request.user.id}, ${request.user.displayName || null}, NOW(), NOW()
       )
@@ -164,6 +166,7 @@ export default async function equipmentParamRoutes(fastify) {
         "feedSetting" = EXCLUDED."feedSetting",
         "cutterStroke" = EXCLUDED."cutterStroke",
         "strokeUpdateFreq" = EXCLUDED."strokeUpdateFreq",
+        "baseProductSpecAttr" = EXCLUDED."baseProductSpecAttr",
         "baseParamFileName" = EXCLUDED."baseParamFileName",
         "baseParamFileAttr" = EXCLUDED."baseParamFileAttr",
         "baseMoldSpec" = EXCLUDED."baseMoldSpec",

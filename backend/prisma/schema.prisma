@@ -127,6 +127,7 @@ model EquipmentParam {
   strokeUpdateFreq String?  // 行程更新頻度
 
   // 基礎參數（標準/基準值）
+  baseProductSpecAttr  String?
   baseParamFileName    String?
   baseParamFileAttr    String?
   baseMoldSpec         String?
