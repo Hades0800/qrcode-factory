@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ..auth_deps import require_admin
 from ..db import prisma
-from ..helpers import audit, clip_str, to_taiwan_date
+from ..helpers import audit, clip_str
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -244,7 +244,7 @@ async def migrate_dates():
             times.append(o.stepEntries[0].recordedAt)
         if o.pauseEvents:
             times.append(o.pauseEvents[0].startAt)
-        actual_start_date = to_taiwan_date(min(times)) if times else None
+        actual_start_date = min(times) if times else None
 
         planned_date = None
         earliest_row = await prisma.uploadrow.find_first(
@@ -296,8 +296,41 @@ async def fix_production_dates():
                 await prisma.order.update(where={"id": o.id}, data={"productionDate": None})
                 fixed += 1
             continue
-        correct = to_taiwan_date(min(times))
-        if o.productionDate != correct:
-            await prisma.order.update(where={"id": o.id}, data={"productionDate": correct})
+        earliest = min(times)
+        if o.productionDate != earliest:
+            await prisma.order.update(where={"id": o.id}, data={"productionDate": earliest})
             fixed += 1
     return {"ok": True, "total": len(orders), "fixed": fixed}
+
+
+@router.post("/recompute-actual-start-dates")
+async def recompute_actual_start_dates():
+    """UTC 重構後的資料修補：把舊的 actualStartDate（台灣日期 marker）重算成
+    第一筆事件的原始 UTC timestamp。"""
+    orders = await prisma.order.find_many(
+        include={
+            "stepEntries": {"where": {"deletedAt": None}, "order_by": {"recordedAt": "asc"}, "take": 1},
+            "pauseEvents": {"where": {"deletedAt": None}, "order_by": {"startAt": "asc"}, "take": 1},
+        }
+    )
+    updated = 0
+    step_keys = ["step1At", "step2At", "step3At", "step4At", "step5At", "step6At",
+                 "step7At", "step11At", "step21At", "step22At", "step23At"]
+    for o in orders:
+        times = []
+        for k in step_keys:
+            v = getattr(o, k, None)
+            if v:
+                times.append(v)
+        if o.stepEntries:
+            times.append(o.stepEntries[0].recordedAt)
+        if o.pauseEvents:
+            times.append(o.pauseEvents[0].startAt)
+        new_start = min(times) if times else None
+        if o.actualStartDate != new_start:
+            await prisma.order.update(
+                where={"id": o.id},
+                data={"actualStartDate": new_start},
+            )
+            updated += 1
+    return {"ok": True, "total": len(orders), "updated": updated}

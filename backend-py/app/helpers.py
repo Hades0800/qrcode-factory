@@ -4,7 +4,7 @@
 """
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 
 from .db import prisma
@@ -24,25 +24,6 @@ def clip_str(s, max_len: int) -> Optional[str]:
     if s is None:
         return None
     return str(s)[:max_len]
-
-
-def to_taiwan_date(t) -> datetime:
-    """轉成「台灣日期」（UTC 午夜，作為純日期標記）。對應 toTaiwanDate(t)。"""
-    if t is None:
-        d = datetime.now(timezone.utc)
-    elif isinstance(t, datetime):
-        d = t if t.tzinfo else t.replace(tzinfo=timezone.utc)
-    else:
-        d = datetime.fromisoformat(str(t).replace("Z", "+00:00"))
-        if d.tzinfo is None:
-            d = d.replace(tzinfo=timezone.utc)
-    tw = d.astimezone(timezone.utc) + timedelta(hours=8)
-    return datetime(tw.year, tw.month, tw.day, tzinfo=timezone.utc)
-
-
-def taiwan_date_at_8(t) -> datetime:
-    """台灣當日 08:00 對應的 UTC 時間（= 台灣日期的 UTC 00:00）。"""
-    return to_taiwan_date(t)
 
 
 def has_activity(o) -> bool:

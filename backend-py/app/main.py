@@ -23,7 +23,6 @@ from .auth_deps import authenticate, require_admin
 from .config import (ADMIN_NAME, ADMIN_PASSWORD, ADMIN_USERNAME, ALLOWED_MACHINES,
                      ALLOWED_ORIGINS, DATABASE_URL, JWT_SECRET, LOG_LEVEL, PORT)
 from .db import connect_db, disconnect_db, prisma
-from .helpers import to_taiwan_date
 from .routes.admin import router as admin_router
 from .routes.auth import router as auth_router
 from .routes.equipment_params import router as equipment_router
@@ -230,9 +229,9 @@ async def fix_dates():
                 await prisma.order.update(where={"id": o.id}, data={"productionDate": None})
                 fixed += 1
             continue
-        correct = to_taiwan_date(min(times))
-        if o.productionDate != correct:
-            await prisma.order.update(where={"id": o.id}, data={"productionDate": correct})
+        earliest = min(times)
+        if o.productionDate != earliest:
+            await prisma.order.update(where={"id": o.id}, data={"productionDate": earliest})
             fixed += 1
     return {"ok": True, "total": len(orders), "fixed": fixed}
 

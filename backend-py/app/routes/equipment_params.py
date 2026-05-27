@@ -3,7 +3,7 @@
 一張工單對應一筆設備參數（upsert）。寫入前必須是「今日有活動」的工單（admin 例外）。
 """
 
-from datetime import datetime, time, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -39,21 +39,20 @@ def _float_or_none(v):
 
 
 async def _is_today_active(order_id: int) -> bool:
-    """工單是否「今日（本地時間）有實際活動」。"""
-    day_start = datetime.combine(datetime.now().date(), time.min)
-    day_end = datetime.combine(datetime.now().date(), time.max)
+    """工單是否「最近 24 小時內有實際活動」（滑動視窗，與時區無關）。"""
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
     step_count = await prisma.stepentry.count(
-        where={"orderId": order_id, "recordedAt": {"gte": day_start, "lt": day_end}}
+        where={"orderId": order_id, "recordedAt": {"gte": since}}
     )
     if step_count > 0:
         return True
     pause_count = await prisma.pauseevent.count(
-        where={"orderId": order_id, "startAt": {"gte": day_start, "lt": day_end}}
+        where={"orderId": order_id, "startAt": {"gte": since}}
     )
     if pause_count > 0:
         return True
     order = await prisma.order.find_unique(where={"id": order_id})
-    if order and order.step11At and day_start <= order.step11At < day_end:
+    if order and order.step11At and order.step11At >= since:
         return True
     return False
 

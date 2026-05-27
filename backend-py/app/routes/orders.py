@@ -14,8 +14,7 @@ from ..auth_deps import authenticate
 from ..config import ALLOWED_MACHINES
 from ..db import prisma
 from ..helpers import (STEP_COLS, audit, clip_str, has_activity,
-                       taiwan_date_at_8, to_taiwan_date, valid_machine,
-                       valid_order_no)
+                       valid_machine, valid_order_no)
 
 router = APIRouter(dependencies=[Depends(authenticate)])
 
@@ -67,12 +66,13 @@ async def get_prev_machine_end_at(order) -> Optional[datetime]:
 
 
 async def set_actual_start_date(order, event_time: datetime):
-    """規則：actualStartDate 一旦有值就鎖死，不再覆寫。"""
+    """規則：actualStartDate 一旦有值就鎖死。改為存第一筆事件的 UTC timestamp
+    （不再做時區轉換）。顯示成日期由前端依 Asia/Taipei 處理。"""
     if order.actualStartDate:
         return
     await prisma.order.update(
         where={"orderNo": order.orderNo},
-        data={"actualStartDate": to_taiwan_date(event_time)},
+        data={"actualStartDate": event_time},
     )
 
 
@@ -572,25 +572,11 @@ async def add_step_entry(order_no: str, request: Request, user: dict = Depends(a
             raise HTTPException(status_code=400, detail="補登時間不能超過現在")
         time_ = parsed
 
-    # 強制：本單第一筆生產時態（40/41）的時間
+    # 第一筆生產時態（40/41）的時間強制：移到前端負責
+    # 此處不再做時區/業務 magic — 接收到什麼 recordedAt 就存什麼
     forced_from_prev = False
     forced_prev_end = None
     forced_reason = None
-    if step_no in ("40", "41") and order.machineNo:
-        existing_stable = await prisma.stepentry.find_first(
-            where={"orderId": order.id, "stepNo": {"in": ["40", "41"]}}
-        )
-        if not existing_stable:
-            prev_end = await get_prev_machine_end_at(order)
-            target_day = to_taiwan_date(time_)
-            if prev_end and to_taiwan_date(prev_end) == target_day:
-                time_ = prev_end + timedelta(minutes=1)
-                forced_reason = "prev_same_day"
-            else:
-                time_ = taiwan_date_at_8(time_)
-                forced_reason = "day_start"
-            forced_from_prev = True
-            forced_prev_end = prev_end
 
     await set_actual_start_date(order, time_)
     entry = await prisma.stepentry.create(
