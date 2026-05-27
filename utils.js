@@ -53,25 +53,50 @@ function toast(msg, type) {
   setTimeout(() => t.classList.remove('show'), 2400);
 }
 
-// 日期格式化
+// 日期格式化 — 後端統一存 UTC，這邊用 Asia/Taipei 顯示
+// 用 Intl.DateTimeFormat 強制台灣時區，避免使用者在外地瀏覽器顯示成當地時間
+const TZ = 'Asia/Taipei';
+
+function _twParts(iso) {
+  const d = new Date(iso);
+  const f = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ, hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  const parts = {};
+  for (const p of f.formatToParts(d)) {
+    if (p.type !== 'literal') parts[p.type] = p.value;
+  }
+  // Intl 在跨日的午夜會回 "24" 而不是 "00"，補一下
+  if (parts.hour === '24') parts.hour = '00';
+  return parts;
+}
+
 function fmtTime(iso) {
   if (!iso) return '';
-  const d = new Date(iso);
-  const pad = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  const p = _twParts(iso);
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
 }
 
 function fmtTimeShort(iso) {
   if (!iso) return '';
-  const d = new Date(iso);
-  const pad = n => String(n).padStart(2, '0');
-  return `${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const p = _twParts(iso);
+  return `${p.month}/${p.day} ${p.hour}:${p.minute}`;
 }
 
 function fmtDate(iso) {
   if (!iso) return '';
-  const d = new Date(iso);
-  return d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
+  const p = _twParts(iso);
+  return `${p.year}/${p.month}/${p.day}`;
+}
+
+// 取得「Asia/Taipei 視角下的 YYYY-MM-DD」— 取代 String(iso).slice(0, 10)，避免跨日誤差
+// 用法：oldKey = String(o.actualStartDate).slice(0, 10)  →  newKey = twDateKey(o.actualStartDate)
+function twDateKey(iso) {
+  if (!iso) return '';
+  const p = _twParts(iso);
+  return `${p.year}-${p.month}-${p.day}`;
 }
 
 function fmtDuration(sec) {

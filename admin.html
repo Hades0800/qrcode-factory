@@ -390,11 +390,10 @@ async function deleteLeader(id, name) {
 }
 
 function fmtDateTime(iso) {
+  // 後端統一 UTC；用 fmtTime（Asia/Taipei）只取到分
   if (!iso) return '';
-  const d = new Date(iso);
-  const ymd = d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
-  const hm = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
-  return ymd + ' ' + hm;
+  const s = fmtTime(iso);
+  return s.replace(/-/g, '/').slice(0, 16);
 }
 
 // ──────────────────────────────────────────────────────────
@@ -451,12 +450,12 @@ function renderRecovery() {
   const start = (page - 1) * RECOVERY_PAGE_SIZE;
   const slice = items.slice(start, start + RECOVERY_PAGE_SIZE);
 
-  // 按操作日期分組（YYYY-MM-DD）
-  const dateOf = (it) => String(
+  // 按操作日期分組（台灣日期 YYYY-MM-DD）
+  const dateOf = (it) => twDateKey(
     tab === 'deleted' ? it.deletedAt :
     tab === 'reset' ? it.lastDeletedAt :
     it.cancelledAt
-  ).slice(0, 10);
+  );
   const groups = {};
   slice.forEach(it => { (groups[dateOf(it)] = groups[dateOf(it)] || []).push(it); });
   const html = Object.keys(groups).sort().reverse().map(day => {
@@ -583,7 +582,7 @@ function renderAuditLog() {
 
   const groups = {};
   slice.forEach(l => {
-    const day = String(l.createdAt).slice(0, 10);
+    const day = twDateKey(l.createdAt);
     (groups[day] = groups[day] || []).push(l);
   });
   const itemsHtml = Object.keys(groups).sort().reverse().map(day => {

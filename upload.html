@@ -434,7 +434,8 @@ function parseRows(json) {
       let val = row[excelKey];
       const field = mapping[excelKey];
       if (field === 'productionDate' && val instanceof Date) {
-        val = val.toISOString().slice(0, 10);
+        // Excel cell 通常以 Taiwan 當地時間 parse；轉成台灣日期文字
+        val = twDateKey(val);
       }
       obj[field] = val;
     });
@@ -637,7 +638,7 @@ async function loadOverview() {
   // Group by productionDate
   const groups = {};
   overviewOrders.forEach(o => {
-    const key = o.productionDate ? String(o.productionDate).slice(0, 10) : '未設定日期';
+    const key = o.productionDate ? twDateKey(o.productionDate) : '未設定日期';
     if (!groups[key]) groups[key] = [];
     groups[key].push(o);
   });
@@ -677,8 +678,8 @@ async function loadOverview() {
                   // 顯示「計畫 vs 實際」差異標籤：當兩者都有值且不同時亮黃色標
                   let mismatchTag = '';
                   if (o.actualStartDate && o.plannedDate) {
-                    const actDate = String(o.actualStartDate).slice(0, 10);
-                    const plDate = String(o.plannedDate).slice(0, 10);
+                    const actDate = twDateKey(o.actualStartDate);
+                    const plDate = twDateKey(o.plannedDate);
                     if (actDate !== plDate) {
                       mismatchTag = ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 6px;border-radius:6px;" title="計畫 ' + plDate + ' / 實際 ' + actDate + '">計畫 ' + plDate + '</span>';
                     }
@@ -737,7 +738,7 @@ async function loadBatches() {
   content.innerHTML = batches.map(b => {
     const uploadTime = fmtTime(b.uploadedAt);
     const isCancelled = !!b.cancelledAt;
-    const prodDate = b.productionDate ? String(b.productionDate).slice(0, 10) : '';
+    const prodDate = b.productionDate ? twDateKey(b.productionDate) : '';
     const orderList = (b.orderNos || []);
     return `
       <div style="margin-bottom:12px;padding:16px 20px;background:${isCancelled ? '#f9f9f9' : 'var(--card)'};border:1px solid ${isCancelled ? '#e5e5ea' : 'var(--border)'};border-radius:12px;transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.06)'" onmouseout="this.style.boxShadow='none'">

@@ -184,12 +184,9 @@ fastify.post('/api/fix-dates', {
       continue;
     }
     const earliest = new Date(Math.min(...times.map(t => t.getTime())));
-    const twTime = new Date(earliest.getTime() + 8 * 60 * 60 * 1000);
-    const y = twTime.getUTCFullYear(), m = twTime.getUTCMonth(), d = twTime.getUTCDate();
-    const correctDate = new Date(Date.UTC(y, m, d));
     const current = o.productionDate ? new Date(o.productionDate).getTime() : null;
-    if (current !== correctDate.getTime()) {
-      await fastify.prisma.order.update({ where: { id: o.id }, data: { productionDate: correctDate } });
+    if (current !== earliest.getTime()) {
+      await fastify.prisma.order.update({ where: { id: o.id }, data: { productionDate: earliest } });
       fixed++;
     }
   }

@@ -17,20 +17,20 @@ function floatOrNull(v) {
   return Number.isFinite(n) ? Math.max(0, Math.min(1e9, n)) : null;
 }
 
-// 工單是否「今日有實際活動」
+// 工單是否「最近 24 小時內有實際活動」
+// 改用滑動 24 小時視窗（與時區無關），取代原本的「今日」邏輯
 async function isTodayActive(prisma, orderId) {
-  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(dayStart.getTime() + 86400000);
+  const since = new Date(Date.now() - 86400000);
   const stepCount = await prisma.stepEntry.count({
-    where: { orderId, recordedAt: { gte: dayStart, lt: dayEnd } },
+    where: { orderId, recordedAt: { gte: since } },
   });
   if (stepCount > 0) return true;
   const pauseCount = await prisma.pauseEvent.count({
-    where: { orderId, startAt: { gte: dayStart, lt: dayEnd } },
+    where: { orderId, startAt: { gte: since } },
   });
   if (pauseCount > 0) return true;
   const order = await prisma.order.findUnique({ where: { id: orderId } });
-  if (order && order.step11At && order.step11At >= dayStart && order.step11At < dayEnd) return true;
+  if (order && order.step11At && order.step11At >= since) return true;
   return false;
 }
 

@@ -264,14 +264,9 @@ export default async function adminRoutes(fastify) {
   });
 
   // 一次性 migration：把舊 productionDate 拆成 plannedDate + actualStartDate
-  // - actualStartDate：用第一筆活動的台灣日期
-  // - plannedDate：找最早未取消批次的 productionDate；找不到就用舊 productionDate
+  // - actualStartDate：第一筆活動的原始 UTC timestamp（不做時區換算；顯示交給前端）
+  // - plannedDate：最早未取消批次的 productionDate；找不到就沿用舊 productionDate
   fastify.post('/migrate-dates', async () => {
-    const toTwDate = (t) => {
-      const d = t instanceof Date ? t : new Date(t);
-      const tw = new Date(d.getTime() + 8 * 60 * 60 * 1000);
-      return new Date(Date.UTC(tw.getUTCFullYear(), tw.getUTCMonth(), tw.getUTCDate()));
-    };
     const orders = await fastify.prisma.order.findMany({
       include: {
         stepEntries: { where: { deletedAt: null }, orderBy: { recordedAt: 'asc' }, take: 1 },
@@ -280,7 +275,7 @@ export default async function adminRoutes(fastify) {
     });
     let updated = 0;
     for (const o of orders) {
-      // 計算 actualStartDate
+      // 計算 actualStartDate：取所有事件中最早的 UTC timestamp
       const times = [];
       ['step1At','step2At','step3At','step4At','step5At','step6At','step7At','step11At','step21At','step22At','step23At'].forEach(k => {
         if (o[k]) times.push(new Date(o[k]));
@@ -288,7 +283,7 @@ export default async function adminRoutes(fastify) {
       if (o.stepEntries && o.stepEntries.length > 0) times.push(new Date(o.stepEntries[0].recordedAt));
       if (o.pauseEvents && o.pauseEvents.length > 0) times.push(new Date(o.pauseEvents[0].startAt));
       const actualStartDate = times.length > 0
-        ? toTwDate(new Date(Math.min(...times.map(t => t.getTime()))))
+        ? new Date(Math.min(...times.map(t => t.getTime())))
         : null;
 
       // 計算 plannedDate：最早一筆未取消批次的 productionDate
@@ -319,7 +314,8 @@ export default async function adminRoutes(fastify) {
     return { ok: true, total: orders.length, updated };
   });
 
-  // 修正所有工單的 productionDate 為第一筆活動日期（台灣時間）
+  // 修正所有工單的 productionDate 為第一筆活動的原始 UTC timestamp
+  // （舊版會把時間 +8h 再 truncate 到 00:00；新版直接用原始時間，顯示交給前端）
   fastify.post('/fix-production-dates', async () => {
     const orders = await fastify.prisma.order.findMany({
       include: {
@@ -343,15 +339,43 @@ export default async function adminRoutes(fastify) {
         continue;
       }
       const earliest = new Date(Math.min(...times.map(t => t.getTime())));
-      const twTime = new Date(earliest.getTime() + 8 * 60 * 60 * 1000);
-      const y = twTime.getUTCFullYear(), m = twTime.getUTCMonth(), d = twTime.getUTCDate();
-      const correctDate = new Date(Date.UTC(y, m, d));
       const current = o.productionDate ? new Date(o.productionDate).getTime() : null;
-      if (current !== correctDate.getTime()) {
-        await fastify.prisma.order.update({ where: { id: o.id }, data: { productionDate: correctDate } });
+      if (current !== earliest.getTime()) {
+        await fastify.prisma.order.update({ where: { id: o.id }, data: { productionDate: earliest } });
         fixed++;
       }
     }
     return { ok: true, total: orders.length, fixed };
+  });
+
+  // UTC 重構後的資料修補：把舊的 actualStartDate（台灣日期 marker）重算成第一筆事件的原始 UTC timestamp
+  // 跟 fix-production-dates 不同的是這支只動 actualStartDate（不動 productionDate）
+  fastify.post('/recompute-actual-start-dates', async () => {
+    const orders = await fastify.prisma.order.findMany({
+      include: {
+        stepEntries: { where: { deletedAt: null }, orderBy: { recordedAt: 'asc' }, take: 1 },
+        pauseEvents: { where: { deletedAt: null }, orderBy: { startAt: 'asc' }, take: 1 },
+      },
+    });
+    let updated = 0;
+    for (const o of orders) {
+      const times = [];
+      ['step1At','step2At','step3At','step4At','step5At','step6At','step7At','step11At','step21At','step22At','step23At'].forEach(k => {
+        if (o[k]) times.push(new Date(o[k]));
+      });
+      if (o.stepEntries && o.stepEntries.length > 0) times.push(new Date(o.stepEntries[0].recordedAt));
+      if (o.pauseEvents && o.pauseEvents.length > 0) times.push(new Date(o.pauseEvents[0].startAt));
+      const newStart = times.length > 0 ? new Date(Math.min(...times.map(t => t.getTime()))) : null;
+      const cur = o.actualStartDate ? new Date(o.actualStartDate).getTime() : null;
+      const next = newStart ? newStart.getTime() : null;
+      if (cur !== next) {
+        await fastify.prisma.order.update({
+          where: { id: o.id },
+          data: { actualStartDate: newStart },
+        });
+        updated++;
+      }
+    }
+    return { ok: true, total: orders.length, updated };
   });
 }
