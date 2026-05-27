@@ -308,9 +308,9 @@ let uploadedFilename = '';
 
 // 權限檢查：只有生管 / admin 能進上傳頁（一般人員從即時頁直接填設備參數）
 if (!me) { location.href = 'index.html'; }
-if (me && !me.isAdmin && !me.isPlanner) { alert('需要生管或管理員權限'); location.href = 'index.html'; }
-$('meShow').textContent = me ? me.displayName + (me.isPlanner ? '（生管）' : me.isAdmin ? '（管理員）' : '') : '';
-if (me && me.isAdmin) $('adminLink').style.display = 'flex';
+if (me && !canUpload(me)) { alert('需要生管或管理員權限'); location.href = 'index.html'; }
+$('meShow').textContent = me ? me.displayName + '（' + rolesDisplay(me) + '）' : '';
+if (me && isAdminUser(me)) $('adminLink').style.display = 'flex';
 $('logoutLink').onclick = e => { e.preventDefault(); localStorage.clear(); location.href = 'index.html'; };
 initDropdownMenu();
 
@@ -569,8 +569,8 @@ async function loadTodayOrders() {
   const hasActivity = o => !!(o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At || o.step11At);
   const active = rows.filter(hasActivity).length;
   $('todayStats').textContent = `今日上傳 ${rows.length} 筆（${active} 筆已開始生產，${rows.length - active} 筆可取消）`;
-  const isAdmin = me && me.isAdmin;
-  const canManageToday = isAdmin || (me && me.isPlanner);
+  const isAdmin = isAdminUser(me);
+  const canManageToday = isAdmin || hasRole(me, 'pm');
   $('todayBody').innerHTML = rows.map((o, i) => {
     const started = hasActivity(o);
     let actionBtn = '—';
@@ -730,8 +730,8 @@ async function loadBatches() {
     return;
   }
 
-  const isAdmin = me && me.isAdmin;
-  const isPlanner = me && me.isPlanner;
+  const isAdmin = isAdminUser(me);
+  const isPlanner = hasRole(me, 'pm');
   const canManage = isAdmin || isPlanner;
 
   content.innerHTML = batches.map(b => {

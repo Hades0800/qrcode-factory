@@ -262,10 +262,14 @@
 <script>
 const me = getMe();
 if (!me) location.href = 'index.html';
+if (me && !canSeeHistory(me)) {
+  alert('此頁需要 管理員 / 品管 / 生管 權限');
+  location.href = 'index.html';
+}
 
-$('meShow').textContent = me ? (me.displayName + (me.isAdmin ? '（管理員）' : '')) : '';
-if (me && me.isAdmin) $('adminLink').style.display = 'flex';
-if (me && (me.isAdmin || me.isPlanner)) $('uploadLink').style.display = 'flex';
+$('meShow').textContent = me ? (me.displayName + '（' + rolesDisplay(me) + '）') : '';
+if (me && isAdminUser(me)) $('adminLink').style.display = 'flex';
+if (me && canUpload(me)) $('uploadLink').style.display = 'flex';
 initDropdownMenu();
 $('logoutLink').onclick = e => {
   e.preventDefault();

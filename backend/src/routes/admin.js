@@ -5,6 +5,20 @@ export default async function adminRoutes(fastify) {
   fastify.addHook('onRequest', fastify.requireAdmin);
 
   // 列出所有小組長
+  const VALID_ROLES = ['admin', 'qc', 'pm', 'tech'];
+  // 把任意輸入正規化成「合法角色逗號字串」；預設 'qc'
+  function normalizeRoles(input) {
+    let arr = [];
+    if (Array.isArray(input)) arr = input;
+    else if (typeof input === 'string') arr = input.split(',');
+    else return 'qc';
+    const cleaned = arr.map(s => String(s).trim()).filter(Boolean);
+    const valid = cleaned.filter(r => VALID_ROLES.includes(r));
+    if (valid.length === 0) return 'qc';
+    // 依固定順序排（admin, qc, pm, tech）、去重
+    return VALID_ROLES.filter(r => valid.includes(r)).join(',');
+  }
+
   fastify.get('/leaders', async () => {
     const leaders = await fastify.prisma.leader.findMany({
       orderBy: { createdAt: 'asc' },
@@ -12,8 +26,7 @@ export default async function adminRoutes(fastify) {
         id: true,
         username: true,
         displayName: true,
-        isAdmin: true,
-        isPlanner: true,
+        roles: true,
         createdAt: true,
       },
     });
@@ -22,7 +35,7 @@ export default async function adminRoutes(fastify) {
 
   // 新增
   fastify.post('/leaders', async (request, reply) => {
-    const { username, password, displayName, isAdmin, isPlanner } = request.body || {};
+    const { username, password, displayName, roles } = request.body || {};
     if (!username || !password || !displayName) {
       return reply.code(400).send({ error: '請填寫帳號、密碼、顯示名稱' });
     }
@@ -35,12 +48,13 @@ export default async function adminRoutes(fastify) {
     if (typeof password !== 'string' || password.length < 6 || password.length > 200) {
       return reply.code(400).send({ error: '密碼長度需 6~200 字' });
     }
+    const normalizedRoles = normalizeRoles(roles);
     const exists = await fastify.prisma.leader.findUnique({ where: { username } });
     if (exists) return reply.code(409).send({ error: '帳號已存在' });
     const passwordHash = await bcrypt.hash(password, 10);
     const leader = await fastify.prisma.leader.create({
-      data: { username, passwordHash, displayName, isAdmin: !!isAdmin, isPlanner: !!isPlanner },
-      select: { id: true, username: true, displayName: true, isAdmin: true, isPlanner: true, createdAt: true },
+      data: { username, passwordHash, displayName, roles: normalizedRoles },
+      select: { id: true, username: true, displayName: true, roles: true, createdAt: true },
     });
     try {
       await fastify.prisma.auditLog.create({
@@ -49,12 +63,44 @@ export default async function adminRoutes(fastify) {
           actorName: request.user?.displayName || null,
           action: 'create_leader',
           target: username,
-          detail: `admin=${!!isAdmin} planner=${!!isPlanner}`,
+          detail: `roles=${normalizedRoles}`,
           ip: request.ip || null,
         },
       });
     } catch (e) {}
     return { leader };
+  });
+
+  // 改角色（admin 可修改任何人的 roles）
+  fastify.post('/leaders/:id/roles', async (request, reply) => {
+    const id = Number(request.params.id);
+    const { roles } = request.body || {};
+    const leader = await fastify.prisma.leader.findUnique({ where: { id } });
+    if (!leader) return reply.code(404).send({ error: '帳號不存在' });
+    const next = normalizeRoles(roles);
+    // 保險：不能把最後一個 admin 拔掉
+    if (leader.roles && leader.roles.split(',').includes('admin') && !next.split(',').includes('admin')) {
+      const otherAdminCount = await fastify.prisma.leader.count({
+        where: { roles: { contains: 'admin' }, id: { not: id } },
+      });
+      if (otherAdminCount === 0) {
+        return reply.code(400).send({ error: '不能拔掉最後一個管理員的 admin 角色' });
+      }
+    }
+    await fastify.prisma.leader.update({ where: { id }, data: { roles: next } });
+    try {
+      await fastify.prisma.auditLog.create({
+        data: {
+          actorId: request.user?.id || null,
+          actorName: request.user?.displayName || null,
+          action: 'update_roles',
+          target: leader.username,
+          detail: `${leader.roles} → ${next}`,
+          ip: request.ip || null,
+        },
+      });
+    } catch (e) {}
+    return { ok: true, roles: next };
   });
 
   // 重設密碼

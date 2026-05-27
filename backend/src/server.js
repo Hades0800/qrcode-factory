@@ -119,9 +119,24 @@ fastify.decorate('authenticate', async (request, reply) => {
   }
 });
 
+// 角色檢查 helper — JWT payload 帶 roles 字串（'admin,pm' 這種）
+function userHasRole(user, role) {
+  if (!user || !user.roles) return false;
+  const arr = String(user.roles).split(',').map(s => s.trim()).filter(Boolean);
+  return arr.includes(role);
+}
+fastify.decorate('hasRole', userHasRole);
+
 fastify.decorate('requireAdmin', async (request, reply) => {
-  if (!request.user?.isAdmin) {
+  if (!userHasRole(request.user, 'admin')) {
     reply.code(403).send({ error: '需要管理員權限' });
+  }
+});
+
+// pm 或 admin（可上傳工單）
+fastify.decorate('requirePlannerOrAdmin', async (request, reply) => {
+  if (!userHasRole(request.user, 'admin') && !userHasRole(request.user, 'pm')) {
+    reply.code(403).send({ error: '需要生管或管理員權限' });
   }
 });
 
@@ -234,7 +249,7 @@ fastify.delete('/api/idle-events/:id', { onRequest: [fastify.authenticate] }, as
   if (!id) return reply.code(400).send({ error: '無效 id' });
   const event = await prisma.idleEvent.findUnique({ where: { id } });
   if (!event) return reply.code(404).send({ error: '找不到紀錄' });
-  if (!request.user.isAdmin && event.leaderId !== request.user.id) {
+  if (!fastify.hasRole(request.user, 'admin') && event.leaderId !== request.user.id) {
     return reply.code(403).send({ error: '只能取消自己建立的紀錄' });
   }
   await prisma.idleEvent.delete({ where: { id } });
@@ -242,9 +257,16 @@ fastify.delete('/api/idle-events/:id', { onRequest: [fastify.authenticate] }, as
 });
 
 // 自動建立第一位管理員
+function _hasAdminRole(rolesStr) {
+  return typeof rolesStr === 'string' && rolesStr.split(',').map(s => s.trim()).includes('admin');
+}
+
 async function ensureAdmin() {
-  const count = await prisma.leader.count({ where: { isAdmin: true } });
-  if (count > 0) return;
+  // 找任何一個 roles 含 'admin' 的使用者
+  const adminCount = await prisma.leader.count({
+    where: { roles: { contains: 'admin' } },
+  });
+  if (adminCount > 0) return;
   const username = process.env.ADMIN_USERNAME;
   const password = process.env.ADMIN_PASSWORD;
   const displayName = process.env.ADMIN_NAME || '管理員';
@@ -257,7 +279,12 @@ async function ensureAdmin() {
   if (exists) {
     const patch = {};
     if (exists.deletedAt) patch.deletedAt = null;
-    if (!exists.isAdmin) patch.isAdmin = true;
+    if (!_hasAdminRole(exists.roles)) {
+      // 把 admin 加進現有 roles
+      const cur = (exists.roles || '').split(',').map(s => s.trim()).filter(Boolean);
+      if (!cur.includes('admin')) cur.unshift('admin');
+      patch.roles = cur.join(',');
+    }
     if (Object.keys(patch).length > 0) {
       await prisma.leader.update({ where: { id: exists.id }, data: patch });
       fastify.log.info(`已恢復/提升管理員：${username}`);
@@ -266,7 +293,7 @@ async function ensureAdmin() {
   }
   const passwordHash = await bcrypt.hash(password, 10);
   await prisma.leader.create({
-    data: { username, passwordHash, displayName, isAdmin: true },
+    data: { username, passwordHash, displayName, roles: 'admin' },
   });
   fastify.log.info(`✓ 已建立第一位管理員: ${username}`);
 }
@@ -290,6 +317,50 @@ function runDbPush() {
   }
 }
 
+// 角色欄位遷移：把舊的 isAdmin/isPlanner 兩個 boolean 欄轉成新的 roles 字串欄
+// 必須在 prisma db push 之前跑（否則 --accept-data-loss 會把舊欄位直接 drop 掉導致資料遺失）
+async function ensureRolesColumn() {
+  if (!process.env.DATABASE_URL) return;
+  try {
+    // 1. 加上 roles 欄位（若還沒有）
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Leader" ADD COLUMN IF NOT EXISTS "roles" TEXT`);
+
+    // 2. 看 isAdmin / isPlanner 還在不在
+    const cols = await prisma.$queryRawUnsafe(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_schema = current_schema() AND table_name = 'Leader'
+    `);
+    const colSet = new Set((cols || []).map(c => c.column_name));
+    const hasIsAdmin = colSet.has('isAdmin');
+    const hasIsPlanner = colSet.has('isPlanner');
+
+    // 3. 把 boolean 欄轉成 roles 字串（只填空值，已遷移過的不動）
+    if (hasIsAdmin || hasIsPlanner) {
+      const adminExpr = hasIsAdmin ? '"isAdmin"' : 'FALSE';
+      const plannerExpr = hasIsPlanner ? '"isPlanner"' : 'FALSE';
+      await prisma.$executeRawUnsafe(`
+        UPDATE "Leader" SET "roles" = (
+          CASE
+            WHEN ${adminExpr} = true AND ${plannerExpr} = true THEN 'admin,pm'
+            WHEN ${adminExpr} = true THEN 'admin'
+            WHEN ${plannerExpr} = true THEN 'pm'
+            ELSE 'qc'
+          END
+        ) WHERE "roles" IS NULL OR "roles" = ''
+      `);
+      if (hasIsAdmin) await prisma.$executeRawUnsafe(`ALTER TABLE "Leader" DROP COLUMN IF EXISTS "isAdmin"`);
+      if (hasIsPlanner) await prisma.$executeRawUnsafe(`ALTER TABLE "Leader" DROP COLUMN IF EXISTS "isPlanner"`);
+      console.log('✓ Leader.roles 遷移完成（舊 isAdmin/isPlanner 已 drop）');
+    }
+
+    // 4. 兜底：任何還是 NULL 的設成預設 'qc'
+    await prisma.$executeRawUnsafe(`UPDATE "Leader" SET "roles" = 'qc' WHERE "roles" IS NULL OR "roles" = ''`);
+  } catch (err) {
+    console.error('⚠️ ensureRolesColumn 失敗，但 server 仍會啟動：', err.message);
+  }
+}
+
+await ensureRolesColumn();
 runDbPush();
 
 // 不讓 ensureAdmin 失敗導致 server 不啟動 — 改成警告，server 仍要啟動方便除錯

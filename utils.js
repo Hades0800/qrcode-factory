@@ -43,6 +43,30 @@ function escapeHtml(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// ===== 角色檢查 helper =====
+// leader 物件可能來自 /api/auth/me 或 localStorage（'leader' key）
+// roles 是逗號字串，如 'admin'、'admin,pm'、'qc,tech'
+function rolesOf(leader) {
+  if (!leader || !leader.roles) return [];
+  return String(leader.roles).split(',').map(s => s.trim()).filter(Boolean);
+}
+function hasRole(leader, role) {
+  return rolesOf(leader).includes(role);
+}
+function isAdminUser(leader) { return hasRole(leader, 'admin'); }
+function canUpload(leader) { return hasRole(leader, 'admin') || hasRole(leader, 'pm'); }
+function canSeeHistory(leader) {
+  // 歷史實態 + 計劃達成統計：admin / qc / pm 可看（tech 不行）
+  return hasRole(leader, 'admin') || hasRole(leader, 'qc') || hasRole(leader, 'pm');
+}
+
+// 中文角色標籤
+const ROLE_LABEL = { admin: '管理員', qc: '品管', pm: '生管', tech: '技術員' };
+function roleLabel(role) { return ROLE_LABEL[role] || role; }
+function rolesDisplay(leader) {
+  return rolesOf(leader).map(roleLabel).join('、') || '—';
+}
+
 function toast(msg, type) {
   const t = $('toast');
   if (!t) return;

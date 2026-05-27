@@ -159,6 +159,15 @@
   }
   .checkbox-row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--brand); }
 
+  .role-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; background: var(--bg); border: 1.5px solid var(--border);
+    border-radius: 20px; font-size: 13px; cursor: pointer; user-select: none;
+    transition: all .15s;
+  }
+  .role-chip input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--brand); margin: 0; }
+  .role-chip:has(input:checked) { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); font-weight: 600; }
+
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
   th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--border); }
@@ -229,13 +238,16 @@
     <input type="text" id="newDisplayName" placeholder="例：王大明">
     <label>密碼（至少 6 字）</label>
     <input type="password" id="newPassword" autocomplete="new-password">
-    <div class="checkbox-row">
-      <input type="checkbox" id="newIsAdmin">
-      <label for="newIsAdmin" style="margin:0;">設為管理員</label>
+    <label>角色（可多選）</label>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 12px;">
+      <label class="role-chip"><input type="checkbox" class="newRole" value="admin"><span>管理員</span></label>
+      <label class="role-chip"><input type="checkbox" class="newRole" value="qc" checked><span>品管</span></label>
+      <label class="role-chip"><input type="checkbox" class="newRole" value="pm"><span>生管</span></label>
+      <label class="role-chip"><input type="checkbox" class="newRole" value="tech"><span>技術員</span></label>
     </div>
-    <div class="checkbox-row">
-      <input type="checkbox" id="newIsPlanner">
-      <label for="newIsPlanner" style="margin:0;">設為生管（可上傳工單）</label>
+    <div style="font-size:11px;color:var(--muted);margin:-8px 0 12px;line-height:1.5;">
+      管理員 = 所有頁面 + 帳號管理；品管 = 實態 / 歷史 / 即時 / 統計；
+      生管 = 同品管 + 上傳；技術員 = 實態 / 即時
     </div>
     <button class="btn-primary btn-block" id="createBtn">新增帳號</button>
   </div>
@@ -309,11 +321,7 @@
 <script>
 
 const me = requireLogin();
-if (me && !me.isAdmin) {
-  alert('需要管理員權限');
-  location.href = 'index.html';
-}
-if (me && !me.isAdmin) {
+if (me && !isAdminUser(me)) {
   alert('需要管理員權限');
   location.href = 'index.html';
 }
@@ -332,11 +340,18 @@ async function loadLeaders() {
   if (!r.ok) { $('leadersTable').textContent = r.error || '載入失敗'; return; }
   const leaders = r.data.leaders;
   if (!leaders.length) { $('leadersTable').innerHTML = '<div style="color:#999;">尚無帳號</div>'; return; }
+  // 各角色 badge 顏色
+  const ROLE_COLORS = { admin: 'var(--brand)', qc: '#1f6feb', pm: '#f0ad4e', tech: '#666' };
+  const rolesBadges = l => rolesOf(l).map(r =>
+    `<span class="badge" style="background:${ROLE_COLORS[r] || '#999'};">${roleLabel(r)}</span>`
+  ).join('');
+
   const rows = leaders.map(l => `
     <tr>
-      <td><strong>${escapeHtml(l.displayName)}</strong>${l.isAdmin ? ' <span class="badge">管理員</span>' : ''}${l.isPlanner ? ' <span class="badge" style="background:#f0ad4e;">生管</span>' : ''}<br><span style="color:#888;font-size:12px;">@${escapeHtml(l.username)}</span></td>
+      <td><strong>${escapeHtml(l.displayName)}</strong> ${rolesBadges(l)}<br><span style="color:#888;font-size:12px;">@${escapeHtml(l.username)}</span></td>
       <td style="font-size:12px;color:#666;">${fmtDate(l.createdAt)}</td>
       <td class="row-actions">
+        <button class="btn-secondary" data-roles="${l.id}" data-name="${escapeHtml(l.displayName)}" data-current="${escapeHtml(l.roles || '')}">改角色</button>
         <button class="btn-secondary" data-reset="${l.id}" data-name="${escapeHtml(l.displayName)}">改密碼</button>
         ${l.id === me.id ? '' : `<button class="btn-danger" data-delete="${l.id}" data-name="${escapeHtml(l.displayName)}">刪除</button>`}
       </td>
@@ -350,6 +365,23 @@ async function loadLeaders() {
   $('leadersTable').querySelectorAll('[data-delete]').forEach(b => {
     b.onclick = () => deleteLeader(b.dataset.delete, b.dataset.name);
   });
+  $('leadersTable').querySelectorAll('[data-roles]').forEach(b => {
+    b.onclick = () => editRoles(b.dataset.roles, b.dataset.name, b.dataset.current);
+  });
+}
+
+async function editRoles(id, name, currentRoles) {
+  const current = (currentRoles || '').split(',').map(s => s.trim()).filter(Boolean);
+  const input = prompt(
+    `「${name}」目前角色：${current.map(roleLabel).join('、') || '（無）'}\n\n` +
+    `輸入新角色，逗號分隔（admin / qc / pm / tech）：`,
+    current.join(',')
+  );
+  if (input == null) return;
+  const r = await api('/api/admin/leaders/' + id + '/roles', { method: 'POST', body: { roles: input } });
+  if (!r.ok) { toast(r.error || '修改失敗', 'error'); return; }
+  toast('角色已更新：' + (r.data.roles.split(',').map(roleLabel).join('、') || '（無）'), 'success');
+  loadLeaders();
 }
 
 initDropdownMenu();
@@ -358,17 +390,19 @@ $('createBtn').onclick = async () => {
   const username = $('newUsername').value.trim();
   const displayName = $('newDisplayName').value.trim();
   const password = $('newPassword').value;
-  const isAdmin = $('newIsAdmin').checked;
-  const isPlanner = $('newIsPlanner').checked;
+  const roles = Array.from(document.querySelectorAll('.newRole:checked')).map(c => c.value);
   if (!username || !displayName || !password) { toast('請填寫完整', 'error'); return; }
   if (!/^[a-zA-Z0-9_]+$/.test(username)) { toast('帳號只能用英數和底線', 'error'); return; }
   if (password.length < 6) { toast('密碼至少 6 字', 'error'); return; }
+  if (roles.length === 0) { toast('請至少選一個角色', 'error'); return; }
   $('createBtn').disabled = true;
-  const r = await api('/api/admin/leaders', { method: 'POST', body: { username, displayName, password, isAdmin, isPlanner } });
+  const r = await api('/api/admin/leaders', { method: 'POST', body: { username, displayName, password, roles } });
   $('createBtn').disabled = false;
   if (!r.ok) { toast(r.error, 'error'); return; }
   toast('已新增 ' + displayName, 'success');
-  $('newUsername').value = ''; $('newDisplayName').value = ''; $('newPassword').value = ''; $('newIsAdmin').checked = false; $('newIsPlanner').checked = false;
+  $('newUsername').value = ''; $('newDisplayName').value = ''; $('newPassword').value = '';
+  // 重置 checkbox：admin/pm/tech 取消、qc 預設勾上
+  document.querySelectorAll('.newRole').forEach(c => { c.checked = (c.value === 'qc'); });
   loadLeaders();
 };
 

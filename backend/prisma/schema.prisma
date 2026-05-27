@@ -16,8 +16,9 @@ model Leader {
   username     String    @unique
   passwordHash String
   displayName  String
-  isAdmin      Boolean   @default(false)
-  isPlanner    Boolean   @default(false)
+  // 角色（逗號字串）：admin / qc / pm / tech；一人可多角色，例 'admin,pm'
+  // 新建預設 'qc'；舊資料由 server.js 的 ensureRolesColumn() 從 isAdmin/isPlanner 遷移
+  roles        String    @default("qc")
   createdAt    DateTime  @default(now())
   deletedAt    DateTime?
 

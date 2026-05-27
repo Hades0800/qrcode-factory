@@ -30,8 +30,13 @@ export default async function authRoutes(fastify) {
     if (!leader || !ok) return reply.code(401).send({ error: '帳號或密碼錯誤' });
 
     const token = fastify.jwt.sign(
-      { id: leader.id, username: leader.username, displayName: leader.displayName, isAdmin: leader.isAdmin, isPlanner: leader.isPlanner },
-      { expiresIn: '7d' }, // 縮短到 7 天
+      {
+        id: leader.id,
+        username: leader.username,
+        displayName: leader.displayName,
+        roles: leader.roles || 'qc',
+      },
+      { expiresIn: '7d' },
     );
     return {
       token,
@@ -39,8 +44,7 @@ export default async function authRoutes(fastify) {
         id: leader.id,
         username: leader.username,
         displayName: leader.displayName,
-        isAdmin: leader.isAdmin,
-        isPlanner: leader.isPlanner,
+        roles: leader.roles || 'qc',
       },
     };
   });
