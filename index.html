@@ -1771,7 +1771,7 @@ function renderSteps() {
   finishBody += '<div class="hint">工單完成與結束（含 / 不含附屬設備）</div>';
   if (isFinished) {
     const noteTxt = order.step11Note ? '（' + escapeHtml(order.step11Note) + '）' : '';
-    const qcTag = (order.step11QcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">QC ${order.step11QcActualQty}</span>` : '';
+    const qcTag = (order.step11QcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${order.step11QcActualQty}</span>` : '';
     finishBody += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:var(--success-soft);border-radius:8px;">
       <span style="font-size:12px;color:var(--success);font-weight:600;flex:1;display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;">${icon('check', 14)}已完成${noteTxt}${qcTag} — ${fmtTime(order.step11At)}</span>
     </div>`;
@@ -1841,7 +1841,7 @@ function renderSteps() {
     const elapsed = now - new Date(e.recordedAt).getTime();
     const canCancel = elapsed < 5 * 60 * 1000;
     const manualTag = e.isManual ? '<span class="manual-tag">補登</span>' : '';
-    const qcTag = (e.qcActualQty != null) ? `<span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">QC ${e.qcActualQty}</span>` : '';
+    const qcTag = (e.qcActualQty != null) ? `<span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span>` : '';
     intBody += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${canCancel ? '#fff4d6' : '#fff8e8'};border-radius:8px;border-left:3px solid #f0ad4e;">`;
     intBody += `<span style="font-size:12px;color:#b8860b;font-weight:600;flex:1;display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;">${icon('clipboard', 14)}${escapeHtml(e.note || '')} — ${fmtTime(e.recordedAt)}${qcTag}${manualTag}</span>`;
     if (canCancel && !isPaused) {
@@ -1854,7 +1854,7 @@ function renderSteps() {
   } else {
     intBody += `<div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">`;
     intBody += `<input type="text" id="specChangeInput" placeholder="新規格描述（例：規格 2）" maxlength="200" style="padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">`;
-    intBody += `<input type="number" id="specChangeQcInput" min="0" step="1" placeholder="前一規格 QC 實際生產數量（必填）" style="padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">`;
+    intBody += `<input type="number" id="specChangeQcInput" min="0" step="1" placeholder="前一規格實際生產數量（必填）" style="padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">`;
     intBody += `<button id="specChangeBtn" style="padding:10px 18px;background:#f0ad4e;color:#fff;border:none;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;">${icon('clipboard', 14)} 記錄</button>`;
     intBody += `</div>`;
   }
@@ -1942,8 +1942,8 @@ function renderSteps() {
       const text = (input?.value || '').trim();
       if (!text) { toast('請填入規格描述', 'error'); input?.focus(); return; }
       const qc = Number(qcInput?.value);
-      if (!Number.isInteger(qc) || qc < 0) { toast('請填入前一規格 QC 實際生產數量（非負整數）', 'error'); qcInput?.focus(); return; }
-      if (!confirm('確定記錄更換規格為「' + text + '」？\n前一規格 QC 數量：' + qc)) return;
+      if (!Number.isInteger(qc) || qc < 0) { toast('請填入前一規格實際生產數量（非負整數）', 'error'); qcInput?.focus(); return; }
+      if (!confirm('確定記錄更換規格為「' + text + '」？\n前一規格數量：' + qc)) return;
       recordSpecChange(text, qc);
     };
   }
@@ -2127,7 +2127,7 @@ function showInterruptModal() {
       wrap.style.display = '';
       if (opt === 'offwork') {
         // 下班時間／隔日生產 — 必須輸入 QC 實際生產數量
-        input.placeholder = 'QC 實際生產數量（必填，整數）';
+        input.placeholder = '實際生產數量（必填，整數）';
         input.type = 'number';
         input.min = '0';
         input.step = '1';
@@ -2213,7 +2213,7 @@ function showCompleteModal(prefillBackfill = false) {
           <input type="radio" name="cmpIndep" value="無法分開獨立運作" style="width:16px;height:16px;accent-color:#d23535;">無法分開獨立運作
         </label>
       </div>
-      <div style="margin-top:14px;font-size:12px;color:var(--muted);margin-bottom:8px;">③ QC 實際生產數量（必填）：</div>
+      <div style="margin-top:14px;font-size:12px;color:var(--muted);margin-bottom:8px;">③ 實際生產數量（必填）：</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:6px;line-height:1.4;">單一規格工單：本工單完成的總數量。<br>多規格工單：最後一段規格的生產數量。</div>
       <input type="number" id="cmpQcInput" min="0" step="1" placeholder="輸入整數" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;box-sizing:border-box;">
       <button id="cmpBackfillToggle" style="width:100%;margin-top:14px;padding:10px;background:none;border:1.5px dashed var(--border);border-radius:10px;color:#b8860b;font-size:13px;cursor:pointer;">${icon('edit', 14)} 補登時間（不填用現在）</button>
@@ -2241,7 +2241,7 @@ function showCompleteModal(prefillBackfill = false) {
       const note = auxNote + '｜' + indepNote;
       const qcInput = document.getElementById('cmpQcInput');
       const qc = Number(qcInput?.value);
-      if (!Number.isInteger(qc) || qc < 0) { toast('請填入 QC 實際生產數量（非負整數）', 'error'); qcInput?.focus(); return; }
+      if (!Number.isInteger(qc) || qc < 0) { toast('請填入實際生產數量（非負整數）', 'error'); qcInput?.focus(); return; }
       const bfTime = document.getElementById('cmpBackfillTime').value;
       let recordedAt = null;
       if (bfTime) {
@@ -2250,7 +2250,7 @@ function showCompleteModal(prefillBackfill = false) {
         if (dt > new Date()) { toast('補登時間不能超過現在', 'error'); return; }
         recordedAt = dt.toISOString();
       }
-      const summary = (recordedAt ? `「${note}」\n補登時間：${bfTime.replace('T', ' ')}` : `「${note}」`) + `\nQC 數量：${qc}`;
+      const summary = (recordedAt ? `「${note}」\n補登時間：${bfTime.replace('T', ' ')}` : `「${note}」`) + `\n數量：${qc}`;
       if (!confirm('確定完成此工單？\n' + summary)) return;
       modal.remove();
       try { await submitStepWithBody('11', { note, recordedAt, qcActualQty: qc }); } catch (e) {}

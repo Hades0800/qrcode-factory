@@ -710,7 +710,7 @@ function render() {
           label += '（' + escapeHtml(o.step11Note) + '）';
         }
         if (s.key === 'step11At' && o.step11QcActualQty != null) {
-          label += ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">QC ${o.step11QcActualQty}</span>`;
+          label += ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${o.step11QcActualQty}</span>`;
         }
         allItems.push({ time: new Date(o[s.key]), label, style: 'done' });
       }
@@ -719,7 +719,7 @@ function render() {
     (o.stepEntries || []).forEach(e => {
       if (e.stepNo === '30') {
         const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
-        const qcTag = (e.qcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">QC ${e.qcActualQty}</span>` : '';
+        const qcTag = (e.qcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span>` : '';
         allItems.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + qcTag + manual, style: 'spec-change' });
         return;
       }
@@ -737,7 +737,7 @@ function render() {
     // 暫停事件
     ((o.pause12 && o.pause12.history) || []).forEach((e, i) => {
       const isLunch = (e.note || '').includes('中午') || (e.note || '').includes('午休') || (e.note || '').includes('午餐');
-      const qcTag = (e.qcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">QC ${e.qcActualQty}</span>` : '';
+      const qcTag = (e.qcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span>` : '';
       allItems.push({ time: new Date(e.startAt), label: icon('pause', 13) + ' 暫停' + (e.note ? '（'+escapeHtml(e.note)+'）' : '') + qcTag, style: 'pause' });
       if (e.endAt) {
         const dur = e.duration ? fmtDur(e.duration) : '';
@@ -1082,7 +1082,7 @@ $('exportBtn').onclick = () => {
     '小組長',
     '21.設備啓動','22.準備完成','23.無工令',
     '01.原料準備','02.模刀具','03.試模確認','04.穩定生產-無中斷','05.穩定生產-中斷調整','06.穩定生產-中斷多次','07.後工程','08.其他作業','11.完成',
-    '完成QC數量','規格切換QC明細','下班QC明細',
+    '完成數量','規格切換明細','下班明細',
     '暫停次數','暫停秒數','異常次數','異常秒數','最後更新',
   ];
   // 從 stepEntries 取各步驟第一次紀錄時間（優先），fallback 到舊格式 stepXAt
