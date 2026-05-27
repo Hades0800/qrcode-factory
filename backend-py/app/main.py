@@ -16,6 +16,7 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from .auth_deps import authenticate, require_admin
@@ -114,6 +115,16 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
         status_code=429,
         content={"ok": False, "error": "請求太頻繁，請稍候再試"},
     )
+
+
+# 把 FastAPI 預設的 {"detail": "..."} 換成 Node backend 用的 {"error": "..."} 格式
+# 如果 detail 已經是 dict（routes 有些故意傳 dict 多帶 code/hint 等），原樣回傳
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    detail = exc.detail
+    if isinstance(detail, dict):
+        return JSONResponse(status_code=exc.status_code, content=detail)
+    return JSONResponse(status_code=exc.status_code, content={"error": detail})
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
