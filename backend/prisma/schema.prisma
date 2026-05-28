@@ -18,13 +18,30 @@ model Leader {
   displayName  String
   // 角色（逗號字串）：admin / qc / pm / tech；一人可多角色，例 'admin,pm'
   // 新建預設 'qc'；舊資料由 server.js 的 ensureRolesColumn() 從 isAdmin/isPlanner 遷移
-  roles        String    @default("qc")
+  roles        String    @default("qc")  
   createdAt    DateTime  @default(now())
   deletedAt    DateTime?
 
   orders Order[]
 
   @@index([deletedAt])
+}
+
+model Account {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  passwordHash String
+  displayName  String
+  // 角色（逗號字串）：admin / qc / pm / tech；一人可多角色，例 'admin,pm'
+  // 新建預設 'qc'；舊資料由 server.js 的 ensureRolesColumn() 從 isAdmin/isPlanner 遷移
+  roles        String    
+  createdAt    DateTime  @default(now())
+  deletedAt    DateTime?
+  //帳號是否有效
+  enable       Boolean   @default(true)
+
+  @@index([username])
+  @@index([enable])
 }
 
 // ───────────────────────────────
