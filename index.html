@@ -661,6 +661,7 @@
     <a href="records.html">歷史實態紀錄</a>
     <a href="realtime.html">即時生產資訊</a>
     <a href="plan-stats.html">計畫達成統計</a>
+    <a href="goal-stats.html">目標達成統計</a>
     <a href="upload.html" id="uploadLink" style="display:none;">📤 上傳</a>
     <a href="admin.html" id="adminLink" style="display:none;">⚙ 管理</a>
     <div class="menu-sep"></div>
@@ -776,6 +777,8 @@
       <button class="aux-choice" data-aux="rewind" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:14px;">收料機</button>
       <button class="aux-choice" data-aux="other" style="padding:14px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;text-align:center;font-weight:700;font-size:14px;">其他設備</button>
     </div>
+    <!-- 每個選中設備的編號輸入（自動依選取狀態產生） -->
+    <div id="auxNosWrap" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
     <input type="text" id="auxCustomInput" maxlength="100" placeholder="其他設備（可自填名稱）" autocomplete="off" style="margin-top:10px;width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-size:14px;background:#fff;box-sizing:border-box;">
     <button style="margin-top:8px;width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:#f8f8fa;cursor:pointer;font-weight:600;font-size:13px;color:var(--muted);" id="auxClearBtn">清除全部</button>
   </div>
@@ -1339,11 +1342,17 @@ function renderOperationInfo() {
   }
 }
 
-// ── 輔助設備（可複選 + 自訂）──
+// ── 輔助設備（可複選 + 自訂 + 各自編號）──
+const AUX_LABELS = { flat: '軋平機', leveler: '整平機', slitter: '分條機', wave: '波浪機', rewind: '收料機', other: '其他設備' };
 function parseAuxList(v) {
   if (Array.isArray(v)) return v.filter(Boolean);
   if (typeof v === 'string' && v) return v.split(',').map(s => s.trim()).filter(Boolean);
   return [];
+}
+function parseAuxNos(v) {
+  if (v && typeof v === 'object' && !Array.isArray(v)) return { ...v };
+  if (typeof v === 'string' && v) { try { return JSON.parse(v) || {}; } catch (e) { return {}; } }
+  return {};
 }
 function renderAuxEquipment() {
   const selected = parseAuxList(order && order.auxEquipment);
@@ -1357,6 +1366,20 @@ function renderAuxEquipment() {
   const custom = $('auxCustomInput');
   if (custom && document.activeElement !== custom) {
     custom.value = (order && order.auxEquipmentCustom) || '';
+  }
+  // 每個選中設備的編號輸入（正在輸入時不重繪，避免游標跳掉）
+  const wrap = $('auxNosWrap');
+  if (wrap && !wrap.contains(document.activeElement)) {
+    const nos = parseAuxNos(order && order.auxEquipmentNos);
+    wrap.innerHTML = selected.map(code => {
+      const name = AUX_LABELS[code] || code;
+      const no = nos[code] || '';
+      return `<div style="display:flex;align-items:center;gap:8px;">
+        <input type="text" class="aux-no-input" data-aux-no="${code}" value="${escapeHtml(no)}" maxlength="20" placeholder="編號" autocomplete="off"
+          style="width:96px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;box-sizing:border-box;text-align:center;background:#fff;">
+        <span style="font-weight:700;font-size:14px;">${escapeHtml(name)}</span>
+      </div>`;
+    }).join('');
   }
 }
 document.querySelectorAll('.aux-choice').forEach(b => {
@@ -1411,20 +1434,56 @@ document.querySelectorAll('.aux-choice').forEach(b => {
     });
   }
 }
+// 各設備編號：用事件委派（輸入框是動態產生的）
+{
+  const nosWrap = $('auxNosWrap');
+  let auxNoSaveTimer = null;
+  async function saveAuxNos() {
+    if (!order || !orderNo) return;
+    const nos = parseAuxNos(order.auxEquipmentNos);
+    const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/aux-equipment', {
+      method: 'POST',
+      body: { auxEquipmentNos: nos },
+    });
+    if (!r.ok) toast(r.error || '編號儲存失敗', 'error');
+  }
+  if (nosWrap) {
+    nosWrap.addEventListener('input', (e) => {
+      const input = e.target.closest('[data-aux-no]');
+      if (!input || !order) return;
+      const code = input.dataset.auxNo;
+      const nos = parseAuxNos(order.auxEquipmentNos);
+      const v = (input.value || '').trim();
+      if (v) nos[code] = v; else delete nos[code];
+      order.auxEquipmentNos = nos;   // 立即更新物件（重繪時不會遺失）
+      if (auxNoSaveTimer) clearTimeout(auxNoSaveTimer);
+      auxNoSaveTimer = setTimeout(saveAuxNos, 600);
+    });
+    // blur 不會 bubble，用 capture
+    nosWrap.addEventListener('blur', (e) => {
+      if (!e.target.closest || !e.target.closest('[data-aux-no]')) return;
+      if (auxNoSaveTimer) { clearTimeout(auxNoSaveTimer); auxNoSaveTimer = null; }
+      saveAuxNos();
+    }, true);
+  }
+}
 $('auxClearBtn').onclick = async () => {
   if (!order || !orderNo) return;
   const oldStr = order.auxEquipment || null;
   const oldCustom = order.auxEquipmentCustom || null;
-  if (oldStr == null && oldCustom == null) return;
+  const oldNos = order.auxEquipmentNos || null;
+  if (oldStr == null && oldCustom == null && (oldNos == null || Object.keys(parseAuxNos(oldNos)).length === 0)) return;
   order.auxEquipment = null;
   order.auxEquipmentCustom = null;
+  order.auxEquipmentNos = null;
   renderAuxEquipment();
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/aux-equipment', {
-    method: 'POST', body: { auxEquipment: null, auxEquipmentCustom: null },
+    method: 'POST', body: { auxEquipment: null, auxEquipmentCustom: null, auxEquipmentNos: null },
   });
   if (!r.ok) {
     order.auxEquipment = oldStr;
     order.auxEquipmentCustom = oldCustom;
+    order.auxEquipmentNos = oldNos;
     renderAuxEquipment();
     toast(r.error || '清除失敗', 'error');
   }

@@ -321,11 +321,21 @@ const AUX_EQUIPMENT_LABELS = {
   other:   '其他設備',
 };
 // codes: 逗號字串、陣列、或單一 key；custom: 使用者自訂名稱
-function auxEquipmentLabel(codes, custom) {
+// nos：{ code: '編號' } 物件（或 JSON 字串）；有編號就顯示成「編號 設備名」
+function auxEquipmentLabel(codes, custom, nos) {
   let arr = [];
   if (Array.isArray(codes)) arr = codes;
   else if (typeof codes === 'string' && codes) arr = codes.split(',');
-  const names = arr.map(c => AUX_EQUIPMENT_LABELS[String(c).trim()]).filter(Boolean);
+  let noMap = {};
+  if (nos && typeof nos === 'object' && !Array.isArray(nos)) noMap = nos;
+  else if (typeof nos === 'string' && nos) { try { noMap = JSON.parse(nos) || {}; } catch (e) { noMap = {}; } }
+  const names = arr.map(c => {
+    const code = String(c).trim();
+    const name = AUX_EQUIPMENT_LABELS[code];
+    if (!name) return null;
+    const no = noMap[code];
+    return (no && String(no).trim()) ? (String(no).trim() + ' ' + name) : name;
+  }).filter(Boolean);
   if (custom && String(custom).trim()) names.push(String(custom).trim());
   return names.join('、');
 }

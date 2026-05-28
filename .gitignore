@@ -3,6 +3,7 @@ qrcodes.pdf
 .DS_Store
 node_modules/
 .env
+pgdata/
 
 # Python
 __pycache__/

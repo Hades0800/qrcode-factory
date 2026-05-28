@@ -134,6 +134,7 @@ function serializeOrder(o) {
     materialType: o.materialType || null,    // 'coil'(1.0) | 'plate'(1.2) | null
     auxEquipment: o.auxEquipment || null,           // 逗號字串（flat/leveler/...，可多選）
     auxEquipmentCustom: o.auxEquipmentCustom || null,// 自訂輔助設備名稱
+    auxEquipmentNos: (() => { try { return o.auxEquipmentNos ? JSON.parse(o.auxEquipmentNos) : {}; } catch (e) { return {}; } })(), // 代碼→編號
     operatorName: o.operatorName || null,           // 設備操作人員姓名（第五步）
     totalWorkers: (o.totalWorkers ?? null),         // 全部作業人數（第五步）
     productSpec: o.productSpec || '',
@@ -628,11 +629,33 @@ export default async function orderRoutes(fastify) {
         }
       }
 
+      // 標準化 auxEquipmentNos：物件 { code: '編號' }，只留合法 code、編號最長 20 字、英數
+      // 存成 JSON 字串；空物件視為 null
+      let auxEquipmentNos = body.auxEquipmentNos;
+      if (auxEquipmentNos !== undefined) {
+        if (auxEquipmentNos === null) {
+          auxEquipmentNos = null;
+        } else if (typeof auxEquipmentNos === 'object' && !Array.isArray(auxEquipmentNos)) {
+          const clean = {};
+          for (const [code, no] of Object.entries(auxEquipmentNos)) {
+            if (!ALLOWED.includes(code)) continue;
+            const v = String(no == null ? '' : no).trim().slice(0, 20);
+            if (v) clean[code] = v;
+          }
+          auxEquipmentNos = Object.keys(clean).length ? JSON.stringify(clean) : null;
+        } else {
+          return reply.code(400).send({ error: 'auxEquipmentNos 格式錯誤' });
+        }
+      }
+
       await fastify.prisma.$executeRawUnsafe(
         'ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "auxEquipment" TEXT'
       );
       await fastify.prisma.$executeRawUnsafe(
         'ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "auxEquipmentCustom" TEXT'
+      );
+      await fastify.prisma.$executeRawUnsafe(
+        'ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "auxEquipmentNos" TEXT'
       );
 
       const sets = [];
@@ -645,12 +668,16 @@ export default async function orderRoutes(fastify) {
         params.push(auxEquipmentCustom);
         sets.push(`"auxEquipmentCustom" = $${params.length}`);
       }
+      if (auxEquipmentNos !== undefined) {
+        params.push(auxEquipmentNos);
+        sets.push(`"auxEquipmentNos" = $${params.length}`);
+      }
       if (sets.length === 0) return { ok: true };
       params.push(orderNo);
       const sql = `UPDATE "Order" SET ${sets.join(', ')} WHERE "orderNo" = $${params.length}`;
       const result = await fastify.prisma.$executeRawUnsafe(sql, ...params);
       if (result === 0) return reply.code(404).send({ error: '找不到工單' });
-      return { ok: true, auxEquipment, auxEquipmentCustom };
+      return { ok: true, auxEquipment, auxEquipmentCustom, auxEquipmentNos };
     } catch (e) {
       request.log.error(e, 'aux-equipment failed');
       return reply.code(500).send({

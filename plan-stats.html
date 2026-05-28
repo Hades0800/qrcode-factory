@@ -214,6 +214,7 @@
     <a href="records.html">歷史實態紀錄</a>
     <a href="realtime.html">即時生產資訊</a>
     <a href="plan-stats.html" class="nav-active">計畫達成統計</a>
+    <a href="goal-stats.html">目標達成統計</a>
     <a href="upload.html" id="uploadLink" style="display:none;">📤 上傳</a>
     <a href="admin.html" id="adminLink" style="display:none;">⚙ 管理</a>
     <div class="menu-sep"></div>
@@ -352,6 +353,28 @@ function orderMatchesMachine(o, machine) {
   return o.machineNo === machine || o.plannedMachineNo === machine;
 }
 
+// 一張工單的「實際生產數量」（QC 回報）
+//   已完成(step11)：Σ 各段更換規格 QC + 完成 QC
+//   未完成但有下班回報（隔日生產）：Σ 各段更換規格 QC + 最後一次下班 QC
+//   兩者都沒有：只算已結束規格段（step30）的量
+function actualQtyOf(o) {
+  const step30Sum = (o.stepEntries || [])
+    .filter(e => e.stepNo === '30' && e.qcActualQty != null)
+    .reduce((s, e) => s + (Number(e.qcActualQty) || 0), 0);
+  if (o.step11At && o.step11QcActualQty != null) {
+    return step30Sum + (Number(o.step11QcActualQty) || 0);
+  }
+  const offWork = ((o.pause12 && o.pause12.history) || []).filter(e => e.qcActualQty != null);
+  if (offWork.length > 0) {
+    return step30Sum + (Number(offWork[offWork.length - 1].qcActualQty) || 0);
+  }
+  return step30Sum;
+}
+// 計畫數量 = 派工數
+function plannedQtyOf(o) {
+  return Number(o.dispatchQty) || 0;
+}
+
 function render() {
   const monthStr = $('filterMonth').value; // yyyy-mm
   const machine = machineSel.value;
@@ -370,29 +393,50 @@ function render() {
     return p.startsWith(monthStr);
   });
 
-  // 統計
+  // 件數統計（保留作為參考資訊）
   const monthPlanned = rows.length;
   const monthDone = rows.filter(o => !!o.step11At).length;
-  const monthRate = monthPlanned > 0 ? (monthDone / monthPlanned * 100).toFixed(1) : null;
 
   // 當日（若今天屬於本月，用今天；否則用該月最後一天）
   const refYmd = todayInThisMonth ? todayYmd : (monthStr + '-' + String(daysInMonth).padStart(2,'0'));
+  const refDay = parseInt(refYmd.split('-')[2], 10);
 
-  // 當日完成 = 完成日 = refYmd
+  // 當日完成件數 / 延誤件數（件數，參考用）
   const todayDone = rows.filter(o => getCompletionYmd(o) === refYmd).length;
-  // 當日延誤完成 = 完成日 = refYmd 且 計畫日 < refYmd
   const todayDelayed = rows.filter(o => {
     const c = getCompletionYmd(o);
     const p = getPlannedYmd(o);
     return c === refYmd && p && p < refYmd;
   }).length;
-  // 日計畫達成度 = (計畫日 ≤ refYmd 且 完成日 ≤ refYmd) / (計畫日 ≤ refYmd)
-  const dueSoFar = rows.filter(o => getPlannedYmd(o) <= refYmd);
-  const doneSoFar = dueSoFar.filter(o => {
+
+  // === 數量基準達成率（以實際生產數量計算）===
+  // 計畫數量：依「計畫日期」歸到該日（Σ 派工數）
+  // 完成數量：依「完成日期」歸到該日（Σ 實際生產數量 QC）
+  const machineOrders = allOrders.filter(o => orderMatchesMachine(o, machine));
+  const plannedByDay = {};
+  const completedByDay = {};
+  machineOrders.forEach(o => {
+    const p = getPlannedYmd(o);
+    if (p && p.startsWith(monthStr)) plannedByDay[p] = (plannedByDay[p] || 0) + plannedQtyOf(o);
     const c = getCompletionYmd(o);
-    return c && c <= refYmd;
+    if (c && c.startsWith(monthStr)) completedByDay[c] = (completedByDay[c] || 0) + actualQtyOf(o);
   });
-  const dayRate = dueSoFar.length > 0 ? (doneSoFar.length / dueSoFar.length * 100).toFixed(1) : null;
+
+  // 日達成率 = 當日完成數量 / 當日計畫數量
+  const dayPlannedQty = plannedByDay[refYmd] || 0;
+  const dayCompletedQty = completedByDay[refYmd] || 0;
+  const dayRate = dayPlannedQty > 0 ? (dayCompletedQty / dayPlannedQty * 100).toFixed(1) : null;
+
+  // 月達成率 = Σ(每日達成率) / 當月日曆天數（本月只算到今天）
+  const lastDay = todayInThisMonth ? refDay : daysInMonth;
+  let rateSum = 0;
+  for (let d = 1; d <= lastDay; d++) {
+    const key = monthStr + '-' + String(d).padStart(2, '0');
+    const pq = plannedByDay[key] || 0;
+    const cq = completedByDay[key] || 0;
+    rateSum += pq > 0 ? (cq / pq) : 0;
+  }
+  const monthRate = lastDay > 0 ? (rateSum / lastDay * 100).toFixed(1) : null;
 
   // 標題
   $('psTitle').textContent = yy + '年' + mm + '月份生產計劃達成度統計';
@@ -403,10 +447,13 @@ function render() {
     <div class="ps-line"></div>
     <div class="ps-line"><span class="lbl">月應完成件數：</span><span class="val">${monthPlanned}</span></div>
     <div class="ps-line"><span class="lbl">月已完成件數：</span><span class="val success">${monthDone}</span></div>
-    <div class="ps-line"><span class="lbl">月計畫達成度：</span><span class="val brand">${monthRate !== null ? monthRate + '%' : '—'}</span></div>
+    <div class="ps-line"><span class="lbl">月達成率（數量）：</span><span class="val brand">${monthRate !== null ? monthRate + '%' : '—'}</span></div>
+    <div class="ps-line"></div>
+    <div class="ps-line"><span class="lbl">當日計畫數量：</span><span class="val">${dayPlannedQty}</span></div>
+    <div class="ps-line"><span class="lbl">當日完成數量：</span><span class="val success">${dayCompletedQty}</span></div>
     <div class="ps-line"><span class="lbl">當日完成件數：</span><span class="val">${todayDone}</span></div>
     <div class="ps-line"><span class="lbl">當日延誤完成：</span><span class="val brand">${todayDelayed}</span></div>
-    <div class="ps-line"><span class="lbl">日計畫達成度：</span><span class="val brand">${dayRate !== null ? dayRate + '%' : '—'}</span></div>
+    <div class="ps-line"><span class="lbl">日達成率（數量）：</span><span class="val brand">${dayRate !== null ? dayRate + '%' : '—'}</span></div>
   `;
 
   // 沒資料

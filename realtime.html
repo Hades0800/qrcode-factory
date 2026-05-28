@@ -503,6 +503,7 @@
     <a href="records.html">歷史實態紀錄</a>
     <a href="realtime.html" class="nav-active">即時生產資訊</a>
     <a href="plan-stats.html">計畫達成統計</a>
+    <a href="goal-stats.html">目標達成統計</a>
     <a href="upload.html" id="uploadLink" style="display:none;">📤 上傳</a>
     <a href="admin.html" id="adminLink" style="display:none;">⚙ 管理</a>
     <div class="menu-sep"></div>
@@ -721,19 +722,42 @@ function renderContent() {
   const totalOrders = machineOrders.length;
   const completedOrders = machineOrders.filter(o => o.step11At).length;
 
+  // 一張工單的「實際生產數量」
+  //   已完成(step11)：Σ 各段更換規格 QC + 完成 QC（單一規格時 step30Sum=0，等於完成量）
+  //   未完成但有下班回報（隔日生產）：Σ 各段更換規格 QC + 最後一次下班 QC
+  //   兩者都沒有：只算已結束規格段（step30）的量
+  function actualQtyOf(o) {
+    const step30Sum = (o.stepEntries || [])
+      .filter(e => e.stepNo === '30' && e.qcActualQty != null)
+      .reduce((s, e) => s + (Number(e.qcActualQty) || 0), 0);
+    if (o.step11At && o.step11QcActualQty != null) {
+      return step30Sum + (Number(o.step11QcActualQty) || 0);
+    }
+    // 下班回報：pause12 history 中帶 qcActualQty 的就是「下班」事件
+    const offWork = ((o.pause12 && o.pause12.history) || []).filter(e => e.qcActualQty != null);
+    if (offWork.length > 0) {
+      return step30Sum + (Number(offWork[offWork.length - 1].qcActualQty) || 0);
+    }
+    return step30Sum;
+  }
+
   // 生產產能 / 達成度
-  // 實際生產重量（kg）= 已完成工單的 totalWeight 加總
+  // 實際生產重量（kg）= Σ (單重 × 實際生產數量)
   // 目標產能（kg/日）從機台標準表查
   const std = MACHINE_STANDARDS[activeMachine] || { capacityKg: 0, workMinutes: 0 };
-  const doneWeight = machineOrders.filter(o => o.step11At).reduce((s, o) => s + (Number(o.totalWeight) || 0), 0);
+  const doneWeight = machineOrders.reduce((s, o) => {
+    const qty = actualQtyOf(o);
+    const unitW = Number(o.unitWeight) || 0;
+    return s + unitW * qty;
+  }, 0);
   const capacityRate = std.capacityKg > 0 ? (doneWeight / std.capacityKg * 100).toFixed(1) : null;
 
-  // 標準工時（分鐘）= 刀數 / SPM × 派工數
+  // 標準工時（分鐘）= 刀數 / SPM × 實際生產數量
   // 累計今日該機台所有工單的標準工時（不再乘規格/原料係數，係數僅作為紀錄）
   const stdMinutes = machineOrders.reduce((s, o) => {
     const blades = Number(o.bladeCount) || 0;
     const spm = Number(o.machineSPM) || 0;
-    const qty = Number(o.dispatchQty) || 0;
+    const qty = actualQtyOf(o);
     if (blades > 0 && spm > 0 && qty > 0) {
       return s + (blades / spm * qty);
     }
@@ -835,7 +859,7 @@ function renderContent() {
             <span class="oi-item"><span class="oi-icon">${icon('user', 14)}</span><span class="oi-label">小組長</span><span class="oi-value">${escapeHtml(o.leaderName || '—')}</span></span>
             ${o.specType ? `<span class="oi-item"><span class="oi-icon">${icon(o.specType === 'new' ? 'sparkles' : 'box', 14)}</span><span class="oi-label">規格</span><span class="oi-value">${o.specType === 'new' ? escapeHtml(formatNewSpecLabel(o.newSpecAspects)) : '量產規格'}</span></span>` : ''}
             ${o.materialType ? `<span class="oi-item"><span class="oi-icon">${icon('layers', 14)}</span><span class="oi-label">原料</span><span class="oi-value">${o.materialType === 'coil' ? '捲料' : '板料'}</span></span>` : ''}
-            ${(o.auxEquipment || o.auxEquipmentCustom) ? `<span class="oi-item"><span class="oi-icon">${icon('gear', 14)}</span><span class="oi-label">輔助設備</span><span class="oi-value">${escapeHtml(auxEquipmentLabel(o.auxEquipment, o.auxEquipmentCustom))}</span></span>` : ''}
+            ${(o.auxEquipment || o.auxEquipmentCustom) ? `<span class="oi-item"><span class="oi-icon">${icon('gear', 14)}</span><span class="oi-label">輔助設備</span><span class="oi-value">${escapeHtml(auxEquipmentLabel(o.auxEquipment, o.auxEquipmentCustom, o.auxEquipmentNos))}</span></span>` : ''}
           </div>
           <div class="rt-ep-section ep-closed" data-coll-id="equip-${escapeHtml(o.orderNo)}" style="margin-top:14px;background:var(--bg);border-radius:8px;padding:10px;">
             <h3 class="ep-header" style="margin:0 0 8px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;" onclick="this.parentNode.classList.toggle('ep-closed')"><span class="ep-chev">▼</span>設備參數</h3>
@@ -1208,30 +1232,67 @@ function buildTimeline(o, isAdmin) {
 }
 
 // 設備參數展開
+// 單值欄位（生產規格 / SPM / 刀數 改用下方多規格小表）
 const RT_EP_FIELDS = [
-  ['productSpecAttr', '生產規格'],
   ['paramFileName', '設備參數檔名'],
   ['paramFileAttr', '參數檔案屬性'],
   ['moldSpec', '模具規格'],
-  ['machineSPM', '機器SPM'],
-  ['bladeCount', '生產刀數'],
   ['feedSetting', '送料設定'],
   ['cutterStroke', '大刀座位置'],
   ['strokeUpdateFreq', '位置更新頻度'],
 ];
+// 解析多規格陣列；舊資料 fallback：從單值欄位組成一列
+function rtParseSpecRows(ep, prefix) {
+  const key = prefix ? 'baseSpecRows' : 'specRows';
+  let arr = [];
+  const raw = ep && ep[key];
+  if (raw) { try { arr = JSON.parse(raw) || []; } catch (e) { arr = []; } }
+  if (!Array.isArray(arr)) arr = [];
+  if (arr.length === 0 && ep) {
+    const sK = prefix ? 'baseProductSpecAttr' : 'productSpecAttr';
+    const pK = prefix ? 'baseMachineSPM' : 'machineSPM';
+    const bK = prefix ? 'baseBladeCount' : 'bladeCount';
+    const spec = ep[sK], spm = ep[pK], blades = ep[bK];
+    if ((spec != null && spec !== '') || spm != null || blades != null) {
+      arr = [{ spec: spec || '', spm: spm, blades: blades }];
+    }
+  }
+  return arr;
+}
+function rtSpecRowHtml(spec, spm, blades) {
+  const val = v => (v == null ? '' : String(v));
+  return `<div class="spec-row" data-spec-row style="display:flex;gap:5px;align-items:center;margin-bottom:4px;">
+    <input data-sf="spec" value="${escapeHtml(val(spec))}" placeholder="規格" maxlength="50" style="flex:1;min-width:0;padding:6px 7px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;">
+    <input data-sf="spm" value="${escapeHtml(val(spm))}" type="number" min="0" step="0.1" placeholder="SPM" style="width:58px;padding:6px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;">
+    <input data-sf="blades" value="${escapeHtml(val(blades))}" type="number" min="0" placeholder="刀數" style="width:58px;padding:6px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;">
+    <button type="button" onclick="this.closest('.spec-row').remove()" title="刪除" style="flex-shrink:0;width:24px;height:24px;border:none;border-radius:6px;background:#f2f2f5;color:var(--brand);font-weight:700;cursor:pointer;line-height:1;">×</button>
+  </div>`;
+}
+function addSpecRow(btn) {
+  const box = btn.closest('[data-spec-col]').querySelector('.spec-rows');
+  box.insertAdjacentHTML('beforeend', rtSpecRowHtml('', '', ''));
+}
 function renderRtEquipmentColumn(ep, prefix) {
-  // prefix='' 表示參數值；prefix='base' 表示基礎參數
-  return RT_EP_FIELDS.map(([k, label]) => {
+  // prefix='' 表示參數值（原始）；prefix='base' 表示基礎參數（製造）
+  const col = prefix ? 'base' : 'orig';
+  const rows = rtParseSpecRows(ep, prefix);
+  const specTable = `
+    <div data-spec-col="${col}" style="margin-bottom:8px;">
+      <div style="display:flex;gap:5px;font-size:10px;color:var(--muted);font-weight:700;padding:0 2px 3px;">
+        <span style="flex:1;">生產規格</span><span style="width:58px;text-align:center;">SPM</span><span style="width:58px;text-align:center;">刀數</span><span style="width:24px;"></span>
+      </div>
+      <div class="spec-rows">${rows.map(r => rtSpecRowHtml(r.spec, r.spm, r.blades)).join('')}</div>
+      <button type="button" onclick="addSpecRow(this)" style="margin-top:2px;width:100%;padding:5px;border:1px dashed var(--border);border-radius:6px;background:#fafafa;font-size:11px;color:var(--brand);cursor:pointer;font-weight:600;">＋ 新增規格</button>
+    </div>`;
+  const singleFields = RT_EP_FIELDS.map(([k, label]) => {
     const fieldKey = prefix ? prefix + k[0].toUpperCase() + k.slice(1) : k;
     const v = ep ? (ep[fieldKey] ?? '') : '';
-    const isNum = (k === 'machineSPM' || k === 'bladeCount');
-    const type = isNum ? 'number' : 'text';
-    const step = (k === 'machineSPM') ? ' step="0.1" min="0"' : (isNum ? ' min="0"' : '');
     return `<div style="display:grid;grid-template-columns:88px 1fr;align-items:center;gap:6px;padding:3px 0;">
       <label style="color:var(--muted);font-size:11px;">${label}</label>
-      <input type="${type}"${step} data-ep-field="${fieldKey}" value="${escapeHtml(String(v))}" maxlength="200" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;width:100%;background:#fff;">
+      <input type="text" data-ep-field="${fieldKey}" value="${escapeHtml(String(v))}" maxlength="200" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;width:100%;background:#fff;">
     </div>`;
   }).join('');
+  return specTable + singleFields;
 }
 function renderRtEquipment(ep, orderNo) {
   const placeholder = ep ? '' : '<div style="color:var(--muted);font-size:11px;text-align:center;padding:4px 0 6px;">尚未上傳，請填寫後儲存</div>';
@@ -1259,15 +1320,23 @@ async function saveRtEquipment(orderNo, btn) {
   const body = {};
   wrap.querySelectorAll('[data-ep-field]').forEach(input => {
     const k = input.dataset.epField;
-    let v = (input.value || '').trim();
-    if (v === '') { body[k] = null; return; }
-    if (k === 'machineSPM' || k === 'bladeCount') {
-      const n = Number(v);
-      body[k] = Number.isFinite(n) ? n : null;
-    } else {
-      body[k] = v;
-    }
+    const v = (input.value || '').trim();
+    body[k] = v === '' ? null : v;
   });
+  // 多規格小表（製造=base / 原始=orig）
+  const collectSpec = (colName) => {
+    const out = [];
+    wrap.querySelectorAll('[data-spec-col="' + colName + '"] [data-spec-row]').forEach(row => {
+      const spec = (row.querySelector('[data-sf="spec"]').value || '').trim();
+      const spmRaw = (row.querySelector('[data-sf="spm"]').value || '').trim();
+      const bladesRaw = (row.querySelector('[data-sf="blades"]').value || '').trim();
+      if (!spec && !spmRaw && !bladesRaw) return;
+      out.push({ spec, spm: spmRaw === '' ? null : Number(spmRaw), blades: bladesRaw === '' ? null : Number(bladesRaw) });
+    });
+    return out;
+  };
+  body.specRows = collectSpec('orig');
+  body.baseSpecRows = collectSpec('base');
   btn.disabled = true;
   const r = await api('/api/equipment-params/' + encodeURIComponent(orderNo), {
     method: 'POST',

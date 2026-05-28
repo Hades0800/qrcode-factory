@@ -451,6 +451,7 @@
     <a href="records.html" class="nav-active">歷史實態紀錄</a>
     <a href="realtime.html">即時生產資訊</a>
     <a href="plan-stats.html">計畫達成統計</a>
+    <a href="goal-stats.html">目標達成統計</a>
     <a href="upload.html" id="uploadLink" style="display:none;">📤 上傳</a>
     <a href="admin.html" id="adminLink" style="display:none;">⚙ 管理</a>
     <div class="menu-sep"></div>
@@ -848,7 +849,7 @@ function render() {
           <span>日期 ${o.productionDate ? String(o.productionDate).slice(0,10) : '—'}${o.actualStartDate && o.plannedDate && String(o.actualStartDate).slice(0,10) !== String(o.plannedDate).slice(0,10) ? `<span style="color:#a98e44;font-size:11px;margin-left:4px;">（計畫 ${escapeHtml(String(o.plannedDate).slice(0,10))}）</span>` : ''}</span>
           ${o.specType ? `<span>規格 <strong style="display:inline-flex;align-items:center;gap:4px;">${icon(o.specType === 'new' ? 'sparkles' : 'box', 13)}${o.specType === 'new' ? escapeHtml(formatNewSpecLabel(o.newSpecAspects)) : '量產規格'}</strong></span>` : ''}
           ${o.materialType ? `<span>原料 <strong>${o.materialType === 'coil' ? '捲料' : '板料'}</strong></span>` : ''}
-          ${(o.auxEquipment || o.auxEquipmentCustom) ? `<span>輔助設備 <strong>${escapeHtml(auxEquipmentLabel(o.auxEquipment, o.auxEquipmentCustom))}</strong></span>` : ''}
+          ${(o.auxEquipment || o.auxEquipmentCustom) ? `<span>輔助設備 <strong>${escapeHtml(auxEquipmentLabel(o.auxEquipment, o.auxEquipmentCustom, o.auxEquipmentNos))}</strong></span>` : ''}
         </div>
         <div class="rc-expand" style="margin-top:10px;cursor:pointer;display:flex;align-items:center;gap:6px;width:fit-content;" onclick="toggleDetail(${idx})"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>展開工單明細</div>
         <div class="rc-detail" id="detail-${idx}">
@@ -867,27 +868,54 @@ function render() {
   });
 }
 
-// 設備參數欄位顯示對應
+// 設備參數欄位顯示對應（生產規格 / SPM / 刀數 改用多規格小表）
 const EP_FIELDS = [
-  ['productSpecAttr', '生產規格'],
   ['paramFileName', '設備參數檔名'],
   ['paramFileAttr', '參數檔案屬性'],
   ['moldSpec', '模具規格'],
-  ['machineSPM', '機器SPM'],
-  ['bladeCount', '生產刀數'],
   ['feedSetting', '送料設定'],
   ['cutterStroke', '大刀座位置'],
   ['strokeUpdateFreq', '位置更新頻度'],
 ];
 
+// 解析多規格（原始參數）；舊資料 fallback：單值欄位組一列
+function rcParseSpecRows(ep) {
+  let arr = [];
+  if (ep && ep.specRows) { try { arr = JSON.parse(ep.specRows) || []; } catch (e) { arr = []; } }
+  if (!Array.isArray(arr)) arr = [];
+  if (arr.length === 0 && ep) {
+    const spec = ep.productSpecAttr, spm = ep.machineSPM, blades = ep.bladeCount;
+    if ((spec != null && spec !== '') || spm != null || blades != null) {
+      arr = [{ spec: spec || '', spm, blades }];
+    }
+  }
+  return arr;
+}
+
 function renderEquipmentParam(ep) {
   if (!ep) return '<div style="padding:10px;color:var(--muted);font-size:13px;text-align:center;">尚未上傳設備參數</div>';
+  const specs = rcParseSpecRows(ep);
+  let specHtml = '';
+  if (specs.length) {
+    const dash = '<span style="color:var(--muted);">—</span>';
+    const srows = specs.map(s => `<tr>
+      <td style="padding:4px 8px;font-size:12px;font-weight:600;">${s.spec ? escapeHtml(String(s.spec)) : dash}</td>
+      <td style="padding:4px 8px;font-size:12px;text-align:center;">${s.spm == null || s.spm === '' ? dash : escapeHtml(String(s.spm))}</td>
+      <td style="padding:4px 8px;font-size:12px;text-align:center;">${s.blades == null || s.blades === '' ? dash : escapeHtml(String(s.blades))}</td>
+    </tr>`).join('');
+    specHtml = `<table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:8px;">
+      <tr style="color:var(--muted);font-size:11px;border-bottom:1px solid var(--border);">
+        <th style="text-align:left;padding:4px 8px;font-weight:600;">生產規格</th>
+        <th style="padding:4px 8px;font-weight:600;">機器SPM</th>
+        <th style="padding:4px 8px;font-weight:600;">生產刀數</th>
+      </tr>${srows}</table>`;
+  }
   const rows = EP_FIELDS.map(([k, label]) => {
     const v = ep[k];
     const val = (v == null || v === '') ? '<span style="color:var(--muted);">—</span>' : escapeHtml(String(v));
     return `<tr><td style="padding:4px 8px;color:var(--muted);font-size:11px;width:35%;">${label}</td><td style="padding:4px 8px;font-size:13px;font-weight:600;">${val}</td></tr>`;
   }).join('');
-  return `<table style="width:100%;font-size:12px;border-collapse:collapse;">${rows}</table>`;
+  return specHtml + `<table style="width:100%;font-size:12px;border-collapse:collapse;">${rows}</table>`;
 }
 
 async function toggleEquipment(idx, orderNo) {
