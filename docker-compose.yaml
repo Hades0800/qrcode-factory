@@ -1,0 +1,25 @@
+# 本機開發用 Postgres
+# 啟動：  docker compose up -d
+# 停止：  docker compose down
+# 連線：  postgresql://qrcode:devpass@localhost:5432/qrcode_factory
+# 資料保存在 ./pgdata/，要全部清空就 rm -rf pgdata/
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: qrcode-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: qrcode
+      POSTGRES_PASSWORD: devpass
+      POSTGRES_DB: qrcode_factory
+      TZ: Asia/Taipei
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qrcode -d qrcode_factory"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
