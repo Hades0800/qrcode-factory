@@ -23,7 +23,7 @@
 
 @host = http://localhost:8080
 @username = admin
-@password = admin1234
+@password = changeme123
 
 
 ### ── 健康檢查（不需 token；用來確認 server 活著）─────

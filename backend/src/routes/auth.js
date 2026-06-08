@@ -61,7 +61,6 @@ export default async function authRoutes(fastify) {
   });
 
   //v2
-  export default async function authRoutes(fastify) {
   // 登入：每 IP 每 15 分鐘最多 10 次（防暴力破解）
   fastify.post('/v2/login', {
     config: {
