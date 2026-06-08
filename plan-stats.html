@@ -262,8 +262,8 @@
 <script>
 const me = getMe();
 if (!me) location.href = 'index.html';
-if (me && !canSeeHistory(me)) {
-  alert('此頁需要 管理員 / 品管 / 生管 權限');
+if (me && !hasPermission(me, 'view_plan_stats')) {
+  alert('沒有「計畫達成統計」權限');
   location.href = 'index.html';
 }
 

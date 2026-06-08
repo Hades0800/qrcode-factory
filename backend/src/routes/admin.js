@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 
 export default async function adminRoutes(fastify) {
   fastify.addHook('onRequest', fastify.authenticate);
-  fastify.addHook('onRequest', fastify.requireAdmin);
+  fastify.addHook('onRequest', fastify.requirePermission('manage_accounts'));
 
   // 列出所有小組長
   const VALID_ROLES = ['admin', 'qc', 'pm', 'tech'];
@@ -151,6 +151,63 @@ export default async function adminRoutes(fastify) {
       });
     } catch (e) {}
     return { ok: true };
+  });
+
+  // ── 角色權限矩陣 ──
+  // 讀取：權限目錄 + 各角色目前擁有的權限
+  fastify.get('/roles-permissions', async () => {
+    const permissions = await fastify.prisma.permission.findMany({ orderBy: { sortOrder: 'asc' } });
+    const roles = await fastify.prisma.role.findMany({
+      orderBy: { sortOrder: 'asc' },
+      include: { perms: { include: { permission: true } } },
+    });
+    return {
+      permissions: permissions.map(p => ({ key: p.key, name: p.name, category: p.category })),
+      roles: roles.map(r => ({
+        key: r.key,
+        name: r.name,
+        isSystem: r.isSystem,
+        permissions: r.perms.map(rp => rp.permission.key),
+      })),
+    };
+  });
+
+  // 更新某角色的權限（admin 角色不可改，永遠全有）
+  fastify.put('/roles/:key/permissions', async (request, reply) => {
+    const key = String(request.params.key || '').trim();
+    const { permissions } = request.body || {};
+    if (!Array.isArray(permissions)) return reply.code(400).send({ error: 'permissions 需為陣列' });
+    if (key === 'admin') return reply.code(400).send({ error: 'admin 角色永遠擁有全部權限，不可調整' });
+    const role = await fastify.prisma.role.findUnique({ where: { key } });
+    if (!role) return reply.code(404).send({ error: '找不到角色' });
+
+    // 只接受存在的權限 key
+    const allPerms = await fastify.prisma.permission.findMany();
+    const idByKey = Object.fromEntries(allPerms.map(p => [p.key, p.id]));
+    const wantIds = permissions.map(k => idByKey[k]).filter(Boolean);
+
+    // 整批替換：先刪光該角色的關聯，再插入新的
+    await fastify.prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
+    if (wantIds.length) {
+      await fastify.prisma.rolePermission.createMany({
+        data: wantIds.map(pid => ({ roleId: role.id, permissionId: pid })),
+        skipDuplicates: true,
+      });
+    }
+    await fastify.reloadRolePerms(); // 立即生效（更新記憶體快取）
+    try {
+      await fastify.prisma.auditLog.create({
+        data: {
+          actorId: request.user?.id || null,
+          actorName: request.user?.displayName || null,
+          action: 'update_role_permissions',
+          target: key,
+          detail: permissions.join(','),
+          ip: request.ip || null,
+        },
+      });
+    } catch (e) {}
+    return { ok: true, key, permissions: permissions.filter(k => idByKey[k]) };
   });
 
   // 查單號完整歷史（含已軟刪除的工單、含已取消批次的上傳列）

@@ -165,6 +165,10 @@ const ORDER_INCLUDE = {
 export default async function orderRoutes(fastify) {
   fastify.addHook('onRequest', fastify.authenticate);
 
+  // 能否「修改」生產實態紀錄（取消/刪除/補登）— tech 只能即時記錄
+  const canModify = (u) => fastify.hasPermission(u, 'modify_records');
+  const MODIFY_DENY = { error: '沒有「修改/取消/補登生產紀錄」權限' };
+
   // 上傳批次列表（必須在 /:orderNo 之前定義避免路由衝突）
   fastify.get('/upload-batches', async (request) => {
     const limit = Math.min(Number(request.query.limit) || 50, 200);
@@ -177,7 +181,7 @@ export default async function orderRoutes(fastify) {
 
   // 取消整個上傳批次
   fastify.delete('/upload-batches/:id', async (request, reply) => {
-    if (!fastify.hasRole(request.user, 'admin') && !fastify.hasRole(request.user, 'pm')) {
+    if (!fastify.hasPermission(request.user, 'upload')) {
       return reply.code(403).send({ error: '需要生管或管理員權限' });
     }
     const id = Number(request.params.id);
@@ -218,7 +222,7 @@ export default async function orderRoutes(fastify) {
   // 規則：只填工單目前為 null 的欄位（避免覆蓋後續批次填的新值）
   // - Admin only
   fastify.post('/upload-batches/:id/restore', async (request, reply) => {
-    if (!fastify.hasRole(request.user, 'admin')) {
+    if (!fastify.hasPermission(request.user, 'admin_tools')) {
       return reply.code(403).send({ error: '需要管理員權限' });
     }
     const id = Number(request.params.id);
@@ -320,6 +324,8 @@ export default async function orderRoutes(fastify) {
   fastify.post('/:orderNo/step-entries', async (request, reply) => {
     const orderNo = String(request.params.orderNo || '').toUpperCase();
     const { stepNo, recordedAt: manualTime, note: rawNote, qcActualQty: rawQc } = request.body || {};
+    // 補登（帶自訂過去時間）算「修改」→ tech 不可；即時記錄（無 manualTime）可
+    if (manualTime && !canModify(request.user)) return reply.code(403).send(MODIFY_DENY);
     if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
     const validSteps = ['1','2','3','4','5','6','7','8','21','22','23','12','13','30','40','41'];
     if (!validSteps.includes(stepNo)) {
@@ -448,12 +454,13 @@ export default async function orderRoutes(fastify) {
 
   // 取消工序紀錄（5 分鐘內）
   fastify.delete('/:orderNo/step-entries/:id', async (request, reply) => {
+    if (!canModify(request.user)) return reply.code(403).send(MODIFY_DENY);
     const id = Number(request.params.id);
     if (!id) return reply.code(400).send({ error: '無效 id' });
     const entry = await fastify.prisma.stepEntry.findUnique({ where: { id } });
     if (!entry) return reply.code(404).send({ error: '找不到紀錄' });
     const elapsed = Date.now() - new Date(entry.recordedAt).getTime();
-    if (elapsed > 5 * 60 * 1000 && !fastify.hasRole(request.user, 'admin')) {
+    if (elapsed > 5 * 60 * 1000 && !fastify.hasPermission(request.user, 'admin_tools')) {
       return reply.code(403).send({ error: '已超過 5 分鐘，無法取消（管理員不受此限制）' });
     }
     await fastify.prisma.stepEntry.delete({ where: { id } });
@@ -726,6 +733,8 @@ export default async function orderRoutes(fastify) {
     const orderNo = String(request.params.orderNo || '').toUpperCase();
     const { step } = request.params;
     const { note, recordedAt: manualTime, qcActualQty: rawQc } = request.body || {};
+    // 補登（帶自訂過去時間）算「修改」→ tech 不可
+    if (manualTime && !canModify(request.user)) return reply.code(403).send(MODIFY_DENY);
     if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
     const cols = STEP_COLS[step];
     if (!cols) return reply.code(400).send({ error: '無效步驟' });
@@ -787,6 +796,7 @@ export default async function orderRoutes(fastify) {
 
   // 取消某步驟
   fastify.delete('/:orderNo/steps/:step', async (request, reply) => {
+    if (!canModify(request.user)) return reply.code(403).send(MODIFY_DENY);
     const orderNo = String(request.params.orderNo || '').toUpperCase();
     const { step } = request.params;
     if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
@@ -864,6 +874,7 @@ export default async function orderRoutes(fastify) {
 
   // 補登暫停（已結束的暫停事件）
   fastify.post('/:orderNo/pause-backfill', async (request, reply) => {
+    if (!canModify(request.user)) return reply.code(403).send(MODIFY_DENY);
     const orderNo = String(request.params.orderNo || '').toUpperCase();
     const { type, note, startAt: startStr, endAt: endStr, qcActualQty: rawQc } = request.body || {};
     if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
@@ -895,7 +906,7 @@ export default async function orderRoutes(fastify) {
 
   // 批次上傳工單（生管 or 管理員）
   fastify.post('/bulk-upload', async (request, reply) => {
-    if (!fastify.hasRole(request.user, 'admin') && !fastify.hasRole(request.user, 'pm')) {
+    if (!fastify.hasPermission(request.user, 'upload')) {
       return reply.code(403).send({ error: '需要生管或管理員權限' });
     }
     const { orders: rows, filename, uploadDate } = request.body || {};
@@ -1027,7 +1038,7 @@ export default async function orderRoutes(fastify) {
   // - 工單本身（productionDate、機台、生產紀錄）一律保留
   // - 上傳資料與實態紀錄獨立，重傳時會自動重新配對
   fastify.post('/bulk-cancel-upload', async (request, reply) => {
-    if (!fastify.hasRole(request.user, 'admin') && !fastify.hasRole(request.user, 'pm')) {
+    if (!fastify.hasPermission(request.user, 'upload')) {
       return reply.code(403).send({ error: '需要生管或管理員權限' });
     }
     const { orderNos } = request.body || {};
@@ -1066,14 +1077,14 @@ export default async function orderRoutes(fastify) {
   // - ?force=true（admin only）：連同所有 stepEntries / pauseEvents 一起軟刪除（用於清測試單）
   // - 管理員 / 生管 皆可使用（force 限 admin）
   fastify.delete('/:orderNo', async (request, reply) => {
-    const isAdmin = fastify.hasRole(request.user, 'admin');
-    const isPlanner = fastify.hasRole(request.user, 'pm');
-    if (!isAdmin && !isPlanner) {
-      return reply.code(403).send({ error: '權限不足' });
+    const canDelete = fastify.hasPermission(request.user, 'delete_order');
+    const canForce = fastify.hasPermission(request.user, 'admin_tools');
+    if (!canDelete) {
+      return reply.code(403).send({ error: '沒有刪除工單權限' });
     }
     const force = request.query.force === 'true' || request.query.force === '1';
-    if (force && !isAdmin) {
-      return reply.code(403).send({ error: 'force 模式僅限管理員' });
+    if (force && !canForce) {
+      return reply.code(403).send({ error: 'force 強制刪除需要 admin_tools 權限' });
     }
     const rawNo = String(request.params.orderNo || '').trim();
     if (!rawNo) return reply.code(400).send({ error: '缺少工單號' });
@@ -1091,7 +1102,7 @@ export default async function orderRoutes(fastify) {
       return reply.code(409).send({
         error: '工單已有生產紀錄，無法直接刪除',
         code: 'HAS_PRODUCTION_DATA',
-        canReset: isAdmin,
+        canReset: canForce,
         entryCount, pauseCount,
       });
     }
@@ -1103,15 +1114,14 @@ export default async function orderRoutes(fastify) {
     }
     await fastify.prisma.order.delete({ where: { orderNo: order.orderNo } });
     await audit(fastify.prisma, request, 'delete_order', order.orderNo,
-      force ? `admin_force_delete entries=${entryCount} pauses=${pauseCount}` :
-      (isAdmin ? 'admin_delete' : 'planner_delete_unscanned'));
+      force ? `force_delete entries=${entryCount} pauses=${pauseCount}` : 'delete_unscanned');
     return { ok: true, deleted: true, force, entries: force ? entryCount : 0, pauses: force ? pauseCount : 0 };
   });
 
   // 重設生產紀錄（清空 stepEntries/pauseEvents 與 stepXAt 欄位，保留上傳資料）
   // - Admin only
   fastify.post('/:orderNo/reset-production', async (request, reply) => {
-    if (!fastify.hasRole(request.user, 'admin')) {
+    if (!fastify.hasPermission(request.user, 'admin_tools')) {
       return reply.code(403).send({ error: '需要管理員權限' });
     }
     const rawNo = String(request.params.orderNo || '').trim();
@@ -1148,7 +1158,7 @@ export default async function orderRoutes(fastify) {
   // 已刪除工單列表（回收桶）
   // - Admin only
   fastify.get('/trash', async (request, reply) => {
-    if (!fastify.hasRole(request.user, 'admin')) {
+    if (!fastify.hasPermission(request.user, 'admin_tools')) {
       return reply.code(403).send({ error: '需要管理員權限' });
     }
     // 逃生口：where 有 deletedAt 鍵即跳過中間件自動過濾
@@ -1176,7 +1186,7 @@ export default async function orderRoutes(fastify) {
   //   2. 工單仍使用中、但有軟刪除的 stepEntries / pauseEvents（例如 reset-production 後悔了）
   //      → 只還原子紀錄
   fastify.post('/:orderNo/restore', async (request, reply) => {
-    if (!fastify.hasRole(request.user, 'admin')) {
+    if (!fastify.hasPermission(request.user, 'admin_tools')) {
       return reply.code(403).send({ error: '需要管理員權限' });
     }
     const rawNo = String(request.params.orderNo || '').trim();
@@ -1237,7 +1247,7 @@ export default async function orderRoutes(fastify) {
   // - 用 raw SQL 繞過軟刪除中間件，連同所有 stepEntries / pauseEvents 一起 DELETE
   // - 給「清測試資料」場景使用，正常營運請用一般刪除（軟刪）
   fastify.post('/:orderNo/purge', async (request, reply) => {
-    if (!fastify.hasRole(request.user, 'admin')) {
+    if (!fastify.hasPermission(request.user, 'admin_tools')) {
       return reply.code(403).send({ error: '需要管理員權限' });
     }
     try {

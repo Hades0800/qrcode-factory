@@ -53,11 +53,29 @@ function rolesOf(leader) {
 function hasRole(leader, role) {
   return rolesOf(leader).includes(role);
 }
-function isAdminUser(leader) { return hasRole(leader, 'admin'); }
-function canUpload(leader) { return hasRole(leader, 'admin') || hasRole(leader, 'pm'); }
+// ── 權限檢查（DB 驅動）──
+// leader.permissions 由後端 login / me 解析後回傳（角色 → 權限）
+// 舊 session 沒帶 permissions 時，用下面預設對應 fallback（admin 永遠全有）
+const FALLBACK_ROLE_PERMS = {
+  qc:   ['view_records', 'view_plan_stats', 'view_goal_stats', 'modify_records'],
+  pm:   ['view_records', 'view_plan_stats', 'view_goal_stats', 'modify_records', 'upload', 'delete_order'],
+  tech: ['view_records', 'view_plan_stats', 'view_goal_stats'],
+};
+function hasPermission(leader, key) {
+  if (!leader) return false;
+  if (Array.isArray(leader.permissions)) return leader.permissions.includes(key);
+  // fallback（舊 session / 無 permissions 欄）
+  const roles = rolesOf(leader);
+  if (roles.includes('admin')) return true;
+  return roles.some(r => (FALLBACK_ROLE_PERMS[r] || []).includes(key));
+}
+
+function isAdminUser(leader) { return hasPermission(leader, 'manage_accounts'); }
+function canUpload(leader) { return hasPermission(leader, 'upload'); }
+function canModifyRecords(leader) { return hasPermission(leader, 'modify_records'); }
+// 是否能看「歷史/統計」區（任一檢視權限）— 各頁進入時再用各自權限細判
 function canSeeHistory(leader) {
-  // 歷史實態 + 計劃達成統計：admin / qc / pm 可看（tech 不行）
-  return hasRole(leader, 'admin') || hasRole(leader, 'qc') || hasRole(leader, 'pm');
+  return hasPermission(leader, 'view_records') || hasPermission(leader, 'view_plan_stats') || hasPermission(leader, 'view_goal_stats');
 }
 
 // 中文角色標籤

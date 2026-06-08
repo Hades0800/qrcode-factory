@@ -12,6 +12,8 @@ import authRoutes from './routes/auth.js';
 import orderRoutes from './routes/orders.js';
 import adminRoutes from './routes/admin.js';
 import equipmentParamRoutes from './routes/equipmentParams.js';
+import v2Routes from './routes/v2.js';
+import v2AuthRoutes from './routes/v2/auth.js';
 
 const prisma = new PrismaClient();
 
@@ -140,12 +142,109 @@ fastify.decorate('requirePlannerOrAdmin', async (request, reply) => {
   }
 });
 
+// ─── 權限系統（DB 驅動，可由後台調整）────────────────────
+// 權限目錄：系統所有可指派的能力（seed 進 Permission 表）
+const PERMISSION_CATALOG = [
+  { key: 'view_records',    name: '歷史實態紀錄',                   category: '頁面', sortOrder: 1 },
+  { key: 'view_plan_stats', name: '計畫達成統計',                   category: '頁面', sortOrder: 2 },
+  { key: 'view_goal_stats', name: '目標達成統計',                   category: '頁面', sortOrder: 3 },
+  { key: 'upload',          name: '上傳工單',                       category: '操作', sortOrder: 4 },
+  { key: 'modify_records',  name: '修改/取消/補登生產紀錄',         category: '操作', sortOrder: 5 },
+  { key: 'delete_order',    name: '刪除工單',                       category: '操作', sortOrder: 6 },
+  { key: 'manage_accounts', name: '帳號管理',                       category: '管理', sortOrder: 7 },
+  { key: 'admin_tools',     name: '回收桶/重設/永久刪除/稽核/診斷', category: '管理', sortOrder: 8 },
+];
+const ALL_PERMISSION_KEYS = PERMISSION_CATALOG.map(p => p.key);
+const ROLE_CATALOG = [
+  { key: 'admin', name: '管理員', isSystem: true, sortOrder: 1 },
+  { key: 'qc',    name: '品管',   isSystem: true, sortOrder: 2 },
+  { key: 'pm',    name: '生管',   isSystem: true, sortOrder: 3 },
+  { key: 'tech',  name: '技術員', isSystem: true, sortOrder: 4 },
+];
+const DEFAULT_ROLE_PERMS = {
+  admin: ALL_PERMISSION_KEYS,
+  qc:    ['view_records', 'view_plan_stats', 'view_goal_stats', 'modify_records'],
+  pm:    ['view_records', 'view_plan_stats', 'view_goal_stats', 'modify_records', 'upload', 'delete_order'],
+  tech:  ['view_records', 'view_plan_stats', 'view_goal_stats'],
+};
+
+// 記憶體快取：roleKey -> Set(permKey)；admin 不靠快取（永遠全有）
+let rolePermsMap = {};
+
+// admin 角色永遠擁有全部權限（防鎖死）
+function userHasPermission(user, permKey) {
+  if (!user || !user.roles) return false;
+  const roles = String(user.roles).split(',').map(s => s.trim()).filter(Boolean);
+  if (roles.includes('admin')) return true;
+  for (const r of roles) {
+    if (rolePermsMap[r] && rolePermsMap[r].has(permKey)) return true;
+  }
+  return false;
+}
+fastify.decorate('hasPermission', userHasPermission);
+fastify.decorate('requirePermission', (permKey) => async (request, reply) => {
+  if (!userHasPermission(request.user, permKey)) {
+    reply.code(403).send({ error: '權限不足' });
+  }
+});
+
+// 把角色字串展開成權限 key 陣列（login / me 回傳給前端用）
+function resolvePermissions(rolesStr) {
+  const roles = String(rolesStr || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (roles.includes('admin')) return ALL_PERMISSION_KEYS.slice();
+  const out = new Set();
+  roles.forEach(r => { if (rolePermsMap[r]) rolePermsMap[r].forEach(k => out.add(k)); });
+  return [...out];
+}
+fastify.decorate('resolvePermissions', resolvePermissions);
+
+// 從 DB 載入角色權限到記憶體（啟動 + 後台修改後呼叫）
+async function loadRolePermsMap() {
+  const map = {};
+  try {
+    const roles = await prisma.role.findMany({ include: { perms: { include: { permission: true } } } });
+    roles.forEach(r => { map[r.key] = new Set(r.perms.map(rp => rp.permission.key)); });
+  } catch (e) {
+    console.error('⚠️ loadRolePermsMap 失敗:', e.message);
+  }
+  rolePermsMap = map;
+}
+fastify.decorate('reloadRolePerms', loadRolePermsMap);
+
+// seed 權限目錄 + 角色 + 預設對應（idempotent；新角色才補預設，不覆蓋既有設定）
+async function seedRolesAndPermissions() {
+  try {
+    for (const p of PERMISSION_CATALOG) {
+      await prisma.permission.upsert({
+        where: { key: p.key },
+        update: { name: p.name, category: p.category, sortOrder: p.sortOrder },
+        create: p,
+      });
+    }
+    const allPerms = await prisma.permission.findMany();
+    const permIdByKey = Object.fromEntries(allPerms.map(p => [p.key, p.id]));
+    for (const r of ROLE_CATALOG) {
+      const existing = await prisma.role.findUnique({ where: { key: r.key } });
+      if (!existing) {
+        const created = await prisma.role.create({ data: r });
+        for (const pk of (DEFAULT_ROLE_PERMS[r.key] || [])) {
+          if (permIdByKey[pk]) {
+            await prisma.rolePermission.create({ data: { roleId: created.id, permissionId: permIdByKey[pk] } });
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('⚠️ seedRolesAndPermissions 失敗:', e.message);
+  }
+}
+
 // 健康檢查
 fastify.get('/', async () => ({ ok: true, msg: '工單記錄系統 API 運作中' }));
 fastify.get('/health', async () => ({ ok: true }));
 
 // 診斷端點（僅管理員）
-fastify.get('/diag', { onRequest: [fastify.authenticate, fastify.requireAdmin] }, async () => {
+fastify.get('/diag', { onRequest: [fastify.authenticate, fastify.requirePermission('admin_tools')] }, async () => {
   const env = {
     DATABASE_URL: process.env.DATABASE_URL ? '已設定 (' + process.env.DATABASE_URL.slice(0, 25) + '...)' : '❌ 未設定',
     JWT_SECRET: process.env.JWT_SECRET ? '已設定' : '❌ 未設定',
@@ -172,10 +271,13 @@ await fastify.register(authRoutes, { prefix: '/api/auth' });
 await fastify.register(orderRoutes, { prefix: '/api/orders' });
 await fastify.register(adminRoutes, { prefix: '/api/admin' });
 await fastify.register(equipmentParamRoutes, { prefix: '/api/equipment-params' });
+// v2 API（新 React 前端用）— 已實作模組各自註冊；其餘端點還在 v2.js 當 stub
+await fastify.register(v2AuthRoutes, { prefix: '/v2' });
+await fastify.register(v2Routes, { prefix: '/v2' });
 
 // ── 修正工單日期 ──
 fastify.post('/api/fix-dates', {
-  onRequest: [fastify.authenticate, fastify.requireAdmin],
+  onRequest: [fastify.authenticate, fastify.requirePermission('admin_tools')],
 }, async () => {
   const orders = await fastify.prisma.order.findMany({
     include: {
@@ -249,7 +351,7 @@ fastify.delete('/api/idle-events/:id', { onRequest: [fastify.authenticate] }, as
   if (!id) return reply.code(400).send({ error: '無效 id' });
   const event = await prisma.idleEvent.findUnique({ where: { id } });
   if (!event) return reply.code(404).send({ error: '找不到紀錄' });
-  if (!fastify.hasRole(request.user, 'admin') && event.leaderId !== request.user.id) {
+  if (!fastify.hasPermission(request.user, 'admin_tools') && event.leaderId !== request.user.id) {
     return reply.code(403).send({ error: '只能取消自己建立的紀錄' });
   }
   await prisma.idleEvent.delete({ where: { id } });
@@ -262,40 +364,100 @@ function _hasAdminRole(rolesStr) {
 }
 
 async function ensureAdmin() {
-  // 找任何一個 roles 含 'admin' 的使用者
-  const adminCount = await prisma.leader.count({
+  // ── Leader（v1）─────────────────────────────────
+  // 找任何一個 roles 含 'admin' 的使用者；活的 admin 已存在就跳過建立
+  let leaderAdmin = await prisma.leader.findFirst({
     where: { roles: { contains: 'admin' } },
   });
-  if (adminCount > 0) return;
-  const username = process.env.ADMIN_USERNAME;
-  const password = process.env.ADMIN_PASSWORD;
-  const displayName = process.env.ADMIN_NAME || '管理員';
-  if (!username || !password) {
-    fastify.log.warn('沒有任何管理員，且 ADMIN_USERNAME/ADMIN_PASSWORD 未設定，跳過建立');
-    return;
+
+  if (!leaderAdmin) {
+    const username = process.env.ADMIN_USERNAME;
+    const password = process.env.ADMIN_PASSWORD;
+    const displayName = process.env.ADMIN_NAME || '管理員';
+    if (!username || !password) {
+      fastify.log.warn('沒有任何管理員，且 ADMIN_USERNAME/ADMIN_PASSWORD 未設定，跳過建立');
+    } else {
+      // 含已軟刪除（逃生口：deletedAt 鍵出現即繞過 middleware 自動過濾）
+      const exists = await prisma.leader.findFirst({ where: { username, deletedAt: undefined } });
+      if (exists) {
+        const patch = {};
+        if (exists.deletedAt) patch.deletedAt = null;
+        if (!_hasAdminRole(exists.roles)) {
+          const cur = (exists.roles || '').split(',').map(s => s.trim()).filter(Boolean);
+          if (!cur.includes('admin')) cur.unshift('admin');
+          patch.roles = cur.join(',');
+        }
+        if (Object.keys(patch).length > 0) {
+          await prisma.leader.update({ where: { id: exists.id }, data: patch });
+          fastify.log.info(`已恢復/提升 Leader 管理員：${username}`);
+        }
+        leaderAdmin = await prisma.leader.findUnique({ where: { id: exists.id } });
+      } else {
+        const passwordHash = await bcrypt.hash(password, 10);
+        leaderAdmin = await prisma.leader.create({
+          data: { username, passwordHash, displayName, roles: 'admin' },
+        });
+        fastify.log.info(`✓ 已建立 Leader 第一位管理員: ${username}`);
+      }
+    }
   }
-  // 含已軟刪除（逃生口：deletedAt 鍵出現即繞過 middleware 自動過濾）
-  const exists = await prisma.leader.findFirst({ where: { username, deletedAt: undefined } });
+
+  // ── Account（v2 新表）─────────────────────────
+  // 確保至少有一個「有效」(deletedAt=null + enable=true) 的 admin Account
+  // 來源優先序：1) 跟 Leader admin 同帳號同密碼同步 / 2) 沒有 Leader 就用 ENV
+  // 註：Account 不在 SOFT_DELETE_MODELS，prisma 查詢不會自動過濾 deletedAt
+  await ensureAccountAdmin(leaderAdmin);
+}
+
+async function ensureAccountAdmin(leaderAdmin) {
+  const existingActive = await prisma.account.findFirst({
+    where: { roles: { contains: 'admin' }, deletedAt: null, enable: true },
+  });
+  if (existingActive) return;
+
+  // 沒有有效 admin Account → 決定來源
+  let username, passwordHash, displayName, roles;
+  if (leaderAdmin) {
+    username = leaderAdmin.username;
+    passwordHash = leaderAdmin.passwordHash;        // 同一份 hash，v1 / v2 密碼一致
+    displayName = leaderAdmin.displayName;
+    roles = _hasAdminRole(leaderAdmin.roles) ? leaderAdmin.roles : 'admin';
+  } else {
+    username = process.env.ADMIN_USERNAME;
+    const password = process.env.ADMIN_PASSWORD;
+    displayName = process.env.ADMIN_NAME || '管理員';
+    if (!username || !password) {
+      fastify.log.warn('Account 沒有 admin，且 ADMIN_USERNAME/ADMIN_PASSWORD 未設定，跳過建立');
+      return;
+    }
+    passwordHash = await bcrypt.hash(password, 10);
+    roles = 'admin';
+  }
+
+  // 看 username 在 Account 是否已存在（可能是軟刪/停用狀態）
+  const exists = await prisma.account.findUnique({ where: { username } });
   if (exists) {
     const patch = {};
     if (exists.deletedAt) patch.deletedAt = null;
+    if (exists.enable === false) patch.enable = true;
     if (!_hasAdminRole(exists.roles)) {
-      // 把 admin 加進現有 roles
       const cur = (exists.roles || '').split(',').map(s => s.trim()).filter(Boolean);
       if (!cur.includes('admin')) cur.unshift('admin');
       patch.roles = cur.join(',');
     }
     if (Object.keys(patch).length > 0) {
-      await prisma.leader.update({ where: { id: exists.id }, data: patch });
-      fastify.log.info(`已恢復/提升管理員：${username}`);
+      await prisma.account.update({ where: { id: exists.id }, data: patch });
+      fastify.log.info(`已恢復/提升 Account 管理員：${username}`);
+    } else {
+      fastify.log.info(`Account 已有 admin（${username}），跳過`);
     }
     return;
   }
-  const passwordHash = await bcrypt.hash(password, 10);
-  await prisma.leader.create({
-    data: { username, passwordHash, displayName, roles: 'admin' },
+
+  await prisma.account.create({
+    data: { username, passwordHash, displayName, roles, enable: true },
   });
-  fastify.log.info(`✓ 已建立第一位管理員: ${username}`);
+  fastify.log.info(`✓ 已建立 Account 第一位管理員：${username}`);
 }
 
 const port = Number(process.env.PORT || 8080);
@@ -362,6 +524,14 @@ async function ensureRolesColumn() {
 
 await ensureRolesColumn();
 runDbPush();
+
+// 角色 / 權限：seed 預設 + 載入記憶體快取（失敗不擋啟動）
+try {
+  await seedRolesAndPermissions();
+  await loadRolePermsMap();
+} catch (err) {
+  console.error('⚠️ 角色權限初始化失敗，但 server 仍會啟動：', err.message);
+}
 
 // 不讓 ensureAdmin 失敗導致 server 不啟動 — 改成警告，server 仍要啟動方便除錯
 try {

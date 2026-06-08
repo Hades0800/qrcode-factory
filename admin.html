@@ -258,6 +258,14 @@
   </div>
 
   <div class="card">
+    <h2>角色權限</h2>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">勾選各角色可使用的功能。管理員永遠擁有全部權限（不可調整）。改完按「儲存權限」即時生效。</p>
+    <div id="rolePermArea" style="overflow-x:auto;">載入中...</div>
+    <button class="btn-primary" id="savePermsBtn" style="margin-top:12px;padding:10px 20px;display:none;">儲存權限</button>
+    <div id="permResult" style="font-size:12px;margin-top:8px;min-height:14px;"></div>
+  </div>
+
+  <div class="card">
     <h2>回收桶（可救回）</h2>
     <div id="recoveryTabs" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
       <button class="rec-tab active" data-tab="deleted" style="padding:8px 14px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:#fff;cursor:pointer;">已刪除工單 <span class="rec-count">—</span></button>
@@ -385,6 +393,73 @@ async function editRoles(id, name, currentRoles) {
 }
 
 initDropdownMenu();
+
+// ── 角色權限矩陣 ──
+let rolePermData = null;
+async function loadRolePerms() {
+  const r = await api('/api/admin/roles-permissions');
+  if (!r.ok) { $('rolePermArea').textContent = r.error || '載入失敗'; return; }
+  rolePermData = r.data;
+  renderRolePerms();
+}
+function renderRolePerms() {
+  const { permissions, roles } = rolePermData;
+  const head = roles.map(role =>
+    `<th style="padding:8px 10px;text-align:center;white-space:nowrap;">${escapeHtml(role.name)}<br><span style="font-size:10px;color:var(--muted);font-weight:400;">${escapeHtml(role.key)}</span></th>`
+  ).join('');
+  // 依 category 分組
+  let lastCat = null;
+  const rows = permissions.map(p => {
+    const catHeader = (p.category && p.category !== lastCat)
+      ? (lastCat = p.category, `<tr><td colspan="${roles.length + 1}" style="background:#f6f6f8;font-size:11px;color:var(--muted);font-weight:700;padding:5px 10px;">${escapeHtml(p.category)}</td></tr>`)
+      : '';
+    const cells = roles.map(role => {
+      const checked = role.key === 'admin' ? true : role.permissions.includes(p.key);
+      const locked = role.key === 'admin'; // admin 永遠全勾、不可改
+      return `<td style="text-align:center;padding:6px 10px;">
+        <input type="checkbox" class="perm-chk" data-role="${escapeHtml(role.key)}" data-perm="${escapeHtml(p.key)}"
+          ${checked ? 'checked' : ''} ${locked ? 'disabled' : ''} style="width:18px;height:18px;accent-color:var(--brand);cursor:${locked ? 'not-allowed' : 'pointer'};">
+      </td>`;
+    }).join('');
+    return catHeader + `<tr><td style="padding:6px 10px;font-size:13px;">${escapeHtml(p.name)} <span style="font-size:10px;color:var(--muted);">${escapeHtml(p.key)}</span></td>${cells}</tr>`;
+  }).join('');
+  $('rolePermArea').innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <thead><tr><th style="text-align:left;padding:8px 10px;">權限</th>${head}</tr></thead>
+    <tbody>${rows}</tbody></table>`;
+  $('savePermsBtn').style.display = 'inline-block';
+}
+$('savePermsBtn').onclick = async () => {
+  if (!rolePermData) return;
+  $('savePermsBtn').disabled = true;
+  $('permResult').textContent = '儲存中...';
+  $('permResult').style.color = 'var(--muted)';
+  // 蒐集每個非 admin 角色的勾選
+  const byRole = {};
+  document.querySelectorAll('.perm-chk').forEach(chk => {
+    const role = chk.dataset.role;
+    if (role === 'admin') return;
+    (byRole[role] = byRole[role] || []);
+    if (chk.checked) byRole[role].push(chk.dataset.perm);
+  });
+  let failed = 0;
+  for (const [role, perms] of Object.entries(byRole)) {
+    const r = await api('/api/admin/roles/' + encodeURIComponent(role) + '/permissions', {
+      method: 'PUT', body: { permissions: perms },
+    });
+    if (!r.ok) failed++;
+  }
+  $('savePermsBtn').disabled = false;
+  if (failed) {
+    $('permResult').style.color = 'var(--brand)';
+    $('permResult').textContent = '✗ 有 ' + failed + ' 個角色儲存失敗';
+  } else {
+    $('permResult').style.color = 'var(--success)';
+    $('permResult').textContent = '✓ 已儲存（即時生效；使用者重新登入後前端選單才會更新）';
+    toast('權限已更新', 'success');
+  }
+  loadRolePerms();
+};
+loadRolePerms();
 
 $('createBtn').onclick = async () => {
   const username = $('newUsername').value.trim();

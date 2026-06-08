@@ -105,8 +105,8 @@ export default async function equipmentParamRoutes(fastify) {
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) return reply.code(404).send({ error: '工單不存在，無法上傳設備參數' });
 
-    // 驗證：必須是今日有活動的工單（admin 不受限）
-    if (!fastify.hasRole(request.user, 'admin')) {
+    // 驗證：必須是今日有活動的工單（有 admin_tools 權限者不受限）
+    if (!fastify.hasPermission(request.user, 'admin_tools')) {
       const ok = await isTodayActive(fastify.prisma, order.id);
       if (!ok) return reply.code(400).send({ error: '此工單號今日無生產活動，無法上傳設備參數' });
     }

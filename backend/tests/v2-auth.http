@@ -1,0 +1,175 @@
+### v2 Auth API 測試（用 Account 表）
+###
+### 用法：VS Code 裝「REST Client」擴充套件，或 JetBrains 內建 HTTP Client
+### 點每個 ### 上方的 "Send Request" 即可發送
+###
+### 前置：
+###   1. docker compose up -d        （本機 postgres）
+###   2. cd backend && npm run dev    （後端 :8080）
+###   3. Account 表要先有資料 — 最快做法：直接從 Leader 表複製一份過去
+###      （bcrypt hash 同格式，可直接搬，密碼跟原本 Leader 一樣）：
+###
+###        docker exec -it qrcode-pg psql -U qrcode -d qrcode_factory -c "
+###          INSERT INTO \"Account\"
+###            (username, \"passwordHash\", \"displayName\", roles, enable, \"createdAt\")
+###          SELECT username, \"passwordHash\", \"displayName\",
+###                 COALESCE(roles, 'qc'), true, NOW()
+###          FROM \"Leader\"
+###          WHERE \"deletedAt\" IS NULL
+###          ON CONFLICT (username) DO NOTHING;
+###        "
+###
+###      然後用 backend/.env 裡的 ADMIN_USERNAME / ADMIN_PASSWORD 登入。
+
+@host = http://localhost:8080
+@username = admin
+@password = admin1234
+
+
+### ── 健康檢查（不需 token；用來確認 server 活著）─────
+GET {{host}}/health
+
+
+### ── 登入：成功 ────────────────────────────────
+# @name login
+POST {{host}}/v2/login
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+
+###
+# ↑ 跑完登入後，下面用 {{login.response.body.token}} 自動帶 token
+@token = {{login.response.body.token}}
+
+
+### ── 登入：密碼錯（預期 401）────────────────────
+POST {{host}}/v2/login
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "wrong-password"
+}
+
+
+### ── 登入：帳號不存在（預期 401，跟「密碼錯」訊息一樣 — 防帳號列舉）──
+POST {{host}}/v2/login
+Content-Type: application/json
+
+{
+  "username": "no-such-user",
+  "password": "anything"
+}
+
+
+### ── 登入：空 body（預期 400）────────────────────
+POST {{host}}/v2/login
+Content-Type: application/json
+
+{}
+
+
+### ── 登入：超長欄位（預期 400）──────────────────
+POST {{host}}/v2/login
+Content-Type: application/json
+
+{
+  "username": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "password": "x"
+}
+
+
+### ── 取目前登入者（需 token）────────────────────
+GET {{host}}/v2/me
+Authorization: Bearer {{token}}
+
+
+### ── /me：沒 token（預期 401）──────────────────
+GET {{host}}/v2/me
+
+
+### ── /me：token 亂打（預期 401）─────────────────
+GET {{host}}/v2/me
+Authorization: Bearer not-a-real-token
+
+
+### ── 改密碼：成功 ──────────────────────────────
+POST {{host}}/v2/change-password
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "oldPassword": "{{password}}",
+  "newPassword": "new-pass-1234"
+}
+
+###
+# 上面改完後密碼變了，記得：
+#  1. 改回去（執行下一個請求把密碼改回 {{password}}），或
+#  2. 把上面的 @password 變數改成新的
+
+
+### ── 改密碼：改回去（用上面新密碼當舊密碼，舊密碼當新密碼）──
+POST {{host}}/v2/change-password
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "oldPassword": "new-pass-1234",
+  "newPassword": "{{password}}"
+}
+
+
+### ── 改密碼：舊密碼錯（預期 401）────────────────
+POST {{host}}/v2/change-password
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "oldPassword": "wrong-old",
+  "newPassword": "whatever-1234"
+}
+
+
+### ── 改密碼：新密碼太短（預期 400）──────────────
+POST {{host}}/v2/change-password
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "oldPassword": "{{password}}",
+  "newPassword": "12345"
+}
+
+
+### ── 登出（目前回 ok，前端負責清 token）───────────
+POST {{host}}/v2/logout
+Authorization: Bearer {{token}}
+
+
+### ── 停用帳號測試 ──────────────────────────────
+### 先用 psql 把某個帳號設成 enable=false：
+###   UPDATE "Account" SET enable = false WHERE username = 'admin';
+### 然後跑這個（預期 403：帳號已停用）
+POST {{host}}/v2/login
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+
+
+### ── 軟刪除帳號測試 ────────────────────────────
+### 先用 psql：UPDATE "Account" SET "deletedAt" = NOW() WHERE username = 'admin';
+### 跑這個（預期 401：帳號或密碼錯誤 — 軟刪除帳號當作不存在）
+POST {{host}}/v2/login
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}

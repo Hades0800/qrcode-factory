@@ -34,7 +34,7 @@ model Account {
   displayName  String
   // 角色（逗號字串）：admin / qc / pm / tech；一人可多角色，例 'admin,pm'
   // 新建預設 'qc'；舊資料由 server.js 的 ensureRolesColumn() 從 isAdmin/isPlanner 遷移
-  roles        String    
+  roles        String
   createdAt    DateTime  @default(now())
   deletedAt    DateTime?
   //帳號是否有效
@@ -42,6 +42,43 @@ model Account {
 
   @@index([username])
   @@index([enable])
+}
+
+// ───────────────────────────────
+// 角色 / 權限（DB 驅動，可由後台調整）
+// ───────────────────────────────
+
+// 權限目錄：系統所有可指派的能力
+model Permission {
+  id        Int              @id @default(autoincrement())
+  key       String           @unique  // 'view_records' / 'upload' / 'modify_records' ...
+  name      String                    // 中文顯示名
+  category  String?                   // '頁面' / '操作' / '管理'
+  sortOrder Int              @default(0)
+  roles     RolePermission[]
+}
+
+// 角色：admin / qc / pm / tech（可新增）
+model Role {
+  id        Int              @id @default(autoincrement())
+  key       String           @unique  // 'admin' / 'qc' / 'pm' / 'tech'
+  name      String                    // 中文顯示名
+  isSystem  Boolean          @default(false) // 內建角色不可刪
+  sortOrder Int              @default(0)
+  createdAt DateTime         @default(now())
+  perms     RolePermission[]
+}
+
+// 角色 ↔ 權限 多對多關聯
+model RolePermission {
+  roleId       Int
+  permissionId Int
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
 }
 
 // ───────────────────────────────

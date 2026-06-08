@@ -643,6 +643,11 @@
     font-weight: 500;
   }
   #loginScreen .login-btn { margin-top: 20px; }
+  /* 技術員（record-only）：只能即時記錄，隱藏取消/補登等「修改」按鈕 */
+  body.record-only [data-cancel-entry],
+  body.record-only [data-backfill],
+  body.record-only #finishStepBfBtn,
+  body.record-only #interruptBfBtn { display: none !important; }
 </style>
 </head>
 <body>
@@ -1043,6 +1048,8 @@ function renderHeader() {
     if (histLink) histLink.style.display = canSeeHistory(me) ? 'flex' : 'none';
     const statsLink = document.getElementById('statsLink');
     if (statsLink) statsLink.style.display = canSeeHistory(me) ? 'flex' : 'none';
+    // 技術員：只能記錄不能修改 → 隱藏取消/補登按鈕
+    document.body.classList.toggle('record-only', !canModifyRecords(me));
   } else {
     $('leaderShow').textContent = '未登入';
     $('menuBtn').style.display = 'none';
