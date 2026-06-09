@@ -210,6 +210,26 @@
   #toast.show { display: block; }
   #toast.error { background: var(--brand); }
   #toast.success { background: var(--success); }
+
+  /* ===== 手機版 ===== */
+  @media (max-width: 600px) {
+    .container { padding: 12px; }
+    /* 篩選列：月份 / 機台各半行，重新整理整行、好按 */
+    .toolbar { gap: 8px; }
+    .toolbar .field { flex: 1 1 calc(50% - 4px); min-width: 0; }
+    .toolbar input, .toolbar select { width: 100%; min-height: 40px; }
+    .toolbar #refreshBtn { flex: 1 1 100%; min-height: 42px; }
+    /* 格狀圖：工號欄縮窄，露出更多日期格 */
+    table.ps-grid th.ps-order-col,
+    table.ps-grid td.ps-order-col { min-width: 90px; padding-left: 8px; padding-right: 8px; font-size: 12px; }
+    table.ps-grid th, table.ps-grid td { padding: 8px 4px; }
+    table.ps-grid td.ps-cell { min-width: 30px; }
+    .ps-cell .ps-qty { font-size: 11px; }
+    .ps-cell .ps-dot { width: 12px; height: 12px; }
+    /* 點工號彈出的生產規格框：不超出螢幕 */
+    #psSpecPop { max-width: 90vw; }
+    #psSpecPop .pop-spec { font-size: 16px; }
+  }
 </style>
 </head>
 <body>
@@ -527,6 +547,12 @@ function render() {
         }
       }
       const dayQty = qtyMap[dYmd];
+      // 有產量的那天一定要有點：完成日綠、其他黃（涵蓋現場比計畫日早生產的情況）
+      if (!dot && dayQty != null) {
+        dot = (done && dYmd === done)
+          ? '<span class="ps-dot green" title="已完成"></span>'
+          : '<span class="ps-dot yellow" title="生產中"></span>';
+      }
       const qtyHtml = (dayQty != null) ? `<span class="ps-qty">${dayQty}</span>` : '';
       const cellInner = (dot || qtyHtml) ? `<span class="ps-cellwrap">${dot}${qtyHtml}</span>` : '';
       html += `<td class="ps-cell ${isToday ? 'today' : ''}">${cellInner}</td>`;

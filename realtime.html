@@ -485,6 +485,15 @@
   .rt-ep-section.ep-closed > .ep-header .ep-chev { transform: rotate(-90deg); }
   .rt-ep-section.ep-closed > .ep-body { display: none !important; }
   .rt-ep-section.ep-closed { padding-bottom: 6px !important; }
+
+  /* ===== 手機版：設備參數多規格列（規格/SPM/刀數/送料）好觸控 ===== */
+  @media (max-width: 700px) {
+    .spec-row input[data-sf] { min-height: 38px !important; font-size: 14px !important; }
+    .spec-row input[data-sf="spm"],
+    .spec-row input[data-sf="blades"],
+    .spec-row input[data-sf="feed"] { width: 52px !important; }
+    .spec-row > button { width: 30px !important; height: 30px !important; font-size: 16px !important; }
+  }
 </style>
 </head>
 <body>

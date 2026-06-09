@@ -433,6 +433,11 @@
   #toast.show { display: block; }
   #toast.error { background: var(--brand); }
   #toast.success { background: var(--success); }
+
+  /* ===== 手機版：設備參數展開表（含新「送料」欄 4 欄）縮緊以塞得下 ===== */
+  @media (max-width: 600px) {
+    .rc-detail table th, .rc-detail table td { padding: 4px 5px !important; font-size: 11px !important; }
+  }
 </style>
 </head>
 <body>
