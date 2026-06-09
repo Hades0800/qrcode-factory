@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
-<title>上鎧鋼鐵 - 計畫達成統計</title>
+<title>上鎧鋼鐵 - 生產進度統計</title>
 <link rel="icon" href="logo.jpg">
 <link rel="stylesheet" href="styles.css">
 <style>
@@ -175,10 +175,23 @@
   table.ps-grid tr:hover td { background: #fafafc; }
   table.ps-grid tr:hover td.ps-order-col { background: #fafafc; }
 
-  table.ps-grid td.ps-cell { width: 30px; padding: 6px 4px; }
+  table.ps-grid td.ps-cell { min-width: 30px; padding: 6px 5px; }
   .ps-cell .ps-dot { width: 12px; height: 12px; }
+  .ps-cell .ps-cellwrap { display: inline-flex; align-items: center; justify-content: center; gap: 3px; }
+  .ps-cell .ps-qty { font-size: 11px; font-weight: 700; color: #333; }
   .ps-cell.today { background: #fff8e8; }
   table.ps-grid th.today { background: #fff3c4; color: var(--brand); }
+
+  /* 工號可點：點一下顯示生產規格 */
+  td.ps-order-col.ps-order-click { cursor: pointer; }
+  td.ps-order-col.ps-order-click:hover { color: var(--brand); text-decoration: underline; }
+  #psSpecPop {
+    position: fixed; z-index: 1000; display: none; max-width: 280px;
+    background: #1c1c1e; color: #fff; padding: 10px 12px; border-radius: 10px;
+    font-size: 13px; line-height: 1.5; box-shadow: 0 6px 24px rgba(0,0,0,.28);
+  }
+  #psSpecPop .pop-order { font-size: 11px; color: #bbb; margin-bottom: 3px; }
+  #psSpecPop .pop-spec { font-weight: 700; font-size: 15px; word-break: break-word; }
 
   .empty {
     text-align: center;
@@ -204,7 +217,7 @@
   <div class="brand">
     <img src="logo.jpg" alt="上鎧鋼鐵">
     <div class="brand-text">
-      <div class="title">計畫達成統計</div>
+      <div class="title">生產進度統計</div>
       <div class="sub" id="meShow"></div>
     </div>
   </div>
@@ -213,7 +226,7 @@
     <a href="index.html">生產實態紀錄</a>
     <a href="records.html">歷史實態紀錄</a>
     <a href="realtime.html">即時生產資訊</a>
-    <a href="plan-stats.html" class="nav-active">計畫達成統計</a>
+    <a href="plan-stats.html" class="nav-active">生產進度統計</a>
     <a href="goal-stats.html">目標達成統計</a>
     <a href="upload.html" id="uploadLink" style="display:none;">📤 上傳</a>
     <a href="admin.html" id="adminLink" style="display:none;">⚙ 管理</a>
@@ -375,6 +388,26 @@ function plannedQtyOf(o) {
   return Number(o.dispatchQty) || 0;
 }
 
+// 每日實際生產數量（QC 回報）→ { 'yyyy-mm-dd': 數量 }
+//   依各 QC 回報的時間點歸於當天：更換規格(30)、下班回報(pause12)、完成(11)
+function qtyByDayOf(o) {
+  const map = {};
+  const add = (t, q) => {
+    const k = ymd(t);
+    const n = Number(q);
+    if (!k || !Number.isFinite(n) || n === 0) return;
+    map[k] = (map[k] || 0) + n;
+  };
+  (o.stepEntries || []).forEach(e => {
+    if (e.stepNo === '30' && e.qcActualQty != null) add(e.recordedAt, e.qcActualQty);
+  });
+  if (o.step11At && o.step11QcActualQty != null) add(o.step11At, o.step11QcActualQty);
+  ((o.pause12 && o.pause12.history) || []).forEach(e => {
+    if (e.qcActualQty != null) add(e.startAt || e.endAt, e.qcActualQty);
+  });
+  return map;
+}
+
 function render() {
   const monthStr = $('filterMonth').value; // yyyy-mm
   const machine = machineSel.value;
@@ -439,21 +472,11 @@ function render() {
   const monthRate = lastDay > 0 ? (rateSum / lastDay * 100).toFixed(1) : null;
 
   // 標題
-  $('psTitle').textContent = yy + '年' + mm + '月份生產計劃達成度統計';
+  $('psTitle').textContent = yy + '年' + mm + '月份生產進度統計';
 
   // 上方統計列
   $('psSummary').innerHTML = `
     <div class="ps-line"><span class="lbl">機台編號：</span><span class="val">${machine}</span></div>
-    <div class="ps-line"></div>
-    <div class="ps-line"><span class="lbl">月應完成件數：</span><span class="val">${monthPlanned}</span></div>
-    <div class="ps-line"><span class="lbl">月已完成件數：</span><span class="val success">${monthDone}</span></div>
-    <div class="ps-line"><span class="lbl">月達成率（數量）：</span><span class="val brand">${monthRate !== null ? monthRate + '%' : '—'}</span></div>
-    <div class="ps-line"></div>
-    <div class="ps-line"><span class="lbl">當日計畫數量：</span><span class="val">${dayPlannedQty}</span></div>
-    <div class="ps-line"><span class="lbl">當日完成數量：</span><span class="val success">${dayCompletedQty}</span></div>
-    <div class="ps-line"><span class="lbl">當日完成件數：</span><span class="val">${todayDone}</span></div>
-    <div class="ps-line"><span class="lbl">當日延誤完成：</span><span class="val brand">${todayDelayed}</span></div>
-    <div class="ps-line"><span class="lbl">日達成率（數量）：</span><span class="val brand">${dayRate !== null ? dayRate + '%' : '—'}</span></div>
   `;
 
   // 沒資料
@@ -484,8 +507,9 @@ function render() {
     const plan = getPlannedYmd(o);
     const start = getActualStartYmd(o);
     const done = getCompletionYmd(o);
+    const qtyMap = qtyByDayOf(o);
 
-    html += `<tr><td class="ps-order-col">${escapeHtml(o.orderNo)}</td>`;
+    html += `<tr><td class="ps-order-col ps-order-click" data-orderno="${escapeHtml(o.orderNo)}" title="點一下看生產規格">${escapeHtml(o.orderNo)}</td>`;
     for (let d = 1; d <= daysInMonth; d++) {
       const dYmd = monthStr + '-' + String(d).padStart(2,'0');
       const isToday = dYmd === todayYmd;
@@ -502,7 +526,10 @@ function render() {
           dot = '<span class="ps-dot red" title="未完成"></span>';
         }
       }
-      html += `<td class="ps-cell ${isToday ? 'today' : ''}">${dot}</td>`;
+      const dayQty = qtyMap[dYmd];
+      const qtyHtml = (dayQty != null) ? `<span class="ps-qty">${dayQty}</span>` : '';
+      const cellInner = (dot || qtyHtml) ? `<span class="ps-cellwrap">${dot}${qtyHtml}</span>` : '';
+      html += `<td class="ps-cell ${isToday ? 'today' : ''}">${cellInner}</td>`;
     }
     html += '</tr>';
   }
@@ -514,6 +541,36 @@ function render() {
   $(id).addEventListener('change', render);
 });
 $('refreshBtn').onclick = loadOrders;
+
+// 點工號 → 顯示該工單生產規格（手機點一下也行）
+const specPop = document.createElement('div');
+specPop.id = 'psSpecPop';
+specPop.innerHTML = '<div class="pop-order"></div><div class="pop-spec"></div>';
+document.body.appendChild(specPop);
+
+document.addEventListener('click', (e) => {
+  const cell = e.target.closest('.ps-order-click');
+  if (cell) {
+    const orderNo = cell.dataset.orderno;
+    const o = allOrders.find(x => x.orderNo === orderNo);
+    const spec = (o && o.productSpec) ? o.productSpec : '（未填生產規格）';
+    specPop.querySelector('.pop-order').textContent = '工單 ' + orderNo + ' · 生產規格';
+    specPop.querySelector('.pop-spec').textContent = spec;
+    specPop.style.display = 'block';
+    const rect = cell.getBoundingClientRect();
+    const pw = specPop.offsetWidth, ph = specPop.offsetHeight;
+    let left = rect.left;
+    let top = rect.bottom + 6;
+    if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+    if (left < 8) left = 8;
+    if (top + ph > window.innerHeight - 8) top = rect.top - ph - 6;
+    specPop.style.left = left + 'px';
+    specPop.style.top = top + 'px';
+    e.stopPropagation();
+    return;
+  }
+  specPop.style.display = 'none';   // 點其他地方關閉
+});
 
 loadOrders();
 </script>

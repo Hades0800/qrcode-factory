@@ -660,7 +660,7 @@
     <a href="index.html" class="nav-active">生產實態紀錄</a>
     <a href="records.html">歷史實態紀錄</a>
     <a href="realtime.html">即時生產資訊</a>
-    <a href="plan-stats.html">計畫達成統計</a>
+    <a href="plan-stats.html">生產進度統計</a>
     <a href="goal-stats.html">目標達成統計</a>
     <a href="upload.html" id="uploadLink" style="display:none;">📤 上傳</a>
     <a href="admin.html" id="adminLink" style="display:none;">⚙ 管理</a>
@@ -982,11 +982,8 @@ async function doLogin() {
   me = r.data.leader;
   localStorage.setItem('token', token);
   localStorage.setItem('me', JSON.stringify(me));
-  hideLogin();
-  renderHeader();
-  toast('登入成功', 'success');
-  loadIdleMachines();
-  restoreSavedState();
+  // 登入後直接前往「即時生產」頁（多數使用者的主要畫面）
+  location.href = 'realtime.html';
 }
 
 // 恢復上次未完成的工作狀態

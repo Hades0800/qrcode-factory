@@ -502,7 +502,7 @@
     <a href="index.html">生產實態紀錄</a>
     <a href="records.html">歷史實態紀錄</a>
     <a href="realtime.html" class="nav-active">即時生產資訊</a>
-    <a href="plan-stats.html">計畫達成統計</a>
+    <a href="plan-stats.html">生產進度統計</a>
     <a href="goal-stats.html">目標達成統計</a>
     <a href="upload.html" id="uploadLink" style="display:none;">📤 上傳</a>
     <a href="admin.html" id="adminLink" style="display:none;">⚙ 管理</a>
@@ -1122,7 +1122,7 @@ function buildTimeline(o, isAdmin) {
         label += '（' + escapeHtml(o.step11Note) + '）';
       }
       if (s.key === 'step11At' && o.step11QcActualQty != null) {
-        label += ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${o.step11QcActualQty}</span>`;
+        label = label + `<div style="margin:3px 0 0;"><span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${o.step11QcActualQty}</span></div>`;
       }
       items.push({ time: new Date(o[s.key]), label, type: 'step', entryId: null });
     }
@@ -1132,8 +1132,8 @@ function buildTimeline(o, isAdmin) {
   (o.stepEntries || []).forEach(e => {
     if (e.stepNo === '30') {
       const suffix = (e.isManual ? '（補登）' : '');
-      const qcTxt = (e.qcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span>` : '';
-      items.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + qcTxt + suffix, type: 'spec-change', entryId: e.id });
+      const qcTxt = (e.qcActualQty != null) ? `<div style="margin:3px 0 0;"><span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span></div>` : '';
+      items.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + suffix + qcTxt, type: 'spec-change', entryId: e.id });
       return;
     }
     const suffix = (e.isManual ? '（補登）' : '');
@@ -1156,7 +1156,7 @@ function buildTimeline(o, isAdmin) {
   ];
   pauseEvents.forEach(e => {
     const note = e.note ? '（' + escapeHtml(e.note) + '）' : '';
-    const qcTxt = (e.qcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span>` : '';
+    const qcTxt = (e.qcActualQty != null) ? `<div style="margin:3px 0 0;"><span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span></div>` : '';
     const ico = e.pauseType === '13' ? icon('alert', 13) : icon('pause', 13);
     items.push({
       time: new Date(e.startAt),
@@ -1237,7 +1237,6 @@ const RT_EP_FIELDS = [
   ['paramFileName', '設備參數檔名'],
   ['paramFileAttr', '參數檔案屬性'],
   ['moldSpec', '模具規格'],
-  ['feedSetting', '送料設定'],
   ['cutterStroke', '大刀座位置'],
   ['strokeUpdateFreq', '位置更新頻度'],
 ];
@@ -1257,20 +1256,28 @@ function rtParseSpecRows(ep, prefix) {
       arr = [{ spec: spec || '', spm: spm, blades: blades }];
     }
   }
+  // 舊資料相容：送料設定原為單一欄位（如「20，25，16」），依序帶入各規格列
+  const feedKey = prefix ? 'baseFeedSetting' : 'feedSetting';
+  const feedRaw = ep && ep[feedKey];
+  if (feedRaw && arr.length && arr.some(r => r.feed == null || r.feed === '')) {
+    const parts = String(feedRaw).split(/[,，、\s]+/).filter(s => s !== '');
+    arr.forEach((r, i) => { if ((r.feed == null || r.feed === '') && parts[i] != null) r.feed = parts[i]; });
+  }
   return arr;
 }
-function rtSpecRowHtml(spec, spm, blades) {
+function rtSpecRowHtml(spec, spm, blades, feed) {
   const val = v => (v == null ? '' : String(v));
   return `<div class="spec-row" data-spec-row style="display:flex;gap:5px;align-items:center;margin-bottom:4px;">
     <input data-sf="spec" value="${escapeHtml(val(spec))}" placeholder="規格" maxlength="50" style="flex:1;min-width:0;padding:6px 7px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;">
-    <input data-sf="spm" value="${escapeHtml(val(spm))}" type="number" min="0" step="0.1" placeholder="SPM" style="width:58px;padding:6px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;">
-    <input data-sf="blades" value="${escapeHtml(val(blades))}" type="number" min="0" placeholder="刀數" style="width:58px;padding:6px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;">
+    <input data-sf="spm" value="${escapeHtml(val(spm))}" type="number" min="0" step="0.1" placeholder="SPM" style="width:48px;padding:6px 5px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;">
+    <input data-sf="blades" value="${escapeHtml(val(blades))}" type="number" min="0" placeholder="刀數" style="width:48px;padding:6px 5px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;">
+    <input data-sf="feed" value="${escapeHtml(val(feed))}" placeholder="送料" maxlength="50" style="width:48px;padding:6px 5px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;">
     <button type="button" onclick="this.closest('.spec-row').remove()" title="刪除" style="flex-shrink:0;width:24px;height:24px;border:none;border-radius:6px;background:#f2f2f5;color:var(--brand);font-weight:700;cursor:pointer;line-height:1;">×</button>
   </div>`;
 }
 function addSpecRow(btn) {
   const box = btn.closest('[data-spec-col]').querySelector('.spec-rows');
-  box.insertAdjacentHTML('beforeend', rtSpecRowHtml('', '', ''));
+  box.insertAdjacentHTML('beforeend', rtSpecRowHtml('', '', '', ''));
 }
 function renderRtEquipmentColumn(ep, prefix) {
   // prefix='' 表示參數值（原始）；prefix='base' 表示基礎參數（製造）
@@ -1279,9 +1286,9 @@ function renderRtEquipmentColumn(ep, prefix) {
   const specTable = `
     <div data-spec-col="${col}" style="margin-bottom:8px;">
       <div style="display:flex;gap:5px;font-size:10px;color:var(--muted);font-weight:700;padding:0 2px 3px;">
-        <span style="flex:1;">生產規格</span><span style="width:58px;text-align:center;">SPM</span><span style="width:58px;text-align:center;">刀數</span><span style="width:24px;"></span>
+        <span style="flex:1;">生產規格</span><span style="width:48px;text-align:center;">SPM</span><span style="width:48px;text-align:center;">刀數</span><span style="width:48px;text-align:center;">送料</span><span style="width:24px;"></span>
       </div>
-      <div class="spec-rows">${rows.map(r => rtSpecRowHtml(r.spec, r.spm, r.blades)).join('')}</div>
+      <div class="spec-rows">${rows.map(r => rtSpecRowHtml(r.spec, r.spm, r.blades, r.feed)).join('')}</div>
       <button type="button" onclick="addSpecRow(this)" style="margin-top:2px;width:100%;padding:5px;border:1px dashed var(--border);border-radius:6px;background:#fafafa;font-size:11px;color:var(--brand);cursor:pointer;font-weight:600;">＋ 新增規格</button>
     </div>`;
   const singleFields = RT_EP_FIELDS.map(([k, label]) => {
@@ -1330,8 +1337,9 @@ async function saveRtEquipment(orderNo, btn) {
       const spec = (row.querySelector('[data-sf="spec"]').value || '').trim();
       const spmRaw = (row.querySelector('[data-sf="spm"]').value || '').trim();
       const bladesRaw = (row.querySelector('[data-sf="blades"]').value || '').trim();
-      if (!spec && !spmRaw && !bladesRaw) return;
-      out.push({ spec, spm: spmRaw === '' ? null : Number(spmRaw), blades: bladesRaw === '' ? null : Number(bladesRaw) });
+      const feedRaw = (row.querySelector('[data-sf="feed"]').value || '').trim();
+      if (!spec && !spmRaw && !bladesRaw && !feedRaw) return;
+      out.push({ spec, spm: spmRaw === '' ? null : Number(spmRaw), blades: bladesRaw === '' ? null : Number(bladesRaw), feed: feedRaw });
     });
     return out;
   };

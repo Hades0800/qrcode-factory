@@ -450,7 +450,7 @@
     <a href="index.html">生產實態紀錄</a>
     <a href="records.html" class="nav-active">歷史實態紀錄</a>
     <a href="realtime.html">即時生產資訊</a>
-    <a href="plan-stats.html">計畫達成統計</a>
+    <a href="plan-stats.html">生產進度統計</a>
     <a href="goal-stats.html">目標達成統計</a>
     <a href="upload.html" id="uploadLink" style="display:none;">📤 上傳</a>
     <a href="admin.html" id="adminLink" style="display:none;">⚙ 管理</a>
@@ -711,7 +711,7 @@ function render() {
           label += '（' + escapeHtml(o.step11Note) + '）';
         }
         if (s.key === 'step11At' && o.step11QcActualQty != null) {
-          label += ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${o.step11QcActualQty}</span>`;
+          label = label + `<div style="margin:3px 0 0;"><span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${o.step11QcActualQty}</span></div>`;
         }
         allItems.push({ time: new Date(o[s.key]), label, style: 'done' });
       }
@@ -720,8 +720,8 @@ function render() {
     (o.stepEntries || []).forEach(e => {
       if (e.stepNo === '30') {
         const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
-        const qcTag = (e.qcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span>` : '';
-        allItems.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + qcTag + manual, style: 'spec-change' });
+        const qcTag = (e.qcActualQty != null) ? `<div style="margin:3px 0 0;"><span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span></div>` : '';
+        allItems.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + manual + qcTag, style: 'spec-change' });
         return;
       }
       const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
@@ -738,7 +738,7 @@ function render() {
     // 暫停事件
     ((o.pause12 && o.pause12.history) || []).forEach((e, i) => {
       const isLunch = (e.note || '').includes('中午') || (e.note || '').includes('午休') || (e.note || '').includes('午餐');
-      const qcTag = (e.qcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span>` : '';
+      const qcTag = (e.qcActualQty != null) ? `<div style="margin:3px 0 0;"><span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span></div>` : '';
       allItems.push({ time: new Date(e.startAt), label: icon('pause', 13) + ' 暫停' + (e.note ? '（'+escapeHtml(e.note)+'）' : '') + qcTag, style: 'pause' });
       if (e.endAt) {
         const dur = e.duration ? fmtDur(e.duration) : '';
@@ -873,7 +873,6 @@ const EP_FIELDS = [
   ['paramFileName', '設備參數檔名'],
   ['paramFileAttr', '參數檔案屬性'],
   ['moldSpec', '模具規格'],
-  ['feedSetting', '送料設定'],
   ['cutterStroke', '大刀座位置'],
   ['strokeUpdateFreq', '位置更新頻度'],
 ];
@@ -889,6 +888,12 @@ function rcParseSpecRows(ep) {
       arr = [{ spec: spec || '', spm, blades }];
     }
   }
+  // 舊資料相容：送料設定原為單一欄位（如「20，25，16」），依序帶入各規格列
+  const feedRaw = ep && ep.feedSetting;
+  if (feedRaw && arr.length && arr.some(r => r.feed == null || r.feed === '')) {
+    const parts = String(feedRaw).split(/[,，、\s]+/).filter(s => s !== '');
+    arr.forEach((r, i) => { if ((r.feed == null || r.feed === '') && parts[i] != null) r.feed = parts[i]; });
+  }
   return arr;
 }
 
@@ -902,12 +907,14 @@ function renderEquipmentParam(ep) {
       <td style="padding:4px 8px;font-size:12px;font-weight:600;">${s.spec ? escapeHtml(String(s.spec)) : dash}</td>
       <td style="padding:4px 8px;font-size:12px;text-align:center;">${s.spm == null || s.spm === '' ? dash : escapeHtml(String(s.spm))}</td>
       <td style="padding:4px 8px;font-size:12px;text-align:center;">${s.blades == null || s.blades === '' ? dash : escapeHtml(String(s.blades))}</td>
+      <td style="padding:4px 8px;font-size:12px;text-align:center;">${s.feed == null || s.feed === '' ? dash : escapeHtml(String(s.feed))}</td>
     </tr>`).join('');
     specHtml = `<table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:8px;">
       <tr style="color:var(--muted);font-size:11px;border-bottom:1px solid var(--border);">
         <th style="text-align:left;padding:4px 8px;font-weight:600;">生產規格</th>
         <th style="padding:4px 8px;font-weight:600;">機器SPM</th>
         <th style="padding:4px 8px;font-weight:600;">生產刀數</th>
+        <th style="padding:4px 8px;font-weight:600;">送料</th>
       </tr>${srows}</table>`;
   }
   const rows = EP_FIELDS.map(([k, label]) => {

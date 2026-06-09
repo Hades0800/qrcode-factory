@@ -122,7 +122,8 @@ export default async function equipmentParamRoutes(fastify) {
           ? Math.max(0, Math.min(1e5, Number(r.spm))) : null,
         blades: (r && r.blades != null && r.blades !== '' && Number.isFinite(Number(r.blades)))
           ? Math.max(0, Math.min(1e6, Math.round(Number(r.blades)))) : null,
-      })).filter(r => r.spec || r.spm != null || r.blades != null);
+        feed: (r && r.feed != null) ? String(r.feed).trim().slice(0, 50) : '',
+      })).filter(r => r.spec || r.spm != null || r.blades != null || r.feed);
       return rows.length ? JSON.stringify(rows) : null;
     };
 
