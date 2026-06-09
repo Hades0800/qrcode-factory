@@ -1,0 +1,282 @@
+/* RecordsPage 專屬樣式 — 對應原 records.html <style> 區段（工單卡片 / 時間軸 / 規格卡片 / 匯總） */
+
+.records-page .toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+}
+.records-page .toolbar .field { display: flex; flex-direction: column; }
+.records-page .toolbar label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.records-page .toolbar input,
+.records-page .toolbar select {
+  padding: 8px 10px;
+  font-size: 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+}
+.records-page .toolbar input:focus,
+.records-page .toolbar select:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+
+.records-page .stats {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.records-page .stat-card {
+  flex: 1;
+  min-width: 140px;
+  background: #fff;
+  padding: 14px 16px;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  border-left: 3px solid var(--brand);
+}
+.records-page .stat-card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.records-page .stat-card .value { font-size: 22px; font-weight: 800; color: var(--ink); margin-top: 4px; }
+
+.records-page .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* 工單卡片（直向顯示） */
+.records-page .order-list { display: flex; flex-direction: column; gap: 12px; }
+.records-page .rec-card {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.02);
+  border-left: 4px solid var(--border);
+  transition: box-shadow .15s;
+}
+.records-page .rec-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+.records-page .rec-card.has-complete { border-left-color: var(--success); }
+.records-page .rec-card .rc-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.records-page .rec-card .rc-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.records-page .rec-card .rc-no { font-size: 20px; font-weight: 800; color: var(--ink); min-width: 0; word-break: break-all; }
+.records-page .rec-card .rc-badge {
+  font-size: 11px; font-weight: 700; padding: 4px 12px;
+  border-radius: 10px; background: var(--border); color: var(--muted);
+  flex-shrink: 0;
+}
+.records-page .rec-card .rc-badge.done { background: var(--success); color: #fff; }
+.records-page .rec-card .rc-badge.active { background: var(--brand-soft); color: var(--brand); }
+.records-page .rec-card .rc-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.records-page .rec-card .rc-pill {
+  font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 6px;
+  line-height: 1.4; white-space: nowrap;
+}
+.records-page .rec-card .rc-pill.scope { background: #fff3cd; color: #b8860b; border: 1.5px solid #f0ad4e; }
+.records-page .rec-card .rc-meta {
+  display: flex; gap: 16px; flex-wrap: wrap;
+  font-size: 14px; color: var(--muted); margin-bottom: 14px;
+}
+.records-page .rec-card .rc-meta strong { color: var(--ink); }
+
+/* Vertical Timeline */
+.records-page .rec-card .rc-timeline { padding-left: 0; margin: 14px 0 0; list-style: none; }
+.records-page .rc-timeline li {
+  position: relative;
+  padding-left: 28px;
+  padding-bottom: 14px;
+  font-size: 13px;
+}
+.records-page .rc-timeline li:last-child { padding-bottom: 0; }
+.records-page .rc-timeline li::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 22px;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+.records-page .rc-timeline li:last-child::before { display: none; }
+.records-page .rc-timeline li .tl-dot {
+  position: absolute;
+  left: 2px;
+  top: 4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--border);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px var(--border);
+}
+.records-page .rc-timeline li.done .tl-dot { background: var(--success); box-shadow: 0 0 0 2px var(--success); }
+.records-page .rc-timeline li.pause-event .tl-dot { background: #f0ad4e; box-shadow: 0 0 0 2px #f0ad4e; }
+.records-page .rc-timeline li.abnormal-event .tl-dot { background: var(--brand); box-shadow: 0 0 0 2px var(--brand); }
+.records-page .rc-timeline li.resume-event .tl-dot { background: var(--success); box-shadow: 0 0 0 2px var(--success); }
+.records-page .rc-timeline li.pause-event,
+.records-page .rc-timeline li.abnormal-event,
+.records-page .rc-timeline li.resume-event {
+  margin-left: 20px;
+  padding-left: 28px;
+  border-left: 2px dashed var(--border);
+}
+.records-page .rc-timeline li .tl-time {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.records-page .rc-timeline li .tl-label {
+  color: var(--ink);
+  margin-top: 2px;
+  font-weight: 500;
+}
+.records-page .rc-timeline li.done .tl-label { color: var(--success); }
+.records-page .rc-timeline li.pause-event .tl-time { color: #b8860b; }
+.records-page .rc-timeline li.pause-event .tl-label { color: #b8860b; font-weight: 600; }
+.records-page .rc-timeline li.abnormal-event .tl-time { color: var(--brand); }
+.records-page .rc-timeline li.abnormal-event .tl-label { color: var(--brand); font-weight: 600; }
+.records-page .rc-timeline li.resume-event .tl-time { color: var(--success); }
+.records-page .rc-timeline li.resume-event .tl-label { color: var(--success); font-style: italic; font-weight: 600; }
+.records-page .rc-timeline li.day-divider {
+  padding-left: 0;
+  padding-bottom: 10px;
+  padding-top: 4px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brand);
+}
+.records-page .rc-timeline li.day-divider::before { display: none; }
+.records-page .rc-timeline li.spec-change {
+  padding-left: 0;
+  padding-top: 8px;
+  padding-bottom: 12px;
+  margin: 6px 0;
+  border-top: 2px dashed #f0ad4e;
+  color: #b8860b;
+  font-size: 13px;
+  font-weight: 700;
+  background: linear-gradient(to bottom, #fff8e8 0%, transparent 100%);
+}
+.records-page .rc-timeline li.spec-change::before { display: none; }
+
+.records-page .rc-expand { font-size: 12px; color: var(--brand); margin-top: 10px; text-align: left; }
+.records-page .rc-detail {
+  display: none; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
+}
+.records-page .rc-detail.show { display: block; }
+
+/* 工單資訊卡片 */
+.records-page .info-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+}
+.records-page .info-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.records-page .info-empty { color: var(--muted); font-weight: 400; }
+
+/* Spec cards */
+.records-page .spec-cards-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  margin-bottom: 12px;
+}
+.records-page .spec-cards-wrap::-webkit-scrollbar { display: none; }
+.records-page .spec-cards {
+  display: flex;
+  gap: 10px;
+  min-width: min-content;
+}
+.records-page .spec-card {
+  flex: 0 0 auto;
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 10px 14px;
+  min-width: 140px;
+}
+.records-page .spec-card .sc-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+.records-page .spec-card .sc-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  word-break: break-all;
+  line-height: 1.3;
+}
+.records-page .spec-card.wide { min-width: 220px; }
+.records-page .spec-stats {
+  display: flex;
+  gap: 8px;
+  min-width: min-content;
+}
+.records-page .spec-stat {
+  background: linear-gradient(135deg, var(--brand-soft), #fff);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  text-align: center;
+  min-width: 90px;
+  flex: 0 0 auto;
+}
+.records-page .spec-stat .ss-label { font-size: 10px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+.records-page .spec-stat .ss-value { font-size: 18px; font-weight: 800; color: var(--ink); }
+.records-page .spec-stat .ss-unit { font-size: 11px; color: var(--muted); font-weight: 500; }
+
+@media (min-width: 768px) {
+  .records-page .spec-cards-wrap { overflow-x: visible; }
+  .records-page .spec-cards { flex-wrap: wrap; }
+  .records-page .spec-card { flex: 1 1 auto; min-width: 160px; }
+  .records-page .spec-card.wide { flex: 2 1 auto; }
+  .records-page .spec-stats { flex-wrap: wrap; }
+  .records-page .spec-stat { flex: 1 1 0; min-width: 0; }
+  .records-page .spec-multi-grid {
+    display: grid;
+    grid-template-columns: repeat(var(--ms-cols, 4), minmax(0, 280px));
+    gap: 12px;
+  }
+  .records-page .spec-multi-grid > div { min-width: 0; max-width: none; }
+}
+
+/* preview table（無工令） */
+.records-page .preview-table { width: 100%; border-collapse: collapse; }
+.records-page .preview-table th { background: var(--bg); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; padding: 8px; text-align: left; }
+.records-page .preview-table td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.records-page .preview-table tr:last-child td { border-bottom: none; }

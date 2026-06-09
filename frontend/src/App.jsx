@@ -9,6 +9,8 @@ import PlanStatsPage from './pages/PlanStatsPage';
 import GoalStatsPage from './pages/GoalStatsPage';
 import UploadPage from './pages/UploadPage';
 import AdminPage from './pages/AdminPage';
+import MachinesPage from './pages/MachinesPage';
+import QrcodesPage from './pages/QrcodesPage';
 
 export default function App() {
   return (
@@ -24,6 +26,8 @@ export default function App() {
         <Route path="/goal-stats" element={<ProtectedRoute permission="view_goal_stats"><GoalStatsPage /></ProtectedRoute>} />
         <Route path="/upload" element={<ProtectedRoute permission="upload"><UploadPage /></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute permission="manage_accounts"><AdminPage /></ProtectedRoute>} />
+        <Route path="/machines" element={<MachinesPage />} />
+        <Route path="/qrcodes" element={<QrcodesPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

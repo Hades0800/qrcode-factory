@@ -23,6 +23,8 @@ export default function Layout() {
     { to: '/plan-stats', label: '計畫達成統計', show: hasPermission(me, 'view_plan_stats') },
     { to: '/goal-stats', label: '目標達成統計', show: hasPermission(me, 'view_goal_stats') },
     { to: '/upload',     label: '📤 上傳',     show: hasPermission(me, 'upload') },
+    { to: '/machines',   label: '🏷 機台 QR Code', show: true },
+    { to: '/qrcodes',    label: '🏷 工項 QR Code', show: true },
     { to: '/admin',      label: '⚙ 管理',     show: hasPermission(me, 'manage_accounts') },
   ];
 
