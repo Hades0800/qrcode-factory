@@ -199,7 +199,7 @@ export default async function orderRoutes(fastify) {
         await fastify.prisma.order.update({
           where: { orderNo },
           data: {
-            productSpec: null, moldSpec: null,
+            productSpec: null, customerName: null, moldSpec: null,
             material: null, dispatchQty: null, bladeCount: null,
             machineSPM: null, unitWeight: null, totalWeight: null,
           },
@@ -965,6 +965,7 @@ export default async function orderRoutes(fastify) {
         batchId: batch.id,
         orderNo: orderNo || String(row.orderNo || ''),
         productSpec: clipStr(row.productSpec, 200),
+        customerName: clipStr(row.customerName, 100),
         moldSpec: clipStr(row.moldSpec, 100),
         material: clipStr(row.material, 200),
         machineNo: row.machineNo ? clipStr(row.machineNo, 60) : null,
@@ -994,7 +995,7 @@ export default async function orderRoutes(fastify) {
         const data = {
           plannedDate: batchProductionDate, // 計畫日期：可被新上傳覆寫
           productSpec: rawRow.productSpec,
-          customerName: clipStr(row.customerName, 100),
+          customerName: rawRow.customerName,
           moldSpec: rawRow.moldSpec,
           material: rawRow.material,
           dispatchQty: rawRow.dispatchQty,
@@ -1020,6 +1021,13 @@ export default async function orderRoutes(fastify) {
             rawRow.status = 'updated';
             updated++;
           } else {
+            // 規格不同跳過，但客戶名稱跟著工單號走：工單還沒填客戶時照樣配對補上
+            if (data.customerName && !existing.customerName) {
+              await fastify.prisma.order.update({
+                where: { orderNo },
+                data: { customerName: data.customerName },
+              });
+            }
             rawRow.status = 'skipped';
             rawRow.errorMsg = '規格不同，跳過';
             skipped++;
@@ -1051,6 +1059,41 @@ export default async function orderRoutes(fastify) {
     return { ok: true, created, updated, skipped, errors, total: rows.length, batchId: batch.id };
   });
 
+  // 客戶名稱補登（管理員）：簡表（工單號＋客戶名稱）一次補齊
+  // 只更新 customerName，依工單號配對；計畫日期、規格、生產紀錄一律不碰
+  fastify.post('/bulk-fill-customer', async (request, reply) => {
+    if (!request.user.isAdmin) {
+      return reply.code(403).send({ error: '需要管理員權限' });
+    }
+    const { rows } = request.body || {};
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return reply.code(400).send({ error: '沒有資料' });
+    }
+    if (rows.length > 1000) {
+      return reply.code(400).send({ error: '單次上限 1000 筆' });
+    }
+    let filled = 0, overwritten = 0, unchanged = 0;
+    const notFound = [], errors = [];
+    for (const row of rows) {
+      try {
+        const orderNo = String(row.orderNo || '').trim().toUpperCase();
+        const customerName = clipStr(String(row.customerName || '').trim(), 100);
+        if (!validOrderNo(orderNo)) { errors.push((row.orderNo || '(空)') + '：工單號格式錯誤'); continue; }
+        if (!customerName) { errors.push(orderNo + '：客戶名稱空白'); continue; }
+        const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
+        if (!order) { notFound.push(orderNo); continue; }
+        if (order.customerName === customerName) { unchanged++; continue; }
+        await fastify.prisma.order.update({ where: { orderNo }, data: { customerName } });
+        if (order.customerName) overwritten++; else filled++;
+      } catch (e) {
+        errors.push((row.orderNo || '?') + ': ' + e.message);
+      }
+    }
+    await audit(fastify.prisma, request, 'bulk_fill_customer', null,
+      `filled=${filled} overwritten=${overwritten} unchanged=${unchanged} notFound=${notFound.length} errors=${errors.length}`);
+    return { ok: true, filled, overwritten, unchanged, notFound, errors, total: rows.length };
+  });
+
   // 批次取消上傳：只動上傳資料，工單本身不刪
   // - 不論工單是否有生產紀錄，一律只清上傳欄位（productSpec、moldSpec、material 等）
   // - 工單本身（productionDate、機台、生產紀錄）一律保留
@@ -1077,7 +1120,7 @@ export default async function orderRoutes(fastify) {
         await fastify.prisma.order.update({
           where: { orderNo },
           data: {
-            productSpec: null, moldSpec: null,
+            productSpec: null, customerName: null, moldSpec: null,
             material: null, dispatchQty: null, bladeCount: null,
             machineSPM: null, unitWeight: null, totalWeight: null,
           },

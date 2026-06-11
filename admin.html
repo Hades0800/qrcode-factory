@@ -291,6 +291,31 @@
   </div>
 
   <div class="card">
+    <h2>客戶名稱補登</h2>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">
+      用簡表一次補齊工單的客戶名稱：Excel 只需「製造單號」與「客戶名稱」兩欄，依工單號配對（日期等其他欄位可有可無，會被忽略）。
+      只更新客戶名稱——計畫日期、規格、生產紀錄都不會動。
+    </p>
+    <input type="file" id="custFile" accept=".xlsx,.xls" style="display:none;">
+    <button class="btn-primary btn-block" id="custPickBtn">選擇 Excel 簡表</button>
+    <div id="custFileName" style="margin-top:8px;font-size:13px;color:var(--muted);"></div>
+    <div id="custPreview" style="display:none;margin-top:12px;">
+      <div id="custStats" style="font-size:13px;margin-bottom:8px;"></div>
+      <div style="max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:8px;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr style="background:var(--bg);"><th style="text-align:left;padding:6px 10px;">#</th><th style="text-align:left;padding:6px 10px;">製造單號</th><th style="text-align:left;padding:6px 10px;">客戶名稱</th></tr></thead>
+          <tbody id="custPreviewBody"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:10px;">
+        <button class="btn-primary btn-block" id="custFillBtn">確認補登</button>
+        <button class="btn-secondary btn-block" id="custCancelBtn">取消</button>
+      </div>
+    </div>
+    <div id="custResult" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card">
     <h2>系統工具</h2>
     <button class="btn-primary btn-block" id="migrateDatesBtn" style="margin-bottom:6px;">遷移：拆分計畫日期 / 實際開始日期</button>
     <p style="font-size:12px;color:var(--muted);margin:0 0 14px;">把舊 productionDate 拆成「計畫日期 (plannedDate)」與「實際開始日期 (actualStartDate)」。執行後即時頁、紀錄頁、製造概覽會以實際日期為準，並標出計畫日期不同處。建議只跑一次。</p>
@@ -305,6 +330,7 @@
 
 <div id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="config.js"></script>
 <script src="utils.js?v=20260522a"></script>
 <script>
@@ -800,6 +826,85 @@ document.querySelectorAll('.rec-tab').forEach(tabEl => {
     renderRecovery();
   };
 });
+
+// ── 客戶名稱補登：簡表（製造單號＋客戶名稱）一次補齊 ──
+let custRows = [];
+const CUST_ORDER_KEYS = ['製造單號', '工單號', '工單編號', '工單'];
+const CUST_NAME_KEYS = ['客戶名稱', '客戶', '客戶名', '客戶簡稱', '客戶全名'];
+const custNormHeader = s => String(s || '').trim().replace(/[\s　()（）\-_－\/／:：]/g, '').toLowerCase();
+
+$('custPickBtn').onclick = () => $('custFile').click();
+$('custFile').onchange = e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { toast('檔案過大（上限 5MB）', 'error'); return; }
+  if (!/\.(xlsx|xls)$/i.test(file.name)) { toast('請選擇 .xlsx 或 .xls 檔', 'error'); return; }
+  $('custFileName').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const wb = XLSX.read(ev.target.result, { type: 'array', cellDates: true });
+      const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '', raw: true });
+      parseCustRows(json);
+    } catch (err) { toast('Excel 解析失敗：' + err.message, 'error'); }
+  };
+  reader.readAsArrayBuffer(file);
+};
+
+function parseCustRows(json) {
+  if (!json.length) { toast('Excel 沒有資料', 'error'); return; }
+  const headers = Object.keys(json[0]);
+  const orderKey = headers.find(h => CUST_ORDER_KEYS.map(custNormHeader).includes(custNormHeader(h)));
+  const nameKey = headers.find(h => CUST_NAME_KEYS.map(custNormHeader).includes(custNormHeader(h)));
+  if (!orderKey) { toast('找不到「製造單號」欄位，請確認第一列表頭', 'error'); return; }
+  if (!nameKey) { toast('找不到「客戶名稱」欄位，請確認第一列表頭', 'error'); return; }
+  custRows = json
+    .map(r => ({
+      orderNo: String(r[orderKey] || '').trim().toUpperCase(),
+      customerName: String(r[nameKey] || '').trim(),
+    }))
+    .filter(r => r.orderNo || r.customerName)
+    .map(r => ({ ...r, _valid: /^[A-Z]\d{10}$/.test(r.orderNo) && !!r.customerName }));
+  if (!custRows.length) { toast('Excel 沒有可用的資料列', 'error'); return; }
+  const valid = custRows.filter(r => r._valid).length;
+  const invalid = custRows.length - valid;
+  $('custResult').innerHTML = '';
+  $('custPreview').style.display = 'block';
+  $('custStats').innerHTML = `共 <strong>${custRows.length}</strong> 筆，有效 <strong>${valid}</strong> 筆` +
+    (invalid ? `，<span style="color:var(--brand);">略過 ${invalid} 筆（工單號格式錯誤或客戶名稱空白）</span>` : '');
+  $('custPreviewBody').innerHTML = custRows.map((r, i) =>
+    `<tr style="border-top:1px solid var(--border);${r._valid ? '' : 'opacity:.45;'}">` +
+    `<td style="padding:5px 10px;">${i + 1}</td>` +
+    `<td style="padding:5px 10px;">${escapeHtml(r.orderNo) || '—'}</td>` +
+    `<td style="padding:5px 10px;">${escapeHtml(r.customerName) || '—'}</td></tr>`
+  ).join('');
+}
+
+$('custCancelBtn').onclick = () => {
+  custRows = [];
+  $('custPreview').style.display = 'none';
+  $('custFileName').textContent = '';
+  $('custFile').value = '';
+};
+
+$('custFillBtn').onclick = async () => {
+  const clean = custRows.filter(r => r._valid).map(r => ({ orderNo: r.orderNo, customerName: r.customerName }));
+  if (!clean.length) { toast('沒有有效資料', 'error'); return; }
+  if (!confirm('確定補登 ' + clean.length + ' 筆客戶名稱？只更新客戶欄位，其他資料不會動。')) return;
+  $('custFillBtn').disabled = true;
+  const r = await api('/api/orders/bulk-fill-customer', { method: 'POST', body: { rows: clean } });
+  $('custFillBtn').disabled = false;
+  if (!r.ok) { toast(r.error || '補登失敗', 'error'); return; }
+  const d = r.data;
+  toast('客戶名稱補登完成', 'success');
+  $('custPreview').style.display = 'none';
+  $('custResult').innerHTML =
+    `<div style="font-size:13px;line-height:1.9;">` +
+    `<span style="color:var(--success);font-weight:600;">✓ 補上 ${d.filled} 筆、覆蓋 ${d.overwritten} 筆、原本相同 ${d.unchanged} 筆</span>` +
+    (d.notFound.length ? `<div style="color:var(--brand);">⚠ 找不到工單 ${d.notFound.length} 筆：${d.notFound.map(escapeHtml).join('、')}</div>` : '') +
+    (d.errors.length ? `<div style="color:var(--brand);">⚠ 錯誤 ${d.errors.length} 筆：${d.errors.map(escapeHtml).join('、')}</div>` : '') +
+    `</div>`;
+};
 
 if (API_URL.startsWith('PASTE_')) {
   toast('尚未設定 API_URL，請先部署後端', 'error');

@@ -981,6 +981,7 @@ async function toggleDetail(idx) {
       <div class="spec-cards-wrap"><div class="spec-cards">
         ${dateCard}
         <div class="spec-card wide"><div class="sc-label">🔧 生產規格</div><div class="sc-value">${s.productSpec ? escapeHtml(s.productSpec) : '<span class="info-empty">—</span>'}</div></div>
+        <div class="spec-card"><div class="sc-label">🏢 客戶</div><div class="sc-value">${o.customerName ? escapeHtml(o.customerName) : '<span class="info-empty">—</span>'}</div></div>
         <div class="spec-card"><div class="sc-label">⚙ 模具</div><div class="sc-value">${s.moldSpec ? escapeHtml(s.moldSpec) : '<span class="info-empty">—</span>'}</div></div>
         <div class="spec-card"><div class="sc-label" style="display:inline-flex;align-items:center;gap:4px;">${icon('box', 12)}領料</div><div class="sc-value">${s.material ? escapeHtml(s.material) : '<span class="info-empty">—</span>'}</div></div>
       </div></div>
@@ -1020,6 +1021,7 @@ async function toggleDetail(idx) {
     // 電腦版用 grid 均分，手機版用 flex 橫向滑動
     const cols = Math.min(specs.length, 4);
     specArea.innerHTML = `
+      ${o.customerName ? `<div style="font-size:12px;color:var(--ink);font-weight:600;margin-bottom:4px;">🏢 客戶：${escapeHtml(o.customerName)}</div>` : ''}
       <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">${specs.length} 種規格（左右滑動查看）</div>
       <div class="spec-cards-wrap">
         <div class="spec-cards spec-multi-grid" style="--ms-cols:${cols};">
@@ -1118,7 +1120,7 @@ $('exportBtn').onclick = () => {
   const filtered = applyFilters(allOrders);
   if (filtered.length === 0) { toast('沒有資料可匯出', 'error'); return; }
   const headers = [
-    '工單號','生產日期','機台','生產規格','模具','領料','數量','SPM','單重','總重量','刀數',
+    '工單號','生產日期','機台','生產規格','客戶名稱','模具','領料','數量','SPM','單重','總重量','刀數',
     '規格類型','原料類型',
     '小組長',
     '21.設備啓動','22.準備完成','23.無工令',
@@ -1142,7 +1144,7 @@ $('exportBtn').onclick = () => {
   }
   const rows = filtered.map(o => [
     o.orderNo, o.productionDate ? String(o.productionDate).slice(0,10) : '',
-    o.machineNo, o.productSpec || '', o.moldSpec || '', o.material || '',
+    o.machineNo, o.productSpec || '', o.customerName || '', o.moldSpec || '', o.material || '',
     o.dispatchQty || '', o.machineSPM || '', o.unitWeight || '', o.totalWeight || '', o.bladeCount || '',
     (o.specType === 'new'
       ? formatNewSpecLabel(o.newSpecAspects)

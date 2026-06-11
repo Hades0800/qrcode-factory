@@ -922,6 +922,7 @@ async function loadSpecCards(o) {
     area.innerHTML = `
       <div class="spec-cards-wrap"><div class="spec-cards">
         <div class="spec-card wide"><div class="sc-label">🔧 生產規格</div><div class="sc-value">${s.productSpec ? escapeHtml(s.productSpec) : '—'}</div></div>
+        <div class="spec-card"><div class="sc-label">🏢 客戶</div><div class="sc-value">${o.customerName ? escapeHtml(o.customerName) : '—'}</div></div>
         <div class="spec-card"><div class="sc-label">⚙ 模具</div><div class="sc-value">${s.moldSpec ? escapeHtml(s.moldSpec) : '—'}</div></div>
         <div class="spec-card"><div class="sc-label" style="display:inline-flex;align-items:center;gap:4px;">${icon('box', 12)}領料</div><div class="sc-value">${s.material ? escapeHtml(s.material) : '—'}</div></div>
       </div></div>
@@ -935,6 +936,7 @@ async function loadSpecCards(o) {
   } else {
     const cols = Math.min(specs.length, 4);
     area.innerHTML = `
+      ${o.customerName ? `<div style="font-size:12px;color:var(--ink);font-weight:600;margin-bottom:4px;">🏢 客戶：${escapeHtml(o.customerName)}</div>` : ''}
       <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">${specs.length} 種規格</div>
       <div class="spec-cards-wrap"><div class="spec-cards spec-multi-grid" style="--ms-cols:${cols};">
         ${specs.map((s, i) => {

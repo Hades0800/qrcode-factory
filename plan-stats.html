@@ -276,7 +276,7 @@
     <h2 class="ps-title" id="psTitle">—</h2>
     <div class="ps-summary" id="psSummary"></div>
     <div class="ps-legend">
-      <span class="lg"><span class="ps-dot red"></span>未完成</span>
+      <span class="lg"><span class="ps-dot red"></span>未進行/未完成</span>
       <span class="lg"><span class="ps-dot yellow"></span>進行中</span>
       <span class="lg"><span class="ps-dot green"></span>已完成</span>
     </div>
@@ -606,7 +606,7 @@ function render() {
         } else if (start && dYmd >= start) {
           dot = '<span class="ps-dot yellow" title="進行中"></span>';
         } else {
-          dot = '<span class="ps-dot red" title="未完成"></span>';
+          dot = '<span class="ps-dot red" title="未進行/未完成"></span>';
         }
       }
       const dayQty = qtyMap[dYmd];

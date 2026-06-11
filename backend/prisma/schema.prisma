@@ -224,6 +224,7 @@ model UploadRow {
   batch         UploadBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   orderNo       String
   productSpec   String?
+  customerName  String?
   moldSpec      String?
   material      String?
   machineNo     String?
