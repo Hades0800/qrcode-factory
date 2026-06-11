@@ -192,6 +192,7 @@
   }
   #psSpecPop .pop-order { font-size: 11px; color: #bbb; margin-bottom: 3px; }
   #psSpecPop .pop-spec { font-weight: 700; font-size: 15px; word-break: break-word; }
+  #psSpecPop .pop-customer { font-size: 13px; color: #ffd47f; margin-top: 4px; word-break: break-word; }
 
   .empty {
     text-align: center;
@@ -428,6 +429,29 @@ function qtyByDayOf(o) {
   return map;
 }
 
+// 多規格工單拆段：每筆「更換規格(30)」收掉一段，最後一段由「完成(11)」收掉
+//   回傳 [{ymd, qty, closed}]；單規格（無更換規格紀錄）回傳 null
+function specSegmentsOf(o) {
+  const step30s = (o.stepEntries || [])
+    .filter(e => e.stepNo === '30')
+    .sort((a, b) => new Date(a.recordedAt) - new Date(b.recordedAt));
+  if (step30s.length === 0) return null;
+  const segs = step30s.map(e => ({
+    ymd: ymd(e.recordedAt),
+    qty: e.qcActualQty != null ? Number(e.qcActualQty) : null,
+    closed: true,
+  }));
+  // 最後一段：已完成用 step11；進行中用最近一次下班回報（沒有就掛在今天）
+  if (o.step11At) {
+    segs.push({ ymd: ymd(o.step11At), qty: o.step11QcActualQty != null ? Number(o.step11QcActualQty) : null, closed: true });
+  } else {
+    const off = ((o.pause12 && o.pause12.history) || []).filter(e => e.qcActualQty != null);
+    const last = off[off.length - 1];
+    segs.push({ ymd: last ? ymd(last.startAt || last.endAt) : null, qty: last ? Number(last.qcActualQty) : null, closed: false });
+  }
+  return segs;
+}
+
 function render() {
   const monthStr = $('filterMonth').value; // yyyy-mm
   const machine = machineSel.value;
@@ -529,6 +553,45 @@ function render() {
     const done = getCompletionYmd(o);
     const qtyMap = qtyByDayOf(o);
 
+    // 多規格工單：每個規格段一列（工號-1、-2…）
+    //   軌跡：上一段收掉那天（第一段=工單實際開始日）→ 本段收掉那天
+    //   中途天=黃點（有下班回報附數量）；收掉那天=綠點+段數量；未收掉的最後一段畫黃到今天
+    const segs = specSegmentsOf(o);
+    if (segs && segs.length > 1) {
+      // 下班回報的每日數量（標在中途天的黃點旁）
+      const offQtyByDay = {};
+      ((o.pause12 && o.pause12.history) || []).forEach(e => {
+        if (e.qcActualQty != null) {
+          const k = ymd(e.startAt || e.endAt);
+          if (k) offQtyByDay[k] = (offQtyByDay[k] || 0) + Number(e.qcActualQty);
+        }
+      });
+      const orderStart = getActualStartYmd(o);
+      segs.forEach((seg, i) => {
+        const segStart = i === 0 ? (orderStart || seg.ymd) : segs[i - 1].ymd;
+        const segEnd = seg.closed ? seg.ymd : todayYmd;
+        html += `<tr><td class="ps-order-col ps-order-click" data-orderno="${escapeHtml(o.orderNo)}" title="點一下看生產規格">${escapeHtml(o.orderNo)}-${i + 1}</td>`;
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dYmd = monthStr + '-' + String(d).padStart(2,'0');
+          const isToday = dYmd === todayYmd;
+          let inner = '';
+          if (segStart && segEnd && dYmd >= segStart && dYmd <= segEnd) {
+            if (seg.closed && dYmd === seg.ymd) {
+              const qtyHtml = (seg.qty != null) ? `<span class="ps-qty">${seg.qty}</span>` : '';
+              inner = `<span class="ps-cellwrap"><span class="ps-dot green" title="已完成"></span>${qtyHtml}</span>`;
+            } else {
+              const q = offQtyByDay[dYmd];
+              const qtyHtml = (q != null) ? `<span class="ps-qty">${q}</span>` : '';
+              inner = `<span class="ps-cellwrap"><span class="ps-dot yellow" title="生產中"></span>${qtyHtml}</span>`;
+            }
+          }
+          html += `<td class="ps-cell ${isToday ? 'today' : ''}">${inner}</td>`;
+        }
+        html += '</tr>';
+      });
+      continue;
+    }
+
     html += `<tr><td class="ps-order-col ps-order-click" data-orderno="${escapeHtml(o.orderNo)}" title="點一下看生產規格">${escapeHtml(o.orderNo)}</td>`;
     for (let d = 1; d <= daysInMonth; d++) {
       const dYmd = monthStr + '-' + String(d).padStart(2,'0');
@@ -571,7 +634,7 @@ $('refreshBtn').onclick = loadOrders;
 // 點工號 → 顯示該工單生產規格（手機點一下也行）
 const specPop = document.createElement('div');
 specPop.id = 'psSpecPop';
-specPop.innerHTML = '<div class="pop-order"></div><div class="pop-spec"></div>';
+specPop.innerHTML = '<div class="pop-order"></div><div class="pop-spec"></div><div class="pop-customer"></div>';
 document.body.appendChild(specPop);
 
 document.addEventListener('click', (e) => {
@@ -580,18 +643,26 @@ document.addEventListener('click', (e) => {
     const orderNo = cell.dataset.orderno;
     const o = allOrders.find(x => x.orderNo === orderNo);
     const spec = (o && o.productSpec) ? o.productSpec : '（未填生產規格）';
-    specPop.querySelector('.pop-order').textContent = '工單 ' + orderNo + ' · 生產規格';
+    const customer = (o && o.customerName) ? o.customerName : '（未填客戶名稱）';
+    specPop.querySelector('.pop-order').textContent = '工單 ' + orderNo;
     specPop.querySelector('.pop-spec').textContent = spec;
+    specPop.querySelector('.pop-customer').textContent = '客戶：' + customer;
     specPop.style.display = 'block';
-    const rect = cell.getBoundingClientRect();
-    const pw = specPop.offsetWidth, ph = specPop.offsetHeight;
+    // 定位需把 body 的 zoom 算進去，否則下半部工單的彈窗會超出螢幕被切掉
+    const Z = parseFloat(getComputedStyle(document.body).zoom) || 1;
+    const rect = cell.getBoundingClientRect();          // 視覺座標（已含 zoom）
+    const pw = specPop.offsetWidth * Z;                 // 彈窗視覺寬高
+    const ph = specPop.offsetHeight * Z;
+    const vw = window.innerWidth, vh = window.innerHeight;
     let left = rect.left;
-    let top = rect.bottom + 6;
-    if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+    if (left + pw > vw - 8) left = vw - pw - 8;
     if (left < 8) left = 8;
-    if (top + ph > window.innerHeight - 8) top = rect.top - ph - 6;
-    specPop.style.left = left + 'px';
-    specPop.style.top = top + 'px';
+    // 預設顯示在該列下方；放不下就翻到上方；再不行就貼齊螢幕底
+    let top = rect.bottom + 6;
+    if (top + ph > vh - 8) top = rect.top - ph - 6;
+    if (top < 8) top = Math.max(8, vh - ph - 8);
+    specPop.style.left = (left / Z) + 'px';             // fixed 座標也會被 zoom 放大，要除回去
+    specPop.style.top = (top / Z) + 'px';
     e.stopPropagation();
     return;
   }

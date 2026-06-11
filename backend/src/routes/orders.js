@@ -138,6 +138,7 @@ function serializeOrder(o) {
     operatorName: o.operatorName || null,           // 設備操作人員姓名（第五步）
     totalWorkers: (o.totalWorkers ?? null),         // 全部作業人數（第五步）
     productSpec: o.productSpec || '',
+    customerName: o.customerName || '',
     moldSpec: o.moldSpec || '', material: o.material || '',
     dispatchQty: o.dispatchQty, bladeCount: o.bladeCount,
     machineSPM: o.machineSPM, unitWeight: o.unitWeight, totalWeight: o.totalWeight,
@@ -993,6 +994,7 @@ export default async function orderRoutes(fastify) {
         const data = {
           plannedDate: batchProductionDate, // 計畫日期：可被新上傳覆寫
           productSpec: rawRow.productSpec,
+          customerName: clipStr(row.customerName, 100),
           moldSpec: rawRow.moldSpec,
           material: rawRow.material,
           dispatchQty: rawRow.dispatchQty,

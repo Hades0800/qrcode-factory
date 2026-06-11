@@ -725,8 +725,8 @@ function render() {
     (o.stepEntries || []).forEach(e => {
       if (e.stepNo === '30') {
         const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
-        const qcTag = (e.qcActualQty != null) ? `<div style="margin:3px 0 0;"><span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span></div>` : '';
-        allItems.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + manual + qcTag, style: 'spec-change' });
+        const qcTag = (e.qcActualQty != null) ? `<div style="margin:0 0 3px;"><span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span></div>` : '';
+        allItems.push({ time: new Date(e.recordedAt), label: qcTag + icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + manual, style: 'spec-change' });
         return;
       }
       const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
