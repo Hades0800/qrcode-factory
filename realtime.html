@@ -372,6 +372,12 @@
     font-weight: 600;
   }
   .timeline li.current .tl-time { color: var(--brand); font-weight: 700; }
+  /* QC 數量獨立列：歸屬上一段生產，與上一筆紀錄用虛線明顯區隔 */
+  .timeline li.qc-row {
+    padding: 8px 0 8px 28px;
+    margin-top: 2px;
+    border-top: 1.5px dashed #9bbcf2;
+  }
   .timeline li .tl-label {
     color: var(--ink);
     margin-top: 2px;
@@ -1132,7 +1138,7 @@ function buildTimeline(o, isAdmin) {
       if (s.key === 'step11At' && o.step11Note) {
         label += '（' + escapeHtml(o.step11Note) + '）';
       }
-      // 完成的 QC 數量屬於剛結束的那段生產 → 掛到上一筆事件下方（qcMoveUp）
+      // 完成的 QC 數量屬於剛結束的那段生產 → 獨立列顯示在本事件上方（qcMoveUp）
       const qcMoveUp = (s.key === 'step11At' && o.step11QcActualQty != null) ? o.step11QcActualQty : null;
       items.push({ time: new Date(o[s.key]), label, type: 'step', entryId: null, qcMoveUp });
     }
@@ -1142,7 +1148,7 @@ function buildTimeline(o, isAdmin) {
   (o.stepEntries || []).forEach(e => {
     if (e.stepNo === '30') {
       const suffix = (e.isManual ? '（補登）' : '');
-      // 數量屬於剛結束的那段生產 → 排序後掛到「上一筆事件」下方（qcMoveUp）
+      // 數量屬於剛結束的那段生產 → 獨立列顯示在本事件上方（qcMoveUp）
       items.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + suffix, type: 'spec-change', entryId: e.id, qcMoveUp: (e.qcActualQty != null ? e.qcActualQty : null) });
       return;
     }
@@ -1166,12 +1172,12 @@ function buildTimeline(o, isAdmin) {
   ];
   pauseEvents.forEach(e => {
     const note = e.note ? '（' + escapeHtml(e.note) + '）' : '';
-    const qcTxt = (e.qcActualQty != null) ? `<div style="margin:3px 0 0;"><span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span></div>` : '';
     const ico = e.pauseType === '13' ? icon('alert', 13) : icon('pause', 13);
     items.push({
       time: new Date(e.startAt),
-      label: ico + ' ' + e.pauseLabel + note + qcTxt,
+      label: ico + ' ' + e.pauseLabel + note,
       type: e.pauseType === '13' ? 'abnormal' : 'pause',
+      qcMoveUp: (e.qcActualQty != null ? e.qcActualQty : null),
     });
     if (e.endAt) {
       const dur = e.duration ? fmtDur(e.duration) : '';
@@ -1184,14 +1190,6 @@ function buildTimeline(o, isAdmin) {
   });
 
   items.sort((a, b) => a.time - b.time);
-
-  // 更換規格的數量 → 顯示在上一筆事件的下方（虛線分隔之上，歸屬前一段生產）
-  const qcBadgeHtml = q => `<div style="margin:4px 0 0;"><span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${q}</span></div>`;
-  items.forEach((it, i) => {
-    if (it.qcMoveUp == null) return;
-    if (i > 0) items[i - 1].label += qcBadgeHtml(it.qcMoveUp);
-    else it.label = qcBadgeHtml(it.qcMoveUp) + it.label;
-  });
 
   if (items.length === 0) return '<li><div class="tl-dot"></div><div class="tl-label" style="color:var(--muted);">尚未開始</div></li>';
 
@@ -1239,7 +1237,11 @@ function buildTimeline(o, isAdmin) {
     }
 
     const delBtn = isAdmin && it.entryId ? ` <button data-del-entry="${it.entryId}" data-order="${escapeHtml(o.orderNo)}" style="background:var(--brand);color:#fff;border:none;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer;margin-left:6px;">✕</button>` : '';
-    return dayDivider + `
+    // QC 數量獨立列：放在回報它的事件上方（歸屬剛結束的那段生產），跨日時放在隔日分隔線之前
+    const qcRow = (it.qcMoveUp != null)
+      ? `<li class="qc-row"><span style="background:#1f6feb;color:#fff;font-size:11px;padding:3px 12px;border-radius:8px;font-weight:700;">數量：${it.qcMoveUp}</span></li>`
+      : '';
+    return qcRow + dayDivider + `
       <li class="${cls}">
         <div class="tl-dot"></div>
         <div class="tl-time">${dateStr}<span style="font-size:10px;color:var(--muted);font-weight:500;">${diffStr}</span></div>

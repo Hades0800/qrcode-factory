@@ -293,6 +293,12 @@
     background: linear-gradient(to bottom, #fff8e8 0%, transparent 100%);
   }
   .rc-timeline li.spec-change::before { display: none; }
+  /* QC 數量獨立列：歸屬上一段生產，與上一筆紀錄用虛線明顯區隔 */
+  .rc-timeline li.qc-row {
+    padding: 8px 0 8px 28px;
+    margin-top: 2px;
+    border-top: 1.5px dashed #9bbcf2;
+  }
   .rc-card-pause {
     display: flex; gap: 16px; margin-top: 10px; font-size: 13px; color: var(--muted);
     padding-top: 10px; border-top: 1px solid var(--border);
@@ -715,7 +721,7 @@ function render() {
         if (s.key === 'step11At' && o.step11Note) {
           label += '（' + escapeHtml(o.step11Note) + '）';
         }
-        // 完成的 QC 數量屬於剛結束的那段生產 → 掛到上一筆事件下方（qcMoveUp）
+        // 完成的 QC 數量屬於剛結束的那段生產 → 獨立列顯示在本事件上方（qcMoveUp）
         const qcMoveUp = (s.key === 'step11At' && o.step11QcActualQty != null) ? o.step11QcActualQty : null;
         allItems.push({ time: new Date(o[s.key]), label, style: 'done', qcMoveUp });
       }
@@ -724,7 +730,7 @@ function render() {
     (o.stepEntries || []).forEach(e => {
       if (e.stepNo === '30') {
         const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
-        // 數量屬於剛結束的那段生產 → 排序後掛到「上一筆事件」下方（qcMoveUp）
+        // 數量屬於剛結束的那段生產 → 獨立列顯示在本事件上方（qcMoveUp）
         allItems.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + manual, style: 'spec-change', qcMoveUp: (e.qcActualQty != null ? e.qcActualQty : null) });
         return;
       }
@@ -742,8 +748,7 @@ function render() {
     // 暫停事件
     ((o.pause12 && o.pause12.history) || []).forEach((e, i) => {
       const isLunch = (e.note || '').includes('中午') || (e.note || '').includes('午休') || (e.note || '').includes('午餐');
-      const qcTag = (e.qcActualQty != null) ? `<div style="margin:3px 0 0;"><span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span></div>` : '';
-      allItems.push({ time: new Date(e.startAt), label: icon('pause', 13) + ' 暫停' + (e.note ? '（'+escapeHtml(e.note)+'）' : '') + qcTag, style: 'pause' });
+      allItems.push({ time: new Date(e.startAt), label: icon('pause', 13) + ' 暫停' + (e.note ? '（'+escapeHtml(e.note)+'）' : ''), style: 'pause', qcMoveUp: (e.qcActualQty != null ? e.qcActualQty : null) });
       if (e.endAt) {
         const dur = e.duration ? fmtDur(e.duration) : '';
         const resumeLabel = isLunch ? icon('play', 13) + ' 午後恢復生產' : icon('play', 13) + ' 恢復生產' + (dur ? '（暫停 ' + dur + '）' : '');
@@ -760,14 +765,6 @@ function render() {
     });
     // 按時間排序
     allItems.sort((a, b) => a.time - b.time);
-
-    // 更換規格的數量 → 顯示在上一筆事件的下方（虛線分隔之上，歸屬前一段生產）
-    const qcBadgeHtml = q => `<div style="margin:4px 0 0;"><span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${q}</span></div>`;
-    allItems.forEach((it, i) => {
-      if (it.qcMoveUp == null) return;
-      if (i > 0) allItems[i - 1].label += qcBadgeHtml(it.qcMoveUp);
-      else it.label = qcBadgeHtml(it.qcMoveUp) + it.label;
-    });
 
     const pad = n => String(n).padStart(2, '0');
     const stepsHtml = allItems.length === 0
@@ -811,7 +808,11 @@ function render() {
           if (it.style === 'resume') displayLabel = icon('play', 13) + ' 隔日恢復生產';
         }
 
-        return dayDivider + `<li class="${cls}">
+        // QC 數量獨立列：放在回報它的事件上方（歸屬剛結束的那段生產），跨日時放在隔日分隔線之前
+        const qcRow = (it.qcMoveUp != null)
+          ? `<li class="qc-row"><span style="background:#1f6feb;color:#fff;font-size:11px;padding:3px 12px;border-radius:8px;font-weight:700;">數量：${it.qcMoveUp}</span></li>`
+          : '';
+        return qcRow + dayDivider + `<li class="${cls}">
           <div class="tl-dot"></div>
           <div class="tl-time">${dateStr}<span style="font-size:10px;color:var(--muted);font-weight:500;">${diffStr}</span></div>
           <div class="tl-label">${displayLabel}</div>
