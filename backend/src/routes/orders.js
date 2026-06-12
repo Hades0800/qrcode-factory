@@ -5,6 +5,12 @@ const ALLOWED_MACHINES = new Set(['No1-350','No2-250','No3-60','No4-90','No5-40'
 function validOrderNo(s) { return typeof s === 'string' && ORDER_NO_RE.test(s); }
 function validMachine(s) { return !s || ALLOWED_MACHINES.has(String(s)); }
 function clipStr(s, max) { return s == null ? null : String(s).slice(0, max); }
+// 「公司編號」欄格式為「77960005 禾鉅」或「26-62530001+ 毅欣」→ 去掉開頭編號只留客戶名稱
+function stripCustomerCode(s) {
+  if (s == null) return null;
+  const t = String(s).replace(/^[\d][\d\-+]{4,}\s+/, '').trim();
+  return t || null;
+}
 function hasActivity(o) {
   return !!(o.step1At || o.step2At || o.step3At || o.step4At ||
     o.step5At || o.step6At || o.step7At || o.step11At ||
@@ -965,7 +971,7 @@ export default async function orderRoutes(fastify) {
         batchId: batch.id,
         orderNo: orderNo || String(row.orderNo || ''),
         productSpec: clipStr(row.productSpec, 200),
-        customerName: clipStr(row.customerName, 100),
+        customerName: clipStr(stripCustomerCode(row.customerName), 100),
         moldSpec: clipStr(row.moldSpec, 100),
         material: clipStr(row.material, 200),
         machineNo: row.machineNo ? clipStr(row.machineNo, 60) : null,
@@ -1077,7 +1083,7 @@ export default async function orderRoutes(fastify) {
     for (const row of rows) {
       try {
         const orderNo = String(row.orderNo || '').trim().toUpperCase();
-        const customerName = clipStr(String(row.customerName || '').trim(), 100);
+        const customerName = clipStr(stripCustomerCode(row.customerName) || '', 100);
         if (!validOrderNo(orderNo)) { errors.push((row.orderNo || '(空)') + '：工單號格式錯誤'); continue; }
         if (!customerName) { errors.push(orderNo + '：客戶名稱空白'); continue; }
         const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
