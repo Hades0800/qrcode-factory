@@ -268,6 +268,11 @@
         <label>機台</label>
         <select id="filterMachine"></select>
       </div>
+      <div class="field">
+        <label>客戶查詢（跨機台）</label>
+        <input type="text" id="filterCustomer" list="customerList" placeholder="輸入客戶名稱…" autocomplete="off">
+        <datalist id="customerList"></datalist>
+      </div>
       <button class="btn-secondary" id="refreshBtn">🔄 重新整理</button>
     </div>
   </div>
@@ -345,6 +350,9 @@ async function loadOrders() {
     return;
   }
   allOrders = r.data.orders || [];
+  // 客戶自動建議清單（去重、排序；輸入時瀏覽器只顯示符合的）
+  const names = [...new Set(allOrders.map(o => (o.customerName || '').trim()).filter(Boolean))].sort();
+  $('customerList').innerHTML = names.map(n => `<option value="${escapeHtml(n)}">`).join('');
   render();
 }
 
@@ -462,9 +470,16 @@ function render() {
   const todayYmd = ymd(new Date());
   const todayInThisMonth = todayYmd.startsWith(monthStr);
 
-  // 篩選：計畫日期落在此月份 + 機台
+  // 客戶查詢：有輸入時改為「跨所有機台」依客戶名稱（部分符合）篩選
+  const custQ = ($('filterCustomer').value || '').trim();
+
+  // 篩選：計畫日期落在此月份 +（機台 或 客戶）
   const rows = allOrders.filter(o => {
-    if (!orderMatchesMachine(o, machine)) return false;
+    if (custQ) {
+      if (!(o.customerName || '').includes(custQ)) return false;
+    } else {
+      if (!orderMatchesMachine(o, machine)) return false;
+    }
     const p = getPlannedYmd(o);
     if (!p) return false;
     return p.startsWith(monthStr);
@@ -516,16 +531,17 @@ function render() {
   const monthRate = lastDay > 0 ? (rateSum / lastDay * 100).toFixed(1) : null;
 
   // 標題
-  $('psTitle').textContent = yy + '年' + mm + '月份生產進度統計';
+  $('psTitle').textContent = yy + '年' + mm + '月份生產進度統計' + (custQ ? '（客戶查詢）' : '');
 
-  // 上方統計列
-  $('psSummary').innerHTML = `
-    <div class="ps-line"><span class="lbl">機台編號：</span><span class="val">${machine}</span></div>
-  `;
+  // 上方統計列：客戶查詢時顯示客戶（跨機台），否則顯示機台
+  $('psSummary').innerHTML = custQ
+    ? `<div class="ps-line"><span class="lbl">客戶：</span><span class="val brand">${escapeHtml(custQ)}</span><span class="lbl" style="margin-left:10px;">（跨所有機台，共 ${rows.length} 張工單）</span></div>`
+    : `<div class="ps-line"><span class="lbl">機台編號：</span><span class="val">${machine}</span></div>`;
 
   // 沒資料
   if (rows.length === 0) {
-    $('gridArea').innerHTML = '<div class="empty">此機台本月份沒有計畫工單</div>';
+    $('gridArea').innerHTML = '<div class="empty">' +
+      (custQ ? '本月份找不到客戶「' + escapeHtml(custQ) + '」的工單' : '此機台本月份沒有計畫工單') + '</div>';
     return;
   }
 
@@ -552,6 +568,10 @@ function render() {
     const start = getActualStartYmd(o);
     const done = getCompletionYmd(o);
     const qtyMap = qtyByDayOf(o);
+    // 客戶查詢（跨機台）時，每列標出機台
+    const machineTag = custQ
+      ? ` <span style="font-weight:600;font-size:10px;color:var(--muted);">${escapeHtml(o.machineNo || o.plannedMachineNo || '')}</span>`
+      : '';
 
     // 多規格工單：每個規格段一列（工號-1、-2…）
     //   軌跡：上一段收掉那天（第一段=工單實際開始日）→ 本段收掉那天
@@ -570,7 +590,7 @@ function render() {
       segs.forEach((seg, i) => {
         const segStart = i === 0 ? (orderStart || seg.ymd) : segs[i - 1].ymd;
         const segEnd = seg.closed ? seg.ymd : todayYmd;
-        html += `<tr><td class="ps-order-col ps-order-click" data-orderno="${escapeHtml(o.orderNo)}" data-segidx="${i + 1}" title="點一下看生產規格">${escapeHtml(o.orderNo)}-${i + 1}</td>`;
+        html += `<tr><td class="ps-order-col ps-order-click" data-orderno="${escapeHtml(o.orderNo)}" data-segidx="${i + 1}" title="點一下看生產規格">${escapeHtml(o.orderNo)}-${i + 1}${machineTag}</td>`;
         for (let d = 1; d <= daysInMonth; d++) {
           const dYmd = monthStr + '-' + String(d).padStart(2,'0');
           const isToday = dYmd === todayYmd;
@@ -592,7 +612,7 @@ function render() {
       continue;
     }
 
-    html += `<tr><td class="ps-order-col ps-order-click" data-orderno="${escapeHtml(o.orderNo)}" title="點一下看生產規格">${escapeHtml(o.orderNo)}</td>`;
+    html += `<tr><td class="ps-order-col ps-order-click" data-orderno="${escapeHtml(o.orderNo)}" title="點一下看生產規格">${escapeHtml(o.orderNo)}${machineTag}</td>`;
     for (let d = 1; d <= daysInMonth; d++) {
       const dYmd = monthStr + '-' + String(d).padStart(2,'0');
       const isToday = dYmd === todayYmd;
@@ -629,6 +649,7 @@ function render() {
 ['filterMonth','filterMachine'].forEach(id => {
   $(id).addEventListener('change', render);
 });
+$('filterCustomer').addEventListener('input', render);   // 邊打邊篩，清空即回到機台檢視
 $('refreshBtn').onclick = loadOrders;
 
 // 點工號 → 顯示該工單生產規格（手機點一下也行）
