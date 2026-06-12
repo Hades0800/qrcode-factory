@@ -1132,10 +1132,9 @@ function buildTimeline(o, isAdmin) {
       if (s.key === 'step11At' && o.step11Note) {
         label += '（' + escapeHtml(o.step11Note) + '）';
       }
-      if (s.key === 'step11At' && o.step11QcActualQty != null) {
-        label = label + `<div style="margin:3px 0 0;"><span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${o.step11QcActualQty}</span></div>`;
-      }
-      items.push({ time: new Date(o[s.key]), label, type: 'step', entryId: null });
+      // 完成的 QC 數量屬於剛結束的那段生產 → 掛到上一筆事件下方（qcMoveUp）
+      const qcMoveUp = (s.key === 'step11At' && o.step11QcActualQty != null) ? o.step11QcActualQty : null;
+      items.push({ time: new Date(o[s.key]), label, type: 'step', entryId: null, qcMoveUp });
     }
   });
 
