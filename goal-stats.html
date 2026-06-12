@@ -14,7 +14,7 @@
     --ink: #1c1c1e; --text: #2c2c2e; --muted: #6e6e73;
     --border: #e5e5ea; --bg: #f2f2f5; --card: #ffffff;
     --success: #2ea043; --warn: #f5c518;
-    --prep: #e8833a; --prod: #2f6fe0; --std: #b9bcc2;
+    --prep: #e87000; --prod: #1d5fd6; --std: #5f6670;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
@@ -90,11 +90,12 @@
   .chart-title { font-size: 14px; font-weight: 700; text-align: center; margin-bottom: 12px; color: var(--ink); }
   .chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .chart-area { display: flex; align-items: flex-end; gap: 6px; height: 240px; padding: 18px 4px 0; min-width: max-content; }
-  .chart-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; min-width: 26px; height: 100%; }
+  .chart-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; min-width: 32px; height: 100%; }
   .chart-bar-label { font-size: 9px; font-weight: 700; margin-bottom: 2px; color: var(--ink); }
   .chart-xlabel { font-size: 9px; color: var(--muted); margin-top: 4px; }
   .bar-eff { width: 22px; background: var(--prod); border-radius: 3px 3px 0 0; }
-  .stack { width: 24px; display: flex; flex-direction: column-reverse; border-radius: 3px 3px 0 0; overflow: hidden; }
+  .stack { width: 30px; display: flex; flex-direction: column-reverse; border-radius: 3px 3px 0 0; overflow: hidden; }
+  .stack > div { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 9px; font-weight: 700; line-height: 1; overflow: hidden; }
   .stack .seg-prep { background: var(--prep); }
   .stack .seg-prod { background: var(--prod); }
   .stack .seg-std  { background: var(--std); }
@@ -420,12 +421,20 @@ function render() {
   const h = v => (v / stackMax * 100).toFixed(1);
   $('stackChart').innerHTML = chartDays.map(x => {
     const total = x.prepMin + x.prodMin + x.stdMin;
+    // 段內數值：段的實際高度（約 220px 圖高 × 佔比）夠放一行字才顯示，避免擠爆
+    const CHART_PX = 220;
+    const seg = (cls, v) => {
+      const pct = total ? (v / total * 100) : 0;
+      const px = (total / stackMax) * CHART_PX * (pct / 100);
+      const label = (v > 0 && px >= 12) ? v : '';
+      return `<div class="${cls}" style="height:${pct.toFixed(1)}%;">${label}</div>`;
+    };
     return `<div class="chart-col">
       <div class="chart-bar-label">${total || ''}</div>
       <div class="stack" style="height:${h(total)}%;">
-        <div class="seg-prep" style="height:${total ? (x.prepMin / total * 100).toFixed(1) : 0}%;"></div>
-        <div class="seg-prod" style="height:${total ? (x.prodMin / total * 100).toFixed(1) : 0}%;"></div>
-        <div class="seg-std"  style="height:${total ? (x.stdMin  / total * 100).toFixed(1) : 0}%;"></div>
+        ${seg('seg-prep', x.prepMin)}
+        ${seg('seg-prod', x.prodMin)}
+        ${seg('seg-std',  x.stdMin)}
       </div>
       <div class="chart-xlabel">${mm}/${x.d}</div>
     </div>`;

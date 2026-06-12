@@ -1387,8 +1387,80 @@ async function loadRtEquipment(orderNo) {
 }
 
 initDropdownMenu();
+
+// ====== 自動更新（提示版）======
+// 畫面永遠不會自己重畫。背景每 30 秒檢查一次，發現資料有變只顯示
+// 「有新資料」橫幅，你點了才套用更新。手動操作（記錄/儲存）仍立即更新。
+function dataFingerprint(orders, idleArr) {
+  const s = JSON.stringify([orders, idleArr]);
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  return s.length + ':' + h;
+}
+function idleSetFromEvents(events) {
+  const now = new Date();
+  return (events || []).filter(e => {
+    const d = new Date(e.createdAt);
+    return d.getFullYear() === now.getFullYear() &&
+           d.getMonth() === now.getMonth() &&
+           d.getDate() === now.getDate();
+  }).map(e => e.machineNo);
+}
+let currentFp = dataFingerprint(allOrders, Array.from(idleMachinesToday));
+let pendingData = null;
+
+const updBanner = document.createElement('div');
+updBanner.id = 'rtUpdateBanner';
+updBanner.textContent = '🔔 有新資料，點此更新';
+updBanner.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:998;display:none;'
+  + 'background:var(--brand);color:#fff;font-size:13px;font-weight:700;padding:9px 18px;border-radius:999px;'
+  + 'box-shadow:0 4px 16px rgba(210,53,53,.35);cursor:pointer;';
+document.body.appendChild(updBanner);
+updBanner.onclick = () => {
+  if (!pendingData) { updBanner.style.display = 'none'; return; }
+  allOrders = pendingData.orders;
+  idleMachinesToday = new Set(pendingData.idle);
+  currentFp = pendingData.fp;
+  pendingData = null;
+  try {
+    localStorage.setItem(CACHE_RT, JSON.stringify({
+      orders: allOrders,
+      idleMachines: Array.from(idleMachinesToday),
+      savedAt: Date.now(),
+    }));
+  } catch (e) {}
+  updBanner.style.display = 'none';
+  renderMachineTabs();
+  renderContent();
+};
+
+async function checkForUpdates() {
+  const [ordersRes, idleRes] = await Promise.all([
+    api('/api/orders?limit=200'),
+    api('/api/idle-events?limit=50'),
+  ]);
+  if (!ordersRes.ok) return;
+  const orders = ordersRes.data.orders || [];
+  const idle = idleRes.ok ? idleSetFromEvents(idleRes.data.events) : Array.from(idleMachinesToday);
+  const fp = dataFingerprint(orders, idle);
+  if (fp === currentFp) { pendingData = null; updBanner.style.display = 'none'; return; }
+  pendingData = { orders, idle, fp };
+  updBanner.style.display = 'block';
+}
+
+// loadOrders（手動/操作後）每次跑完都代表畫面已是最新 → 更新指紋、收掉橫幅
+const _loadOrders = loadOrders;
+loadOrders = async function() {
+  await _loadOrders();
+  currentFp = dataFingerprint(allOrders, Array.from(idleMachinesToday));
+  pendingData = null;
+  updBanner.style.display = 'none';
+};
+
+setInterval(() => { if (!document.hidden) checkForUpdates(); }, 30000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdates(); });
+
 loadOrders();
-setInterval(loadOrders, 30000);
 
 </script>
 </body>

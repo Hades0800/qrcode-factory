@@ -570,7 +570,7 @@ function render() {
       segs.forEach((seg, i) => {
         const segStart = i === 0 ? (orderStart || seg.ymd) : segs[i - 1].ymd;
         const segEnd = seg.closed ? seg.ymd : todayYmd;
-        html += `<tr><td class="ps-order-col ps-order-click" data-orderno="${escapeHtml(o.orderNo)}" title="點一下看生產規格">${escapeHtml(o.orderNo)}-${i + 1}</td>`;
+        html += `<tr><td class="ps-order-col ps-order-click" data-orderno="${escapeHtml(o.orderNo)}" data-segidx="${i + 1}" title="點一下看生產規格">${escapeHtml(o.orderNo)}-${i + 1}</td>`;
         for (let d = 1; d <= daysInMonth; d++) {
           const dYmd = monthStr + '-' + String(d).padStart(2,'0');
           const isToday = dYmd === todayYmd;
@@ -641,10 +641,16 @@ document.addEventListener('click', (e) => {
   const cell = e.target.closest('.ps-order-click');
   if (cell) {
     const orderNo = cell.dataset.orderno;
+    const segIdx = cell.dataset.segidx ? parseInt(cell.dataset.segidx, 10) : null;
     const o = allOrders.find(x => x.orderNo === orderNo);
-    const spec = (o && o.productSpec) ? o.productSpec : '（未填生產規格）';
+    let spec = (o && o.productSpec) ? o.productSpec : '（未填生產規格）';
+    // 子列（工號-N）：生產規格以 / 分隔多段時，顯示對應第 N 段規格
+    if (segIdx && o && o.productSpec) {
+      const parts = o.productSpec.split('/').map(s => s.trim()).filter(Boolean);
+      if (parts.length > 1) spec = parts[segIdx - 1] || spec;
+    }
     const customer = (o && o.customerName) ? o.customerName : '（未填客戶名稱）';
-    specPop.querySelector('.pop-order').textContent = '工單 ' + orderNo;
+    specPop.querySelector('.pop-order').textContent = '工單 ' + orderNo + (segIdx ? '-' + segIdx + '（規格' + segIdx + '）' : '');
     specPop.querySelector('.pop-spec').textContent = spec;
     specPop.querySelector('.pop-customer').textContent = '客戶：' + customer;
     specPop.style.display = 'block';
