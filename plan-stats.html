@@ -665,10 +665,20 @@ document.addEventListener('click', (e) => {
     const segIdx = cell.dataset.segidx ? parseInt(cell.dataset.segidx, 10) : null;
     const o = allOrders.find(x => x.orderNo === orderNo);
     let spec = (o && o.productSpec) ? o.productSpec : '（未填生產規格）';
-    // 子列（工號-N）：生產規格以 / 分隔多段時，顯示對應第 N 段規格
-    if (segIdx && o && o.productSpec) {
-      const parts = o.productSpec.split('/').map(s => s.trim()).filter(Boolean);
-      if (parts.length > 1) spec = parts[segIdx - 1] || spec;
+    // 子列（工號-N）：顯示該段實際做的規格
+    //   規格1 = 工單原始生產規格；規格2 起 = 現場「更換規格」時填的規格描述
+    if (segIdx && o) {
+      if (segIdx > 1) {
+        const step30s = (o.stepEntries || [])
+          .filter(e => e.stepNo === '30')
+          .sort((a, b) => new Date(a.recordedAt) - new Date(b.recordedAt));
+        const ent = step30s[segIdx - 2];
+        if (ent && ent.note) spec = ent.note;
+      } else if (o.productSpec) {
+        // 規格1：生產規格若以 / 列了多段，取第一段
+        const parts = o.productSpec.split('/').map(s => s.trim()).filter(Boolean);
+        if (parts.length > 1) spec = parts[0];
+      }
     }
     const customer = (o && o.customerName) ? o.customerName : '（未填客戶名稱）';
     specPop.querySelector('.pop-order').textContent = '工單 ' + orderNo + (segIdx ? '-' + segIdx + '（規格' + segIdx + '）' : '');

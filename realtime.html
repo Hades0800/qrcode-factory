@@ -1143,8 +1143,8 @@ function buildTimeline(o, isAdmin) {
   (o.stepEntries || []).forEach(e => {
     if (e.stepNo === '30') {
       const suffix = (e.isManual ? '（補登）' : '');
-      const qcTxt = (e.qcActualQty != null) ? `<div style="margin:0 0 3px;"><span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span></div>` : '';
-      items.push({ time: new Date(e.recordedAt), label: qcTxt + icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + suffix, type: 'spec-change', entryId: e.id });
+      // 數量屬於剛結束的那段生產 → 排序後掛到「上一筆事件」下方（qcMoveUp）
+      items.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + suffix, type: 'spec-change', entryId: e.id, qcMoveUp: (e.qcActualQty != null ? e.qcActualQty : null) });
       return;
     }
     const suffix = (e.isManual ? '（補登）' : '');
@@ -1185,6 +1185,14 @@ function buildTimeline(o, isAdmin) {
   });
 
   items.sort((a, b) => a.time - b.time);
+
+  // 更換規格的數量 → 顯示在上一筆事件的下方（虛線分隔之上，歸屬前一段生產）
+  const qcBadgeHtml = q => `<div style="margin:4px 0 0;"><span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${q}</span></div>`;
+  items.forEach((it, i) => {
+    if (it.qcMoveUp == null) return;
+    if (i > 0) items[i - 1].label += qcBadgeHtml(it.qcMoveUp);
+    else it.label = qcBadgeHtml(it.qcMoveUp) + it.label;
+  });
 
   if (items.length === 0) return '<li><div class="tl-dot"></div><div class="tl-label" style="color:var(--muted);">尚未開始</div></li>';
 

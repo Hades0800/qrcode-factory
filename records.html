@@ -725,8 +725,8 @@ function render() {
     (o.stepEntries || []).forEach(e => {
       if (e.stepNo === '30') {
         const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
-        const qcTag = (e.qcActualQty != null) ? `<div style="margin:0 0 3px;"><span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span></div>` : '';
-        allItems.push({ time: new Date(e.recordedAt), label: qcTag + icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + manual, style: 'spec-change' });
+        // 數量屬於剛結束的那段生產 → 排序後掛到「上一筆事件」下方（qcMoveUp）
+        allItems.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + manual, style: 'spec-change', qcMoveUp: (e.qcActualQty != null ? e.qcActualQty : null) });
         return;
       }
       const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
@@ -761,6 +761,14 @@ function render() {
     });
     // 按時間排序
     allItems.sort((a, b) => a.time - b.time);
+
+    // 更換規格的數量 → 顯示在上一筆事件的下方（虛線分隔之上，歸屬前一段生產）
+    const qcBadgeHtml = q => `<div style="margin:4px 0 0;"><span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${q}</span></div>`;
+    allItems.forEach((it, i) => {
+      if (it.qcMoveUp == null) return;
+      if (i > 0) allItems[i - 1].label += qcBadgeHtml(it.qcMoveUp);
+      else it.label = qcBadgeHtml(it.qcMoveUp) + it.label;
+    });
 
     const pad = n => String(n).padStart(2, '0');
     const stepsHtml = allItems.length === 0
