@@ -243,6 +243,7 @@
   }
   .order-card .oc-pill.scope { background: #fff3cd; color: #b8860b; border: 1.5px solid #f0ad4e; }
   .order-card .oc-pill.carryover { background: #f0ad4e; color: #fff; }
+  .order-card .oc-customer { font-size: 13px; font-weight: 600; color: var(--ink); margin: 2px 0 10px; word-break: break-word; }
 
   /* 工單摘要條 — 橫向 meta 條，跟訂單規格的卡片視覺刻意切開 */
   .order-info {
@@ -372,12 +373,10 @@
     font-weight: 600;
   }
   .timeline li.current .tl-time { color: var(--brand); font-weight: 700; }
-  /* QC 數量獨立列：歸屬上一段生產，與上一筆紀錄用虛線明顯區隔 */
-  .timeline li.qc-row {
-    padding: 8px 0 8px 28px;
-    margin-top: 2px;
-    border-top: 1.5px dashed #9bbcf2;
-  }
+  /* QC 數量獨立列：更換規格/下班 → 事件上方（加大間距）；完成 → 事件下方 */
+  .timeline li.qc-row { padding: 2px 0 2px 28px; }
+  .timeline li.qc-above { margin-top: 14px; }
+  .timeline li.qc-below { margin-bottom: 12px; }
   .timeline li .tl-label {
     color: var(--ink);
     margin-top: 2px;
@@ -867,6 +866,7 @@ function renderContent() {
             </div>
             ${hasTags ? `<div class="oc-tags">${scopeTag}${carryOverTag}</div>` : ''}
           </div>
+          <div class="oc-customer">🏢 客戶：${o.customerName ? escapeHtml(o.customerName) : '（未填客戶名稱）'}</div>
           <div id="rt-spec-${escapeHtml(o.orderNo)}" class="rt-spec-area"></div>
           ${o.plannedMachineNo && o.plannedMachineNo !== o.machineNo ? `
           <div style="margin-bottom:8px;padding:6px 10px;background:#fff3cd;border-left:3px solid #f0ad4e;border-radius:4px;font-size:12px;color:#8a6d3b;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
@@ -935,7 +935,6 @@ async function loadSpecCards(o) {
     area.innerHTML = `
       <div class="spec-cards-wrap"><div class="spec-cards">
         <div class="spec-card wide"><div class="sc-label">🔧 生產規格</div><div class="sc-value">${s.productSpec ? escapeHtml(s.productSpec) : '—'}</div></div>
-        <div class="spec-card"><div class="sc-label">🏢 客戶</div><div class="sc-value">${o.customerName ? escapeHtml(o.customerName) : '—'}</div></div>
         <div class="spec-card"><div class="sc-label">⚙ 模具</div><div class="sc-value">${s.moldSpec ? escapeHtml(s.moldSpec) : '—'}</div></div>
         <div class="spec-card"><div class="sc-label" style="display:inline-flex;align-items:center;gap:4px;">${icon('box', 12)}領料</div><div class="sc-value">${s.material ? escapeHtml(s.material) : '—'}</div></div>
       </div></div>
@@ -949,7 +948,6 @@ async function loadSpecCards(o) {
   } else {
     const cols = Math.min(specs.length, 4);
     area.innerHTML = `
-      ${o.customerName ? `<div style="font-size:12px;color:var(--ink);font-weight:600;margin-bottom:4px;">🏢 客戶：${escapeHtml(o.customerName)}</div>` : ''}
       <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">${specs.length} 種規格</div>
       <div class="spec-cards-wrap"><div class="spec-cards spec-multi-grid" style="--ms-cols:${cols};">
         ${specs.map((s, i) => {
@@ -1145,9 +1143,9 @@ function buildTimeline(o, isAdmin) {
       if (s.key === 'step11At' && o.step11Note) {
         label += '（' + escapeHtml(o.step11Note) + '）';
       }
-      // 完成的 QC 數量屬於剛結束的那段生產 → 獨立列顯示在本事件上方（qcMoveUp）
-      const qcMoveUp = (s.key === 'step11At' && o.step11QcActualQty != null) ? o.step11QcActualQty : null;
-      items.push({ time: new Date(o[s.key]), label, type: 'step', entryId: null, qcMoveUp });
+      // 完成的 QC 數量 → 顯示在本事件「下方」（qcBelow）
+      const qcBelow = (s.key === 'step11At' && o.step11QcActualQty != null) ? o.step11QcActualQty : null;
+      items.push({ time: new Date(o[s.key]), label, type: 'step', entryId: null, qcBelow });
     }
   });
 
@@ -1155,8 +1153,8 @@ function buildTimeline(o, isAdmin) {
   (o.stepEntries || []).forEach(e => {
     if (e.stepNo === '30') {
       const suffix = (e.isManual ? '（補登）' : '');
-      // 數量屬於剛結束的那段生產 → 獨立列顯示在本事件上方（qcMoveUp）
-      items.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + suffix, type: 'spec-change', entryId: e.id, qcMoveUp: (e.qcActualQty != null ? e.qcActualQty : null) });
+      // 更換規格的數量屬於剛結束那段 → 顯示在本事件「上方」（qcAbove）
+      items.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + suffix, type: 'spec-change', entryId: e.id, qcAbove: (e.qcActualQty != null ? e.qcActualQty : null) });
       return;
     }
     const suffix = (e.isManual ? '（補登）' : '');
@@ -1184,7 +1182,7 @@ function buildTimeline(o, isAdmin) {
       time: new Date(e.startAt),
       label: ico + ' ' + e.pauseLabel + note,
       type: e.pauseType === '13' ? 'abnormal' : 'pause',
-      qcMoveUp: (e.qcActualQty != null ? e.qcActualQty : null),
+      qcAbove: (e.qcActualQty != null ? e.qcActualQty : null),
     });
     if (e.endAt) {
       const dur = e.duration ? fmtDur(e.duration) : '';
@@ -1244,17 +1242,17 @@ function buildTimeline(o, isAdmin) {
     }
 
     const delBtn = isAdmin && it.entryId ? ` <button data-del-entry="${it.entryId}" data-order="${escapeHtml(o.orderNo)}" style="background:var(--brand);color:#fff;border:none;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer;margin-left:6px;">✕</button>` : '';
-    // QC 數量獨立列：放在回報它的事件上方（歸屬剛結束的那段生產），跨日時放在隔日分隔線之前
-    const qcRow = (it.qcMoveUp != null)
-      ? `<li class="qc-row"><span style="background:#1f6feb;color:#fff;font-size:11px;padding:3px 12px;border-radius:8px;font-weight:700;">數量：${it.qcMoveUp}</span></li>`
-      : '';
-    return qcRow + dayDivider + `
+    // QC 數量：更換規格/下班 → 事件上方（跨日時在隔日分隔線之前）；完成 → 事件下方
+    const qcBadge = q => `<span style="background:#1f6feb;color:#fff;font-size:11px;padding:3px 12px;border-radius:8px;font-weight:700;">數量：${q}</span>`;
+    const qcAboveRow = (it.qcAbove != null) ? `<li class="qc-row qc-above">${qcBadge(it.qcAbove)}</li>` : '';
+    const qcBelowRow = (it.qcBelow != null) ? `<li class="qc-row qc-below">${qcBadge(it.qcBelow)}</li>` : '';
+    return qcAboveRow + dayDivider + `
       <li class="${cls}">
         <div class="tl-dot"></div>
         <div class="tl-time">${dateStr}<span style="font-size:10px;color:var(--muted);font-weight:500;">${diffStr}</span></div>
         <div class="tl-label">${displayLabel}${delBtn}</div>
       </li>
-    `;
+    ` + qcBelowRow;
   }).join('');
 }
 

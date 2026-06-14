@@ -1101,32 +1101,36 @@ function selectMachine(no) {
 
 let idleMachinesToday = new Set();
 
+// 測試中機台：暫不開放生產時態紀錄（顯示「測試中」、不可點）
+const TESTING_MACHINES = new Set(['No12','No13','No16','No17','No18','No19','No20']);
+
 async function loadIdleMachines() {
   const r = await api('/api/idle-events?limit=50');
-  if (!r.ok) return;
-  const now = new Date();
-  idleMachinesToday = new Set((r.data.events || []).filter(e => {
-    const d = new Date(e.createdAt);
-    return d.getFullYear() === now.getFullYear() &&
-           d.getMonth() === now.getMonth() &&
-           d.getDate() === now.getDate();
-  }).map(e => e.machineNo));
+  if (r.ok) {
+    const now = new Date();
+    idleMachinesToday = new Set((r.data.events || []).filter(e => {
+      const d = new Date(e.createdAt);
+      return d.getFullYear() === now.getFullYear() &&
+             d.getMonth() === now.getMonth() &&
+             d.getDate() === now.getDate();
+    }).map(e => e.machineNo));
+  }
   renderMachineButtons();
 }
 
 function renderMachineButtons() {
   document.querySelectorAll('.machine-btn').forEach(b => {
     const m = b.getAttribute('data-machine');
+    const isTesting = TESTING_MACHINES.has(m);
     const isIdle = idleMachinesToday.has(m);
-    b.classList.toggle('disabled', isIdle);
-    // 加/移除無工令標籤
+    b.classList.toggle('disabled', isTesting || isIdle);
+    // 標籤：測試中 優先於 今日無工令
+    const tagText = isTesting ? '測試中' : (isIdle ? '今日無工令' : null);
     let tag = b.querySelector('.m-tag');
-    if (isIdle && !tag) {
-      const s = document.createElement('div');
-      s.className = 'm-tag';
-      s.textContent = '今日無工令';
-      b.appendChild(s);
-    } else if (!isIdle && tag) {
+    if (tagText) {
+      if (!tag) { tag = document.createElement('div'); tag.className = 'm-tag'; b.appendChild(tag); }
+      tag.textContent = tagText;
+    } else if (tag) {
       tag.remove();
     }
   });
@@ -1135,6 +1139,10 @@ function renderMachineButtons() {
 document.querySelectorAll('.machine-btn').forEach(b => {
   b.onclick = () => {
     const m = b.getAttribute('data-machine');
+    if (TESTING_MACHINES.has(m)) {
+      toast('此機台測試中，暫不開放', 'error');
+      return;
+    }
     if (idleMachinesToday.has(m)) {
       toast('此機台今日已記錄無工令，請到紀錄頁取消後再選擇', 'error');
       return;

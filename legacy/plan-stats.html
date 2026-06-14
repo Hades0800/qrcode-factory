@@ -665,29 +665,42 @@ specPop.id = 'psSpecPop';
 specPop.innerHTML = '<div class="pop-order"></div><div class="pop-spec"></div><div class="pop-customer"></div>';
 document.body.appendChild(specPop);
 
-document.addEventListener('click', (e) => {
+// 各工單的「生管上傳多規格資料」快取（每段的真實生產規格來源）
+const psUploadRowsCache = {};
+async function psGetUploadRows(orderNo) {
+  if (orderNo in psUploadRowsCache) return psUploadRowsCache[orderNo];
+  let rows = [];
+  try {
+    const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/upload-rows');
+    rows = (r.ok && r.data.rows) ? r.data.rows : [];
+  } catch (e) { rows = []; }
+  psUploadRowsCache[orderNo] = rows;
+  return rows;
+}
+
+document.addEventListener('click', async (e) => {
   const cell = e.target.closest('.ps-order-click');
   if (cell) {
+    e.stopPropagation();
     const orderNo = cell.dataset.orderno;
     const segIdx = cell.dataset.segidx ? parseInt(cell.dataset.segidx, 10) : null;
     const o = allOrders.find(x => x.orderNo === orderNo);
-    let spec = (o && o.productSpec) ? o.productSpec : '（未填生產規格）';
-    // 子列（工號-N）：顯示該段實際做的規格
-    //   規格1 = 工單原始生產規格；規格2 起 = 現場「更換規格」時填的規格描述
-    if (segIdx && o) {
-      if (segIdx > 1) {
-        const step30s = (o.stepEntries || [])
-          .filter(e => e.stepNo === '30')
-          .sort((a, b) => new Date(a.recordedAt) - new Date(b.recordedAt));
-        const ent = step30s[segIdx - 2];
-        if (ent && ent.note) spec = ent.note;
-      } else if (o.productSpec) {
-        // 規格1：生產規格若以 / 列了多段，取第一段
-        const parts = o.productSpec.split('/').map(s => s.trim()).filter(Boolean);
-        if (parts.length > 1) spec = parts[0];
-      }
-    }
     const customer = (o && o.customerName) ? o.customerName : '（未填客戶名稱）';
+
+    // 生產規格：優先用生管上傳的多規格資料（該段 productSpec），與即時/歷史頁同源
+    //   規格N（工號-N）對應 upload-rows 第 N 筆；單規格取第一筆
+    let spec = (o && o.productSpec) ? o.productSpec : '（未填生產規格）';
+    const rows = await psGetUploadRows(orderNo);
+    if (rows.length > 0) {
+      const row = rows[(segIdx ? segIdx - 1 : 0)] || rows[0];
+      if (row && row.productSpec) spec = row.productSpec;
+    } else if (o && o.productSpec) {
+      // 後備：沒有上傳多規格時，把 productSpec 以 / 分段取對應段
+      const parts = o.productSpec.split('/').map(s => s.trim()).filter(Boolean);
+      const idx = segIdx ? segIdx - 1 : 0;
+      if (parts.length > 1 && parts[idx]) spec = parts[idx];
+    }
+
     specPop.querySelector('.pop-order').textContent = '工單 ' + orderNo + (segIdx ? '-' + segIdx + '（規格' + segIdx + '）' : '');
     specPop.querySelector('.pop-spec').textContent = spec;
     specPop.querySelector('.pop-customer').textContent = '客戶：' + customer;

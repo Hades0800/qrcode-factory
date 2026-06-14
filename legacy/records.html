@@ -196,6 +196,7 @@
   }
   .rec-card .rc-badge.done { background: var(--success); color: #fff; }
   .rec-card .rc-badge.active { background: var(--brand-soft); color: var(--brand); }
+  .rec-card .rc-customer { font-size: 13px; font-weight: 600; color: var(--ink); margin-top: 8px; word-break: break-word; }
   .rec-card .rc-tags {
     display: flex;
     flex-wrap: wrap;
@@ -293,12 +294,10 @@
     background: linear-gradient(to bottom, #fff8e8 0%, transparent 100%);
   }
   .rc-timeline li.spec-change::before { display: none; }
-  /* QC 數量獨立列：歸屬上一段生產，與上一筆紀錄用虛線明顯區隔 */
-  .rc-timeline li.qc-row {
-    padding: 8px 0 8px 28px;
-    margin-top: 2px;
-    border-top: 1.5px dashed #9bbcf2;
-  }
+  /* QC 數量獨立列：更換規格/下班 → 事件上方（加大間距）；完成 → 事件下方 */
+  .rc-timeline li.qc-row { padding: 2px 0 2px 28px; }
+  .rc-timeline li.qc-above { margin-top: 14px; }
+  .rc-timeline li.qc-below { margin-bottom: 12px; }
   .rc-card-pause {
     display: flex; gap: 16px; margin-top: 10px; font-size: 13px; color: var(--muted);
     padding-top: 10px; border-top: 1px solid var(--border);
@@ -721,17 +720,17 @@ function render() {
         if (s.key === 'step11At' && o.step11Note) {
           label += '（' + escapeHtml(o.step11Note) + '）';
         }
-        // 完成的 QC 數量屬於剛結束的那段生產 → 獨立列顯示在本事件上方（qcMoveUp）
-        const qcMoveUp = (s.key === 'step11At' && o.step11QcActualQty != null) ? o.step11QcActualQty : null;
-        allItems.push({ time: new Date(o[s.key]), label, style: 'done', qcMoveUp });
+        // 完成的 QC 數量 → 顯示在本事件「下方」（qcBelow）
+        const qcBelow = (s.key === 'step11At' && o.step11QcActualQty != null) ? o.step11QcActualQty : null;
+        allItems.push({ time: new Date(o[s.key]), label, style: 'done', qcBelow });
       }
     });
     // 新日誌 stepEntries
     (o.stepEntries || []).forEach(e => {
       if (e.stepNo === '30') {
         const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
-        // 數量屬於剛結束的那段生產 → 獨立列顯示在本事件上方（qcMoveUp）
-        allItems.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + manual, style: 'spec-change', qcMoveUp: (e.qcActualQty != null ? e.qcActualQty : null) });
+        // 更換規格的數量屬於剛結束那段 → 顯示在本事件「上方」（qcAbove）
+        allItems.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + manual, style: 'spec-change', qcAbove: (e.qcActualQty != null ? e.qcActualQty : null) });
         return;
       }
       const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
@@ -748,7 +747,7 @@ function render() {
     // 暫停事件
     ((o.pause12 && o.pause12.history) || []).forEach((e, i) => {
       const isLunch = (e.note || '').includes('中午') || (e.note || '').includes('午休') || (e.note || '').includes('午餐');
-      allItems.push({ time: new Date(e.startAt), label: icon('pause', 13) + ' 暫停' + (e.note ? '（'+escapeHtml(e.note)+'）' : ''), style: 'pause', qcMoveUp: (e.qcActualQty != null ? e.qcActualQty : null) });
+      allItems.push({ time: new Date(e.startAt), label: icon('pause', 13) + ' 暫停' + (e.note ? '（'+escapeHtml(e.note)+'）' : ''), style: 'pause', qcAbove: (e.qcActualQty != null ? e.qcActualQty : null) });
       if (e.endAt) {
         const dur = e.duration ? fmtDur(e.duration) : '';
         const resumeLabel = isLunch ? icon('play', 13) + ' 午後恢復生產' : icon('play', 13) + ' 恢復生產' + (dur ? '（暫停 ' + dur + '）' : '');
@@ -808,15 +807,15 @@ function render() {
           if (it.style === 'resume') displayLabel = icon('play', 13) + ' 隔日恢復生產';
         }
 
-        // QC 數量獨立列：放在回報它的事件上方（歸屬剛結束的那段生產），跨日時放在隔日分隔線之前
-        const qcRow = (it.qcMoveUp != null)
-          ? `<li class="qc-row"><span style="background:#1f6feb;color:#fff;font-size:11px;padding:3px 12px;border-radius:8px;font-weight:700;">數量：${it.qcMoveUp}</span></li>`
-          : '';
-        return qcRow + dayDivider + `<li class="${cls}">
+        // QC 數量：更換規格/下班 → 事件上方（跨日時在隔日分隔線之前）；完成 → 事件下方
+        const qcBadge = q => `<span style="background:#1f6feb;color:#fff;font-size:11px;padding:3px 12px;border-radius:8px;font-weight:700;">數量：${q}</span>`;
+        const qcAboveRow = (it.qcAbove != null) ? `<li class="qc-row qc-above">${qcBadge(it.qcAbove)}</li>` : '';
+        const qcBelowRow = (it.qcBelow != null) ? `<li class="qc-row qc-below">${qcBadge(it.qcBelow)}</li>` : '';
+        return qcAboveRow + dayDivider + `<li class="${cls}">
           <div class="tl-dot"></div>
           <div class="tl-time">${dateStr}<span style="font-size:10px;color:var(--muted);font-weight:500;">${diffStr}</span></div>
           <div class="tl-label">${displayLabel}</div>
-        </li>`;
+        </li>` + qcBelowRow;
       }).join('');
 
     // Detail (工單資訊 + 暫停明細) — 多規格卡片區域動態載入
@@ -856,6 +855,7 @@ function render() {
           </div>
           ${o.changeScope ? `<div class="rc-tags"><span class="rc-pill scope">${escapeHtml(scopeLabel(o.changeScope))}</span></div>` : ''}
         </div>
+        <div class="rc-customer">🏢 客戶：${o.customerName ? escapeHtml(o.customerName) : '（未填客戶名稱）'}</div>
         <div class="rc-meta" style="margin-top:10px;">
           <span>機台 <strong>${escapeHtml(o.machineNo || '—')}</strong>${o.plannedMachineNo && o.plannedMachineNo !== o.machineNo ? `<span style="color:#a98e44;font-size:11px;margin-left:4px;">（計畫 ${escapeHtml(o.plannedMachineNo)}）</span>` : ''}</span>
           <span>組長 <strong>${escapeHtml(o.leaderName || '—')}</strong></span>
@@ -989,7 +989,6 @@ async function toggleDetail(idx) {
       <div class="spec-cards-wrap"><div class="spec-cards">
         ${dateCard}
         <div class="spec-card wide"><div class="sc-label">🔧 生產規格</div><div class="sc-value">${s.productSpec ? escapeHtml(s.productSpec) : '<span class="info-empty">—</span>'}</div></div>
-        <div class="spec-card"><div class="sc-label">🏢 客戶</div><div class="sc-value">${o.customerName ? escapeHtml(o.customerName) : '<span class="info-empty">—</span>'}</div></div>
         <div class="spec-card"><div class="sc-label">⚙ 模具</div><div class="sc-value">${s.moldSpec ? escapeHtml(s.moldSpec) : '<span class="info-empty">—</span>'}</div></div>
         <div class="spec-card"><div class="sc-label" style="display:inline-flex;align-items:center;gap:4px;">${icon('box', 12)}領料</div><div class="sc-value">${s.material ? escapeHtml(s.material) : '<span class="info-empty">—</span>'}</div></div>
       </div></div>
@@ -1029,7 +1028,6 @@ async function toggleDetail(idx) {
     // 電腦版用 grid 均分，手機版用 flex 橫向滑動
     const cols = Math.min(specs.length, 4);
     specArea.innerHTML = `
-      ${o.customerName ? `<div style="font-size:12px;color:var(--ink);font-weight:600;margin-bottom:4px;">🏢 客戶：${escapeHtml(o.customerName)}</div>` : ''}
       <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">${specs.length} 種規格（左右滑動查看）</div>
       <div class="spec-cards-wrap">
         <div class="spec-cards spec-multi-grid" style="--ms-cols:${cols};">
