@@ -3,9 +3,8 @@
 //  - GET  /:orderNo  → 讀取（沒有就回 null）
 //  - 寫入前驗證：工單必須存在且為「今日有活動」的工單
 
-const ORDER_NO_RE = /^[A-Z]\d{10}$/;
-function validOrderNo(s) { return typeof s === 'string' && ORDER_NO_RE.test(s); }
-function clipStr(s, max) { return s == null ? null : String(s).slice(0, max); }
+import { validOrderNo, clipStr } from '../lib/validation.js';
+
 function intOrNull(v) {
   if (v == null || v === '') return null;
   const n = Number(v);

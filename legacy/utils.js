@@ -107,6 +107,15 @@ const MACHINE_TARGETS = {
   'No4-90':  { workMinutes: 320, prepMinutes: 160, capacityKg: 1200  },
   'No5-40':  { workMinutes: 420, prepMinutes:  60, capacityKg: 500   },
   'No6-40':  { workMinutes: 420, prepMinutes:  60, capacityKg: 500   },
+  // ── 擴張網／筋網機（待填實際產能目標）──
+  // 下列為占位 0，目標達成統計會顯示 0% 直到填入真實值（工時/備料分鐘、產能 kg）。
+  'No12': { workMinutes: 0, prepMinutes: 0, capacityKg: 0 },
+  'No13': { workMinutes: 0, prepMinutes: 0, capacityKg: 0 },
+  'No16': { workMinutes: 0, prepMinutes: 0, capacityKg: 0 },
+  'No17': { workMinutes: 0, prepMinutes: 0, capacityKg: 0 },
+  'No18': { workMinutes: 0, prepMinutes: 0, capacityKg: 0 },
+  'No19': { workMinutes: 0, prepMinutes: 0, capacityKg: 0 },
+  'No20': { workMinutes: 0, prepMinutes: 0, capacityKg: 0 },
 };
 
 // 一張工單在「特定一天」內的工時分配（秒）

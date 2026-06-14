@@ -220,6 +220,11 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 10px;
   }
+  /* 機台模組（兩大類）與小區塊標題 */
+  .machine-module + .machine-module { margin-top: 22px; padding-top: 18px; border-top: 1.5px solid var(--border); }
+  .machine-module-label { font-size: 15px; font-weight: 800; color: var(--ink); margin: 0 0 12px; }
+  .machine-subgroup { margin-top: 14px; }
+  .machine-subgroup-label { font-size: 12.5px; font-weight: 700; color: var(--muted); margin: 0 0 8px; padding-left: 2px; }
   .machine-btn {
     display: flex;
     flex-direction: column;
@@ -674,13 +679,47 @@
   <div class="card" id="machineCard">
     <h2>選擇機台 <span class="required">第一步</span></h2>
     <div id="machineEmpty">
-      <div class="machine-grid">
-        <button class="machine-btn" data-machine="No1-350"><span class="m-num">No1</span><span class="m-spec">350</span></button>
-        <button class="machine-btn" data-machine="No2-250"><span class="m-num">No2</span><span class="m-spec">250</span></button>
-        <button class="machine-btn" data-machine="No3-60"><span class="m-num">No3</span><span class="m-spec">60</span></button>
-        <button class="machine-btn" data-machine="No4-90"><span class="m-num">No4</span><span class="m-spec">90</span></button>
-        <button class="machine-btn" data-machine="No5-40"><span class="m-num">No5</span><span class="m-spec">40</span></button>
-        <button class="machine-btn" data-machine="No6-40"><span class="m-num">No6</span><span class="m-spec">40</span></button>
+      <!-- 模組 1：原本機台 No1~6 -->
+      <div class="machine-module">
+        <div class="machine-module-label">原本機台</div>
+        <div class="machine-grid">
+          <button class="machine-btn" data-machine="No1-350"><span class="m-num">No1</span><span class="m-spec">350</span></button>
+          <button class="machine-btn" data-machine="No2-250"><span class="m-num">No2</span><span class="m-spec">250</span></button>
+          <button class="machine-btn" data-machine="No3-60"><span class="m-num">No3</span><span class="m-spec">60</span></button>
+          <button class="machine-btn" data-machine="No4-90"><span class="m-num">No4</span><span class="m-spec">90</span></button>
+          <button class="machine-btn" data-machine="No5-40"><span class="m-num">No5</span><span class="m-spec">40</span></button>
+          <button class="machine-btn" data-machine="No6-40"><span class="m-num">No6</span><span class="m-spec">40</span></button>
+        </div>
+      </div>
+
+      <!-- 模組 2：擴張網／筋網機 -->
+      <div class="machine-module">
+        <div class="machine-module-label">擴張網／筋網機</div>
+
+        <div class="machine-subgroup">
+          <div class="machine-subgroup-label">750擴張網機（過濾網）</div>
+          <div class="machine-grid">
+            <button class="machine-btn" data-machine="No12"><span class="m-num">No12</span><span class="m-spec">過濾網</span></button>
+            <button class="machine-btn" data-machine="No13"><span class="m-num">No13</span><span class="m-spec">過濾網</span></button>
+            <button class="machine-btn" data-machine="No16"><span class="m-num">No16</span><span class="m-spec">過濾網</span></button>
+            <button class="machine-btn" data-machine="No17"><span class="m-num">No17</span><span class="m-spec">過濾網</span></button>
+            <button class="machine-btn" data-machine="No18"><span class="m-num">No18</span><span class="m-spec">過濾網</span></button>
+          </div>
+        </div>
+
+        <div class="machine-subgroup">
+          <div class="machine-subgroup-label">低筋網機（有筋）</div>
+          <div class="machine-grid">
+            <button class="machine-btn" data-machine="No19"><span class="m-num">No19</span><span class="m-spec">有筋</span></button>
+          </div>
+        </div>
+
+        <div class="machine-subgroup">
+          <div class="machine-subgroup-label">高筋網板機（免拆模）</div>
+          <div class="machine-grid">
+            <button class="machine-btn" data-machine="No20"><span class="m-num">No20</span><span class="m-spec">免拆模</span></button>
+          </div>
+        </div>
       </div>
     </div>
     <div id="machineShow" style="display:none;">

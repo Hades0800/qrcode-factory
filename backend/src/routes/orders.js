@@ -1,174 +1,20 @@
-// ── 共用常數與 helper ──
-const ORDER_NO_RE = /^[A-Z]\d{10}$/;
-const ALLOWED_MACHINES = new Set(['No1-350','No2-250','No3-60','No4-90','No5-40','No6-40']);
-
-function validOrderNo(s) { return typeof s === 'string' && ORDER_NO_RE.test(s); }
-function validMachine(s) { return !s || ALLOWED_MACHINES.has(String(s)); }
-function clipStr(s, max) { return s == null ? null : String(s).slice(0, max); }
-// 「公司編號」欄格式為「77960005 禾鉅」或「26-62530001+ 毅欣」→ 去掉開頭編號只留客戶名稱
-function stripCustomerCode(s) {
-  if (s == null) return null;
-  const t = String(s).replace(/^[\d][\d\-+]{4,}\s+/, '').trim();
-  return t || null;
-}
-function hasActivity(o) {
-  return !!(o.step1At || o.step2At || o.step3At || o.step4At ||
-    o.step5At || o.step6At || o.step7At || o.step11At ||
-    o.step21At || o.step22At || o.step23At);
-}
-
-// 把任意時間轉成「台灣日期」（UTC 午夜，當作純日期標記）
-function toTaiwanDate(t) {
-  const d = t instanceof Date ? t : new Date(t || Date.now());
-  const tw = new Date(d.getTime() + 8 * 60 * 60 * 1000);
-  return new Date(Date.UTC(tw.getUTCFullYear(), tw.getUTCMonth(), tw.getUTCDate()));
-}
-
-// 取得時刻所在「台灣當日 08:00」對應的 UTC 時間
-// （Taiwan 08:00 = UTC 00:00 of the same Taiwan date）
-function taiwanDateAt8(t) {
-  const d = t instanceof Date ? t : new Date(t || Date.now());
-  const tw = new Date(d.getTime() + 8 * 60 * 60 * 1000);
-  return new Date(Date.UTC(tw.getUTCFullYear(), tw.getUTCMonth(), tw.getUTCDate(), 0, 0, 0));
-}
-
-// 設定 actualStartDate 為實際開始日期（台灣時間）
-// 規則：actualStartDate 一旦有值就永遠不再覆寫；reset-production 才會清空
-// 第一次有活動時（含補登），把那筆活動時間的台灣日期寫入
-async function setActualStartDate(fastify, order, eventTime) {
-  if (order.actualStartDate) return; // 已有值，鎖死不再變
-  await fastify.prisma.order.update({
-    where: { orderNo: order.orderNo },
-    data: { actualStartDate: toTaiwanDate(eventTime) },
-  });
-}
-
-// 找出同機台上一張已完成工單的結束時間（step11At）
-// 用途：強制下一張工單的第一筆生產時態接續在上一張結束的下一分鐘
-async function getPrevMachineEndAt(prisma, order) {
-  if (!order || !order.machineNo) return null;
-  const prev = await prisma.order.findFirst({
-    where: {
-      machineNo: order.machineNo,
-      step11At: { not: null },
-      id: { not: order.id },
-    },
-    orderBy: { step11At: 'desc' },
-    select: { step11At: true },
-  });
-  return prev?.step11At || null;
-}
-
-// 序列化工單並附上「上一張同機台完成時間」— 避免每個 endpoint 都要寫兩行
-async function serializeWithPrev(prisma, order) {
-  if (!order) return null;
-  order.prevMachineEndAt = await getPrevMachineEndAt(prisma, order);
-  return serializeOrder(order);
-}
-
-async function audit(prisma, request, action, target, detail) {
-  try {
-    await prisma.auditLog.create({
-      data: {
-        actorId: request.user?.id || null,
-        actorName: request.user?.displayName || null,
-        action,
-        target: target ? String(target).slice(0, 200) : null,
-        detail: detail ? String(detail).slice(0, 500) : null,
-        ip: request.ip || null,
-      },
-    });
-  } catch (e) { /* ignore audit errors */ }
-}
-
-const STEP_COLS = {
-  '21': { time: 'step21At', note: null },
-  '22': { time: 'step22At', note: null },
-  '23': { time: 'step23At', note: null },
-  '1':  { time: 'step1At',  note: null },
-  '2':  { time: 'step2At',  note: null },
-  '3':  { time: 'step3At',  note: null },
-  '4':  { time: 'step4At',  note: null },
-  '5':  { time: 'step5At',  note: null },
-  '6':  { time: 'step6At',  note: null },
-  '7':  { time: 'step7At',  note: null },
-  '11': { time: 'step11At', note: 'step11Note' },
-  '12': { time: 'step12At', note: 'step12Note' },
-  '13': { time: 'step13At', note: 'step13Note' },
-};
-
-function serializeOrder(o) {
-  if (!o) return null;
-  const events = o.pauseEvents || [];
-  const summarize = (type) => {
-    const items = events.filter(e => e.type === type);
-    const closed = items.filter(e => e.endAt);
-    const active = items.find(e => !e.endAt) || null;
-    return {
-      count: closed.length,
-      totalSec: closed.reduce((s, e) => s + (e.duration || 0), 0),
-      active: active ? { id: active.id, startAt: active.startAt, note: active.note, activeStep: active.activeStep } : null,
-      history: items.map(e => ({
-        id: e.id, activeStep: e.activeStep, startAt: e.startAt, endAt: e.endAt,
-        duration: e.duration, note: e.note, qcActualQty: e.qcActualQty ?? null,
-      })),
-    };
-  };
-  return {
-    orderNo: o.orderNo,
-    machineNo: o.machineNo || '',
-    plannedMachineNo: o.plannedMachineNo || '',
-    leaderId: o.leaderId,
-    leaderName: o.leader?.displayName || '',
-    step21At: o.step21At, step22At: o.step22At, step23At: o.step23At,
-    step1At: o.step1At, step2At: o.step2At, step3At: o.step3At,
-    step4At: o.step4At, step5At: o.step5At, step6At: o.step6At,
-    step7At: o.step7At, step11At: o.step11At, step11Note: o.step11Note || null,
-    step11QcActualQty: o.step11QcActualQty ?? null,
-    // 三個日期：
-    //   plannedDate     = 上傳的計畫日（生管說「這張要 X 做」）
-    //   actualStartDate = 第一筆活動的台灣日期（現場第一次掃 QR 那天）
-    //   productionDate  = 兼容舊邏輯，等同於 actualStartDate || plannedDate
-    plannedDate: o.plannedDate || o.productionDate || null,
-    actualStartDate: o.actualStartDate || null,
-    productionDate: o.actualStartDate || o.plannedDate || o.productionDate || null,
-    specType: o.specType || null,           // 'new' | 'mass' | null
-    difficultyFactor: o.difficultyFactor || null,  // 新製規格才有
-    // 新製規格的差異項目陣列：['raw','mold','dim'] 之子集合（由逗號字串解析）
-    newSpecAspects: o.newSpecAspects ? String(o.newSpecAspects).split(',').filter(Boolean) : [],
-    changeScope: o.changeScope || null,      // '@' | '#' | '@#' | null
-    materialType: o.materialType || null,    // 'coil'(1.0) | 'plate'(1.2) | null
-    auxEquipment: o.auxEquipment || null,           // 逗號字串（flat/leveler/...，可多選）
-    auxEquipmentCustom: o.auxEquipmentCustom || null,// 自訂輔助設備名稱
-    auxEquipmentNos: (() => { try { return o.auxEquipmentNos ? JSON.parse(o.auxEquipmentNos) : {}; } catch (e) { return {}; } })(), // 代碼→編號
-    operatorName: o.operatorName || null,           // 設備操作人員姓名（第五步）
-    totalWorkers: (o.totalWorkers ?? null),         // 全部作業人數（第五步）
-    productSpec: o.productSpec || '',
-    customerName: o.customerName || '',
-    moldSpec: o.moldSpec || '', material: o.material || '',
-    dispatchQty: o.dispatchQty, bladeCount: o.bladeCount,
-    machineSPM: o.machineSPM, unitWeight: o.unitWeight, totalWeight: o.totalWeight,
-    pause12: summarize('12'),
-    pause13: summarize('13'),
-    stepEntries: (o.stepEntries || []).map(e => ({
-      id: e.id, stepNo: e.stepNo, seq: e.seq,
-      recordedAt: e.recordedAt, isManual: e.isManual || false,
-      note: e.note || null,
-      qcActualQty: e.qcActualQty ?? null,
-      leaderName: e.leaderName,
-    })),
-    // 同機台上一張已完成工單的結束時間（強制接續用；由 caller 預先附上）
-    prevMachineEndAt: o.prevMachineEndAt || null,
-    createdAt: o.createdAt,
-    updatedAt: o.updatedAt,
-  };
-}
-
-const ORDER_INCLUDE = {
-  leader: true,
-  pauseEvents: { where: { deletedAt: null } },
-  stepEntries: { where: { deletedAt: null }, orderBy: { recordedAt: 'asc' } },
-};
+// ── 共用常數與 helper（已抽出至 lib/ 與 domain/orders/）──
+import { validOrderNo, clipStr } from '../lib/validation.js';
+import { validMachine } from '../lib/machines.js';
+import { toTaiwanDate, taiwanDateAt8 } from '../lib/date.js';
+import { audit } from '../lib/audit.js';
+import {
+  STEP_COLS,
+  ORDER_INCLUDE,
+  serializeOrder,
+  serializeWithPrev,
+} from '../domain/orders/serialize.js';
+import {
+  stripCustomerCode,
+  hasActivity,
+  setActualStartDate,
+  getPrevMachineEndAt,
+} from '../domain/orders/helpers.js';
 
 export default async function orderRoutes(fastify) {
   fastify.addHook('onRequest', fastify.authenticate);
