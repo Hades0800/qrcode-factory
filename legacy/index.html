@@ -1102,7 +1102,8 @@ function selectMachine(no) {
 let idleMachinesToday = new Set();
 
 // 測試中機台：暫不開放生產時態紀錄（顯示「測試中」、不可點）
-const TESTING_MACHINES = new Set(['No12','No13','No16','No17','No18','No19','No20']);
+// 要暫停某台就把機台號加進這個 Set（例：'No12'）；清空＝全部開放
+const TESTING_MACHINES = new Set();
 
 async function loadIdleMachines() {
   const r = await api('/api/idle-events?limit=50');
