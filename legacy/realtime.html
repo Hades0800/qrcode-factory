@@ -1405,8 +1405,28 @@ initDropdownMenu();
 // ====== 自動更新（提示版）======
 // 畫面永遠不會自己重畫。背景每 30 秒檢查一次，發現資料有變只顯示
 // 「有新資料」橫幅，你點了才套用更新。手動操作（記錄/儲存）仍立即更新。
+// 只追蹤「生產相關（實態）」變動 → 才跳「有新資料」通知（畫面不自動重畫）；
+// 其他（客戶名稱、規格、派工數、計畫日期、換機台、updatedAt…）不通知，等下次刷新頁面才一起更新。
 function dataFingerprint(orders, idleArr) {
-  const s = JSON.stringify([orders, idleArr]);
+  const hasProd = o => !!(o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At ||
+    o.step11At || o.step21At || o.step22At || o.step23At || (o.stepEntries && o.stepEntries.length) ||
+    (o.pause12 && ((o.pause12.history && o.pause12.history.length) || o.pause12.active)) ||
+    (o.pause13 && ((o.pause13.history && o.pause13.history.length) || o.pause13.active)));
+  const pauseSig = p => {
+    if (!p) return '';
+    const a = p.active ? ('A' + (p.active.startAt || '')) : '';
+    const hist = (p.history || []).map(e => (e.startAt || '') + '~' + (e.endAt || '') + '#' + (e.qcActualQty ?? '')).join(',');
+    return a + '|' + hist;
+  };
+  const sig = (orders || []).filter(hasProd).map(o =>
+    o.orderNo +
+    ':' + [o.step1At, o.step2At, o.step3At, o.step4At, o.step5At, o.step6At, o.step7At,
+           o.step21At, o.step22At, o.step23At, o.step11At].map(t => t || '').join('') +
+    ':' + (o.step11QcActualQty ?? '') +
+    ':' + (o.stepEntries || []).map(e => e.stepNo + '@' + (e.recordedAt || '') + '#' + (e.qcActualQty ?? '')).join(',') +
+    ':' + pauseSig(o.pause12) + ':' + pauseSig(o.pause13)
+  ).join(';');
+  const s = sig + '||' + (idleArr || []).slice().sort().join(',');
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
   return s.length + ':' + h;
