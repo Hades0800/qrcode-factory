@@ -94,6 +94,10 @@
   .chart-bar-label { font-size: 9px; font-weight: 700; margin-bottom: 2px; color: var(--ink); }
   .chart-xlabel { font-size: 9px; color: var(--muted); margin-top: 4px; }
   .bar-eff { width: 22px; background: var(--prod); border-radius: 3px 3px 0 0; }
+  /* 平均達成度橫線（疊在效率圖上）*/
+  #effChart { position: relative; }
+  .eff-avg-line { position: absolute; left: 0; right: 0; border-top: 2px dashed #e53935; pointer-events: none; z-index: 2; }
+  .eff-avg-tag { position: absolute; right: 2px; top: -9px; background: #e53935; color: #fff; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
   .stack { width: 30px; display: flex; flex-direction: column-reverse; border-radius: 3px 3px 0 0; overflow: hidden; }
   .stack > div { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 9px; font-weight: 700; line-height: 1; overflow: hidden; }
   .stack .seg-prep { background: var(--prep); }
@@ -414,14 +418,20 @@ function render() {
 
   // 效率達成度長條圖（最高刻度取 max(120, 實際最大)）
   const effMaxVal = Math.max(120, ...chartDays.map(x => x.eff || 0));
-  $('effChart').innerHTML = chartDays.map(x => {
+  const effCols = chartDays.map(x => {
     const pct = x.eff == null ? 0 : (x.eff / effMaxVal * 100);
     return `<div class="chart-col">
       <div class="chart-bar-label">${x.eff == null ? '' : x.eff.toFixed(0) + '%'}</div>
       <div class="bar-eff" style="height:${pct.toFixed(1)}%;"></div>
       <div class="chart-xlabel">${mm}/${x.d}</div>
     </div>`;
-  }).join('') || '<div class="empty">本月此機台無資料</div>';
+  }).join('');
+  // 平均達成度橫線（與表格「平均」欄同一個值 avg.eff；18px 為 .chart-area 的上 padding）
+  const avgEffNum = avg.eff == null ? null : parseFloat(avg.eff);
+  const avgLine = (avgEffNum != null && effCols)
+    ? `<div class="eff-avg-line" style="bottom:calc((100% - 18px) * ${(avgEffNum / effMaxVal).toFixed(4)});"><span class="eff-avg-tag">平均 ${avgEffNum.toFixed(0)}%</span></div>`
+    : '';
+  $('effChart').innerHTML = effCols ? (effCols + avgLine) : '<div class="empty">本月此機台無資料</div>';
 
   // 堆疊圖（生產準備 + 生產實績 + 標準工時）
   const stackMax = Math.max(1, ...chartDays.map(x => x.prepMin + x.prodMin + x.stdMin));
@@ -437,7 +447,6 @@ function render() {
       return `<div class="${cls}" style="height:${pct.toFixed(1)}%;">${label}</div>`;
     };
     return `<div class="chart-col">
-      <div class="chart-bar-label">${total || ''}</div>
       <div class="stack" style="height:${h(total)}%;">
         ${seg('seg-prep', x.prepMin)}
         ${seg('seg-prod', x.prodMin)}

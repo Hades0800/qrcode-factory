@@ -192,6 +192,7 @@
   }
   #psSpecPop .pop-order { font-size: 11px; color: #bbb; margin-bottom: 3px; }
   #psSpecPop .pop-spec { font-weight: 700; font-size: 15px; word-break: break-word; }
+  #psSpecPop .pop-qty { font-size: 13px; color: #cfe3ff; margin-top: 4px; }
   #psSpecPop .pop-customer { font-size: 13px; color: #ffd47f; margin-top: 4px; word-break: break-word; }
 
   .empty {
@@ -274,6 +275,7 @@
         <datalist id="customerList"></datalist>
       </div>
       <button class="btn-secondary" id="refreshBtn">🔄 重新整理</button>
+      <button class="btn-secondary" id="exportBtn">📥 匯出進度</button>
     </div>
   </div>
 
@@ -348,6 +350,8 @@ MACHINES.forEach(m => {
 })();
 
 let allOrders = [];
+// 目前檢視的篩選結果（供匯出用）
+let currentView = { rows: [], custQ: '', machine: '', monthStr: '' };
 
 async function loadOrders() {
   $('gridArea').innerHTML = '<div class="empty">載入中...</div>';
@@ -491,6 +495,9 @@ function render() {
     if (!p) return false;
     return p.startsWith(monthStr);
   });
+
+  // 記住目前檢視，供「匯出進度」使用
+  currentView = { rows, custQ, machine, monthStr };
 
   // 件數統計（保留作為參考資訊）
   const monthPlanned = rows.length;
@@ -659,10 +666,54 @@ function render() {
 $('filterCustomer').addEventListener('input', render);   // 邊打邊篩，清空即回到機台檢視
 $('refreshBtn').onclick = loadOrders;
 
+// 工單完成進度狀態：完成 / 進行中 / 未進行
+function orderProgressStatus(o) {
+  if (o.step11At) return '完成';
+  if (getActualStartYmd(o) || actualQtyOf(o) > 0) return '進行中';
+  return '未進行';
+}
+
+// 匯出目前檢視（客戶查詢或機台）的工單完成進度 CSV
+$('exportBtn').onclick = () => {
+  const { rows, custQ, machine, monthStr } = currentView;
+  if (!rows || rows.length === 0) { alert('目前沒有可匯出的工單'); return; }
+  const headers = ['工單號','機台','客戶','生產規格','派工數','實際生產數量','完成進度','計畫日期','實際開始日','完成日期'];
+  const data = rows.slice().sort((a, b) => {
+    const pa = getPlannedYmd(a) || '', pb = getPlannedYmd(b) || '';
+    if (pa !== pb) return pa < pb ? -1 : 1;
+    return (a.orderNo || '').localeCompare(b.orderNo || '');
+  }).map(o => [
+    o.orderNo,
+    o.machineNo || o.plannedMachineNo || '',
+    o.customerName || '',
+    o.productSpec || '',
+    plannedQtyOf(o) || '',
+    actualQtyOf(o) || 0,
+    orderProgressStatus(o),
+    getPlannedYmd(o) || '',
+    getActualStartYmd(o) || '',
+    getCompletionYmd(o) || '',
+  ]);
+  // 完成度摘要列
+  const done = rows.filter(o => o.step11At).length;
+  const summary = ['完成 ' + done + ' / 共 ' + rows.length + ' 張', '', '', '', '', '', '', '', '', ''];
+
+  const esc = v => { const s = (v == null ? '' : String(v)); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const csv = '﻿' + [headers, ...data, [], summary].map(r => r.map(esc).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const tag = custQ ? ('客戶_' + custQ) : ('機台_' + machine);
+  a.href = url;
+  a.download = tag + '_' + monthStr + '_生產進度.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+};
+
 // 點工號 → 顯示該工單生產規格（手機點一下也行）
 const specPop = document.createElement('div');
 specPop.id = 'psSpecPop';
-specPop.innerHTML = '<div class="pop-order"></div><div class="pop-spec"></div><div class="pop-customer"></div>';
+specPop.innerHTML = '<div class="pop-order"></div><div class="pop-spec"></div><div class="pop-qty"></div><div class="pop-customer"></div>';
 document.body.appendChild(specPop);
 
 // 各工單的「生管上傳多規格資料」快取（每段的真實生產規格來源）
@@ -701,8 +752,17 @@ document.addEventListener('click', async (e) => {
       if (parts.length > 1 && parts[idx]) spec = parts[idx];
     }
 
+    // 派工數：同段 upload-row 的 dispatchQty；無則用工單本身的 dispatchQty
+    let qty = null;
+    if (rows.length > 0) {
+      const qrow = rows[(segIdx ? segIdx - 1 : 0)] || rows[0];
+      if (qrow && qrow.dispatchQty != null && qrow.dispatchQty !== '') qty = qrow.dispatchQty;
+    }
+    if (qty == null && o && o.dispatchQty != null) qty = o.dispatchQty;
+
     specPop.querySelector('.pop-order').textContent = '工單 ' + orderNo + (segIdx ? '-' + segIdx + '（規格' + segIdx + '）' : '');
     specPop.querySelector('.pop-spec').textContent = spec;
+    specPop.querySelector('.pop-qty').textContent = '派工數：' + (qty != null && qty !== '' ? qty + ' 片' : '—');
     specPop.querySelector('.pop-customer').textContent = '客戶：' + customer;
     specPop.style.display = 'block';
     // 定位需把 body 的 zoom 算進去，否則下半部工單的彈窗會超出螢幕被切掉
