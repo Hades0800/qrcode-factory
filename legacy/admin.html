@@ -316,6 +316,21 @@
   </div>
 
   <div class="card">
+    <h2>更正工單號</h2>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">
+      把打錯的工單號改成正確的——所有生產紀錄、設備參數、上傳資料都會跟著保留。
+      目標工單號若已存在（含回收桶）會擋下。
+    </p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <input type="text" id="renameFrom" placeholder="原工單號（錯的）" autocapitalize="characters" autocomplete="off" style="flex:1;min-width:150px;">
+      <span style="color:var(--muted);font-weight:700;">→</span>
+      <input type="text" id="renameTo" placeholder="新工單號（對的）" autocapitalize="characters" autocomplete="off" style="flex:1;min-width:150px;">
+      <button class="btn-primary" id="renameBtn" style="white-space:nowrap;">更正</button>
+    </div>
+    <div id="renameResult" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card">
     <h2>系統工具</h2>
     <button class="btn-primary btn-block" id="migrateDatesBtn" style="margin-bottom:6px;">遷移：拆分計畫日期 / 實際開始日期</button>
     <p style="font-size:12px;color:var(--muted);margin:0 0 14px;">把舊 productionDate 拆成「計畫日期 (plannedDate)」與「實際開始日期 (actualStartDate)」。執行後即時頁、紀錄頁、製造概覽會以實際日期為準，並標出計畫日期不同處。建議只跑一次。</p>
@@ -904,6 +919,26 @@ $('custFillBtn').onclick = async () => {
     (d.notFound.length ? `<div style="color:var(--brand);">⚠ 找不到工單 ${d.notFound.length} 筆：${d.notFound.map(escapeHtml).join('、')}</div>` : '') +
     (d.errors.length ? `<div style="color:var(--brand);">⚠ 錯誤 ${d.errors.length} 筆：${d.errors.map(escapeHtml).join('、')}</div>` : '') +
     `</div>`;
+};
+
+// ── 更正工單號 ──
+$('renameBtn').onclick = async () => {
+  const from = $('renameFrom').value.trim().toUpperCase();
+  const to = $('renameTo').value.trim().toUpperCase();
+  if (!from || !to) { toast('請填原工單號與新工單號', 'error'); return; }
+  if (!/^[A-Z]\d{10}$/.test(from) || !/^[A-Z]\d{10}$/.test(to)) { toast('工單號格式錯誤（1 英文字母 + 10 數字）', 'error'); return; }
+  if (from === to) { toast('新舊工單號相同', 'error'); return; }
+  if (!confirm('確定把工單號「' + from + '」更正為「' + to + '」？\n\n生產紀錄、設備參數、上傳資料都會保留。')) return;
+  $('renameBtn').disabled = true;
+  const r = await api('/api/orders/rename', { method: 'POST', body: { fromOrderNo: from, toOrderNo: to } });
+  $('renameBtn').disabled = false;
+  if (!r.ok) {
+    $('renameResult').innerHTML = '<span style="color:var(--brand);font-weight:600;">✗ ' + escapeHtml(r.error || '更正失敗') + '</span>';
+    return;
+  }
+  toast('工單號已更正', 'success');
+  $('renameResult').innerHTML = '<span style="color:var(--success);font-weight:600;">✓ ' + escapeHtml(r.data.from) + ' → ' + escapeHtml(r.data.to) + ' 已更正（保留所有紀錄）</span>';
+  $('renameFrom').value = ''; $('renameTo').value = '';
 };
 
 if (API_URL.startsWith('PASTE_')) {

@@ -946,6 +946,50 @@ export default async function orderRoutes(fastify) {
     return { ok: true, filled, overwritten, unchanged, notFound, errors, total: rows.length };
   });
 
+  // 更正工單號（管理員）：把 from 改成 to，所有生產紀錄保留
+  // 工單號散落於 Order / EquipmentParam / UploadRow / UploadBatch.orderNos，需一併更新
+  // （StepEntry / PauseEvent 以 orderId 關聯，會自動跟著）
+  fastify.post('/rename', async (request, reply) => {
+    if (!request.user.isAdmin) {
+      return reply.code(403).send({ error: '需要管理員權限' });
+    }
+    const from = String((request.body || {}).fromOrderNo || '').trim().toUpperCase();
+    const to = String((request.body || {}).toOrderNo || '').trim().toUpperCase();
+    if (!validOrderNo(from) || !validOrderNo(to)) {
+      return reply.code(400).send({ error: '工單號格式錯誤（需 1 個英文字母 + 10 個數字）' });
+    }
+    if (from === to) return reply.code(400).send({ error: '新舊工單號相同' });
+
+    const src = await fastify.prisma.order.findUnique({ where: { orderNo: from } });
+    if (!src) return reply.code(404).send({ error: '找不到原工單 ' + from });
+
+    // 目標工單號不可已存在（含回收桶內的軟刪除工單；deletedAt 鍵繞過軟刪除過濾）
+    const dup = await fastify.prisma.order.findFirst({ where: { orderNo: to, deletedAt: undefined } });
+    if (dup) {
+      return reply.code(409).send({
+        error: '目標工單號 ' + to + ' 已存在' + (dup.deletedAt ? '（在回收桶，請先清除）' : '') + '，無法更正',
+      });
+    }
+
+    // 同步更新冗餘 orderNo 欄位（StepEntry / PauseEvent 走 orderId 不需動）
+    await fastify.prisma.$transaction([
+      fastify.prisma.order.update({ where: { orderNo: from }, data: { orderNo: to } }),
+      fastify.prisma.equipmentParam.updateMany({ where: { orderNo: from }, data: { orderNo: to } }),
+      fastify.prisma.uploadRow.updateMany({ where: { orderNo: from }, data: { orderNo: to } }),
+    ]);
+    // UploadBatch.orderNos 是字串陣列，逐批把 from 換成 to
+    const batches = await fastify.prisma.uploadBatch.findMany({ where: { orderNos: { has: from } } });
+    for (const b of batches) {
+      await fastify.prisma.uploadBatch.update({
+        where: { id: b.id },
+        data: { orderNos: (b.orderNos || []).map(n => (n === from ? to : n)) },
+      });
+    }
+
+    await audit(fastify.prisma, request, 'rename_order', from, 'to=' + to);
+    return { ok: true, from, to, batchesUpdated: batches.length };
+  });
+
   // 批次取消上傳：只動上傳資料，工單本身不刪
   // - 不論工單是否有生產紀錄，一律只清上傳欄位（productSpec、moldSpec、material 等）
   // - 工單本身（productionDate、機台、生產紀錄）一律保留
