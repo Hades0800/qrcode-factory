@@ -274,6 +274,10 @@
         <input type="text" id="filterCustomer" list="customerList" placeholder="輸入客戶名稱…" autocomplete="off">
         <datalist id="customerList"></datalist>
       </div>
+      <div class="field">
+        <label>工單號查詢（跨機台）</label>
+        <input type="text" id="filterOrder" placeholder="輸入工單號，自動帶出 @1/@2/@3…" autocapitalize="characters" autocomplete="off">
+      </div>
       <button class="btn-secondary" id="refreshBtn">🔄 重新整理</button>
       <button class="btn-secondary" id="exportBtn">📥 匯出進度</button>
     </div>
@@ -483,10 +487,15 @@ function render() {
 
   // 客戶查詢：有輸入時改為「跨所有機台」依客戶名稱（部分符合）篩選
   const custQ = ($('filterCustomer').value || '').trim();
+  const orderQ = ($('filterOrder').value || '').trim().toUpperCase();
+  const crossMachine = !!(orderQ || custQ);   // 跨機台檢視（每列標機台）
 
-  // 篩選：計畫日期落在此月份 +（機台 或 客戶）
+  // 篩選：計畫日期落在此月份 +（工單號 / 客戶 / 機台，優先序：工單號 > 客戶 > 機台）
   const rows = allOrders.filter(o => {
-    if (custQ) {
+    if (orderQ) {
+      // 工單號查詢：帶出該單與其各機台 @N 紀錄（F1150622001 → 含 @1/@2/@3）
+      if (!(o.orderNo === orderQ || o.orderNo.startsWith(orderQ + '@'))) return false;
+    } else if (custQ) {
       if (!(o.customerName || '').includes(custQ)) return false;
     } else {
       if (!orderMatchesMachine(o, machine)) return false;
@@ -497,7 +506,7 @@ function render() {
   });
 
   // 記住目前檢視，供「匯出進度」使用
-  currentView = { rows, custQ, machine, monthStr };
+  currentView = { rows, custQ, orderQ, machine, monthStr };
 
   // 件數統計（保留作為參考資訊）
   const monthPlanned = rows.length;
@@ -545,17 +554,21 @@ function render() {
   const monthRate = lastDay > 0 ? (rateSum / lastDay * 100).toFixed(1) : null;
 
   // 標題
-  $('psTitle').textContent = yy + '年' + mm + '月份生產進度統計' + (custQ ? '（客戶查詢）' : '');
+  $('psTitle').textContent = yy + '年' + mm + '月份生產進度統計' + (orderQ ? '（工單查詢）' : custQ ? '（客戶查詢）' : '');
 
-  // 上方統計列：客戶查詢時顯示客戶（跨機台），否則顯示機台
-  $('psSummary').innerHTML = custQ
-    ? `<div class="ps-line"><span class="lbl">客戶：</span><span class="val brand">${escapeHtml(custQ)}</span><span class="lbl" style="margin-left:10px;">（跨所有機台，共 ${rows.length} 張工單）</span></div>`
-    : `<div class="ps-line"><span class="lbl">機台編號：</span><span class="val">${machine}</span></div>`;
+  // 上方統計列：工單／客戶查詢顯示對應資訊（跨機台），否則顯示機台
+  $('psSummary').innerHTML = orderQ
+    ? `<div class="ps-line"><span class="lbl">工單：</span><span class="val brand">${escapeHtml(orderQ)}</span><span class="lbl" style="margin-left:10px;">（含各機台 @N，跨所有機台，共 ${rows.length} 筆）</span></div>`
+    : custQ
+      ? `<div class="ps-line"><span class="lbl">客戶：</span><span class="val brand">${escapeHtml(custQ)}</span><span class="lbl" style="margin-left:10px;">（跨所有機台，共 ${rows.length} 張工單）</span></div>`
+      : `<div class="ps-line"><span class="lbl">機台編號：</span><span class="val">${machine}</span></div>`;
 
   // 沒資料
   if (rows.length === 0) {
     $('gridArea').innerHTML = '<div class="empty">' +
-      (custQ ? '本月份找不到客戶「' + escapeHtml(custQ) + '」的工單' : '此機台本月份沒有計畫工單') + '</div>';
+      (orderQ ? '本月份找不到工單「' + escapeHtml(orderQ) + '」（或其 @N 機台紀錄）'
+        : custQ ? '本月份找不到客戶「' + escapeHtml(custQ) + '」的工單'
+        : '此機台本月份沒有計畫工單') + '</div>';
     return;
   }
 
@@ -582,8 +595,8 @@ function render() {
     const start = getActualStartYmd(o);
     const done = getCompletionYmd(o);
     const qtyMap = qtyByDayOf(o);
-    // 客戶查詢（跨機台）時，每列標出機台
-    const machineTag = custQ
+    // 工單／客戶查詢（跨機台）時，每列標出機台
+    const machineTag = crossMachine
       ? ` <span style="font-weight:600;font-size:10px;color:var(--muted);">${escapeHtml(o.machineNo || o.plannedMachineNo || '')}</span>`
       : '';
 
@@ -664,6 +677,7 @@ function render() {
   $(id).addEventListener('change', render);
 });
 $('filterCustomer').addEventListener('input', render);   // 邊打邊篩，清空即回到機台檢視
+$('filterOrder').addEventListener('input', render);      // 工單號查詢（含 @N），優先於客戶／機台
 $('refreshBtn').onclick = loadOrders;
 
 // 工單完成進度狀態：完成 / 進行中 / 未進行
@@ -675,7 +689,7 @@ function orderProgressStatus(o) {
 
 // 匯出目前檢視（客戶查詢或機台）的工單完成進度 CSV
 $('exportBtn').onclick = () => {
-  const { rows, custQ, machine, monthStr } = currentView;
+  const { rows, custQ, orderQ, machine, monthStr } = currentView;
   if (!rows || rows.length === 0) { alert('目前沒有可匯出的工單'); return; }
   const headers = ['工單號','機台','客戶','生產規格','派工數','實際生產數量','完成進度','計畫日期','實際開始日','完成日期'];
   const data = rows.slice().sort((a, b) => {
@@ -703,7 +717,7 @@ $('exportBtn').onclick = () => {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const tag = custQ ? ('客戶_' + custQ) : ('機台_' + machine);
+  const tag = orderQ ? ('工單_' + orderQ) : custQ ? ('客戶_' + custQ) : ('機台_' + machine);
   a.href = url;
   a.download = tag + '_' + monthStr + '_生產進度.csv';
   document.body.appendChild(a); a.click(); a.remove();

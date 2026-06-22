@@ -337,6 +337,9 @@ function normalizeMachine(v) {
   return MACHINE_MAP[s] || s;
 }
 
+// 過濾網機台：一張工單可在多台生產，工單號可加「@機台號」尾碼（例 F1150617007@1，機台 No12）
+const FILTER_MESH_UP = new Set(['No12','No13','No16','No17','No18']);
+
 // 欄位對應（Excel 欄位名 → 系統欄位）— 同義字都對應到同一欄位
 const FIELD_MAP = {
   // 製造單號
@@ -452,11 +455,13 @@ function parseRows(json) {
     });
     // 沒有生產日期就用上傳當日
     if (!obj.productionDate) obj.productionDate = todayStr;
-    obj.orderNo = String(obj.orderNo || '').trim();
-    obj._valid = /^[A-Z]\d{10}$/.test(obj.orderNo.toUpperCase());
-    if (obj._valid) obj.orderNo = obj.orderNo.toUpperCase();
-    // 機台號自動配對
+    obj.orderNo = String(obj.orderNo || '').trim().toUpperCase();
+    // 機台號自動配對（先正規化，@機台號 驗證會用到）
     if (obj.machineNo) obj.machineNo = normalizeMachine(obj.machineNo);
+    // 驗證：標準「1英文+10數字」；或「@機台號」尾碼（限過濾網機台，多機台生產用）
+    const isStd = /^[A-Z]\d{10}$/.test(obj.orderNo);
+    const isMulti = /^[A-Z]\d{10}@\d{1,2}$/.test(obj.orderNo) && FILTER_MESH_UP.has(obj.machineNo);
+    obj._valid = isStd || isMulti;
     // 數值欄位：0 視為空值（拿掉）
     ['dispatchQty','bladeCount','machineSPM','unitWeight','totalWeight'].forEach(k => {
       if (obj[k] !== undefined && obj[k] !== null && obj[k] !== '') {

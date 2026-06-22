@@ -1163,11 +1163,24 @@ $('changeMachineBtn').onclick = () => {
 };
 
 // ====== 工單號（第二步）======
+// 過濾網機台：一張工單可在多台生產，工單號可加「@機台號」尾碼（例 F1150622001@1）
+const FILTER_MESH_MACHINES = new Set(['No12','No13','No16','No17','No18']);
 async function setOrder(no) {
   no = String(no || '').trim().toUpperCase();
   if (!no) { toast('工單號不可空白', 'error'); return; }
-  if (!/^[A-Z]\d{10}$/.test(no)) { toast('工單號格式錯誤：需 1 個英文字母 + 10 個數字（例：F1150407024）', 'error'); return; }
   if (!selectedMachine) { toast('請先選擇機台', 'error'); return; }
+  const hasMachineSuffix = /@\d{1,2}$/.test(no);
+  if (hasMachineSuffix) {
+    // 「@機台號」格式只開放給過濾網機台
+    if (!FILTER_MESH_MACHINES.has(selectedMachine)) {
+      toast('只有過濾網機台可用「@機台號」格式（例：F1150622001@1）', 'error'); return;
+    }
+    if (!/^[A-Z]\d{10}@\d{1,2}$/.test(no)) {
+      toast('格式錯誤：過濾網多機台為 1英文 + 10數字 + @機台號（例：F1150622001@2）', 'error'); return;
+    }
+  } else if (!/^[A-Z]\d{10}$/.test(no)) {
+    toast('工單號格式錯誤：需 1 個英文字母 + 10 個數字（例：F1150407024）', 'error'); return;
+  }
   const r = await api('/api/orders/' + encodeURIComponent(no));
   if (!r.ok) {
     if (r.status === 409 && r.data && r.data.code === 'SOFT_DELETED') {
