@@ -1243,7 +1243,7 @@ function buildTimeline(o, isAdmin) {
 
     const delBtn = isAdmin && it.entryId ? ` <button data-del-entry="${it.entryId}" data-order="${escapeHtml(o.orderNo)}" style="background:var(--brand);color:#fff;border:none;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer;margin-left:6px;">✕</button>` : '';
     // QC 數量：更換規格/下班 → 事件上方（跨日時在隔日分隔線之前）；完成 → 事件下方
-    const qcBadge = q => `<span style="background:#1f6feb;color:#fff;font-size:11px;padding:3px 12px;border-radius:8px;font-weight:700;">數量：${q}</span>`;
+    const qcBadge = q => `<span style="background:#1f6feb;color:#fff;font-size:11px;padding:3px 12px;border-radius:8px;font-weight:700;">生產完成數量：${q}</span>`;
     const qcAboveRow = (it.qcAbove != null) ? `<li class="qc-row qc-above">${qcBadge(it.qcAbove)}</li>` : '';
     const qcBelowRow = (it.qcBelow != null) ? `<li class="qc-row qc-below">${qcBadge(it.qcBelow)}</li>` : '';
     return qcAboveRow + dayDivider + `

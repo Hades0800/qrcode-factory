@@ -1888,7 +1888,7 @@ function renderSteps() {
   finishBody += '<div class="hint">工單完成與結束（含 / 不含附屬設備）</div>';
   if (isFinished) {
     const noteTxt = order.step11Note ? '（' + escapeHtml(order.step11Note) + '）' : '';
-    const qcTag = (order.step11QcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${order.step11QcActualQty}</span>` : '';
+    const qcTag = (order.step11QcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">生產完成數量：${order.step11QcActualQty}</span>` : '';
     finishBody += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:var(--success-soft);border-radius:8px;">
       <span style="font-size:12px;color:var(--success);font-weight:600;flex:1;display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;">${icon('check', 14)}已完成${noteTxt}${qcTag} — ${fmtTime(order.step11At)}</span>
     </div>`;
@@ -1958,7 +1958,7 @@ function renderSteps() {
     const elapsed = now - new Date(e.recordedAt).getTime();
     const canCancel = elapsed < 5 * 60 * 1000;
     const manualTag = e.isManual ? '<span class="manual-tag">補登</span>' : '';
-    const qcTag = (e.qcActualQty != null) ? `<span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span>` : '';
+    const qcTag = (e.qcActualQty != null) ? `<span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">生產完成數量：${e.qcActualQty}</span>` : '';
     intBody += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${canCancel ? '#fff4d6' : '#fff8e8'};border-radius:8px;border-left:3px solid #f0ad4e;">`;
     intBody += `<span style="font-size:12px;color:#b8860b;font-weight:600;flex:1;display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;">${icon('clipboard', 14)}${escapeHtml(e.note || '')} — ${fmtTime(e.recordedAt)}${qcTag}${manualTag}</span>`;
     if (canCancel && !isPaused) {

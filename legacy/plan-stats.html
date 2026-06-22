@@ -766,13 +766,19 @@ document.addEventListener('click', async (e) => {
       if (parts.length > 1 && parts[idx]) spec = parts[idx];
     }
 
-    // 派工數：同段 upload-row 的 dispatchQty；無則用工單本身的 dispatchQty
+    // 派工數：
+    //   多規格的某一段（segIdx）→ 只取「該規格」那筆 upload-row 的派工數，取不到顯示「—」，
+    //     不退回工單層級（工單層級的 dispatchQty 只存第一規格，會誤顯示成別規格／加總）
+    //   單規格工單 → 用上傳第一筆或工單本身的派工數
     let qty = null;
-    if (rows.length > 0) {
-      const qrow = rows[(segIdx ? segIdx - 1 : 0)] || rows[0];
+    if (segIdx) {
+      const qrow = rows[segIdx - 1];
       if (qrow && qrow.dispatchQty != null && qrow.dispatchQty !== '') qty = qrow.dispatchQty;
+    } else {
+      const qrow = rows[0];
+      if (qrow && qrow.dispatchQty != null && qrow.dispatchQty !== '') qty = qrow.dispatchQty;
+      else if (o && o.dispatchQty != null) qty = o.dispatchQty;
     }
-    if (qty == null && o && o.dispatchQty != null) qty = o.dispatchQty;
 
     specPop.querySelector('.pop-order').textContent = '工單 ' + orderNo + (segIdx ? '-' + segIdx + '（規格' + segIdx + '）' : '');
     specPop.querySelector('.pop-spec').textContent = spec;
