@@ -193,6 +193,7 @@
   #psSpecPop .pop-order { font-size: 11px; color: #bbb; margin-bottom: 3px; }
   #psSpecPop .pop-spec { font-weight: 700; font-size: 15px; word-break: break-word; }
   #psSpecPop .pop-qty { font-size: 13px; color: #cfe3ff; margin-top: 4px; }
+  #psSpecPop .pop-weight { font-size: 13px; color: #cfe3ff; margin-top: 4px; }
   #psSpecPop .pop-customer { font-size: 13px; color: #ffd47f; margin-top: 4px; word-break: break-word; }
 
   .empty {
@@ -744,7 +745,7 @@ $('exportBtn').onclick = () => {
 // 點工號 → 顯示該工單生產規格（手機點一下也行）
 const specPop = document.createElement('div');
 specPop.id = 'psSpecPop';
-specPop.innerHTML = '<div class="pop-order"></div><div class="pop-spec"></div><div class="pop-qty"></div><div class="pop-customer"></div>';
+specPop.innerHTML = '<div class="pop-order"></div><div class="pop-spec"></div><div class="pop-qty"></div><div class="pop-weight"></div><div class="pop-customer"></div>';
 document.body.appendChild(specPop);
 
 // 各工單的「生管上傳多規格資料」快取（每段的真實生產規格來源）
@@ -769,26 +770,41 @@ document.addEventListener('click', async (e) => {
     const o = allOrders.find(x => x.orderNo === orderNo);
     const customer = (o && resolveCustomerName(o)) ? resolveCustomerName(o) : '（未填客戶名稱）';
 
-    // 生產規格：優先用生管上傳的多規格資料（該段 productSpec），與即時/歷史頁同源
-    //   規格N（工號-N）對應 upload-rows 第 N 筆；單規格取第一筆
-    let spec = (o && o.productSpec) ? o.productSpec : '（未填生產規格）';
     const rows = await psGetUploadRows(orderNo);
-    if (rows.length > 0) {
+
+    // 該段「實際完成的規格」＝對應 step30 的 note（現場在選單選的規格）。
+    // 用它去比對上傳列，而非用位置 → 現場跳順位生產也能對到正確的規格／派工數。
+    let segNote = null;
+    if (segIdx) {
+      const step30s = ((o && o.stepEntries) || [])
+        .filter(en => en.stepNo === '30')
+        .sort((a, b) => new Date(a.recordedAt) - new Date(b.recordedAt));
+      if (step30s[segIdx - 1]) segNote = (step30s[segIdx - 1].note || '').trim();
+    }
+    const matchedRow = segNote ? (rows.find(r => (r.productSpec || '').trim() === segNote) || null) : null;
+
+    // 生產規格
+    let spec;
+    if (matchedRow && matchedRow.productSpec) {
+      spec = matchedRow.productSpec;                 // 配到該段實際規格的上傳列
+    } else if (segNote) {
+      spec = segNote;                                // 有記錄但沒配到上傳列 → 顯示記錄的規格
+    } else if (rows.length > 0) {
       const row = rows[(segIdx ? segIdx - 1 : 0)] || rows[0];
-      if (row && row.productSpec) spec = row.productSpec;
+      spec = (row && row.productSpec) ? row.productSpec : ((o && o.productSpec) || '（未填生產規格）');
     } else if (o && o.productSpec) {
-      // 後備：沒有上傳多規格時，把 productSpec 以 / 分段取對應段
       const parts = o.productSpec.split('/').map(s => s.trim()).filter(Boolean);
       const idx = segIdx ? segIdx - 1 : 0;
-      if (parts.length > 1 && parts[idx]) spec = parts[idx];
+      spec = (parts.length > 1 && parts[idx]) ? parts[idx] : o.productSpec;
+    } else {
+      spec = '（未填生產規格）';
     }
 
-    // 派工數：
-    //   多規格的某一段（segIdx）→ 只取「該規格」那筆 upload-row 的派工數，取不到顯示「—」，
-    //     不退回工單層級（工單層級的 dispatchQty 只存第一規格，會誤顯示成別規格／加總）
-    //   單規格工單 → 用上傳第一筆或工單本身的派工數
+    // 派工數：優先用「配到該段規格」那筆；配不到時——多規格退回位置（相容舊資料），單規格用工單值
     let qty = null;
-    if (segIdx) {
+    if (matchedRow && matchedRow.dispatchQty != null && matchedRow.dispatchQty !== '') {
+      qty = matchedRow.dispatchQty;
+    } else if (segIdx) {
       const qrow = rows[segIdx - 1];
       if (qrow && qrow.dispatchQty != null && qrow.dispatchQty !== '') qty = qrow.dispatchQty;
     } else {
@@ -797,9 +813,23 @@ document.addEventListener('click', async (e) => {
       else if (o && o.dispatchQty != null) qty = o.dispatchQty;
     }
 
+    // 全部總重量（Excel「總數／全部總重量」欄）：與派工數同一套規格配對
+    let weight = null;
+    if (matchedRow && matchedRow.totalWeight != null && matchedRow.totalWeight !== '') {
+      weight = matchedRow.totalWeight;
+    } else if (segIdx) {
+      const wrow = rows[segIdx - 1];
+      if (wrow && wrow.totalWeight != null && wrow.totalWeight !== '') weight = wrow.totalWeight;
+    } else {
+      const wrow = rows[0];
+      if (wrow && wrow.totalWeight != null && wrow.totalWeight !== '') weight = wrow.totalWeight;
+      else if (o && o.totalWeight != null) weight = o.totalWeight;
+    }
+
     specPop.querySelector('.pop-order').textContent = '工單 ' + orderNo + (segIdx ? '-' + segIdx + '（規格' + segIdx + '）' : '');
     specPop.querySelector('.pop-spec').textContent = spec;
     specPop.querySelector('.pop-qty').textContent = '派工數：' + (qty != null && qty !== '' ? qty + ' 片' : '—');
+    specPop.querySelector('.pop-weight').textContent = '全部總重量：' + (weight != null && weight !== '' ? weight + ' kg' : '—');
     specPop.querySelector('.pop-customer').textContent = '客戶：' + customer;
     specPop.style.display = 'block';
     // 定位需把 body 的 zoom 算進去，否則下半部工單的彈窗會超出螢幕被切掉
