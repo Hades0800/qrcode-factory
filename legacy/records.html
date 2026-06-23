@@ -740,7 +740,7 @@ function render() {
       if (e.stepNo === '30') {
         const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
         // 更換規格的數量屬於剛結束那段 → 顯示在本事件「上方」（qcAbove）
-        allItems.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + manual, style: 'spec-change', qcAbove: (e.qcActualQty != null ? e.qcActualQty : null) });
+        allItems.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 生產規格完成：' + escapeHtml(e.note || '') + manual, style: 'spec-change', qcAbove: (e.qcActualQty != null ? e.qcActualQty : null) });
         return;
       }
       const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';

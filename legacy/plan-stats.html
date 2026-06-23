@@ -462,26 +462,33 @@ function qtyByDayOf(o) {
   return map;
 }
 
-// 多規格工單拆段：每筆「更換規格(30)」收掉一段，最後一段由「完成(11)」收掉
-//   回傳 [{ymd, qty, closed}]；單規格（無更換規格紀錄）回傳 null
+// 多規格工單拆段：每筆「生產規格完成(30)」＝一段規格
+//   回傳 [{ymd, qty, closed}]；單規格（≤1 段）回傳 null（以單列顯示）
+//   相容新舊：
+//     新流程「生產完成終止(11)」無數量 → 不算一段（規格段就是各筆生產規格完成）
+//     舊資料「完成(11)」帶數量 → 它本身是最後一個規格，補一段
 function specSegmentsOf(o) {
   const step30s = (o.stepEntries || [])
     .filter(e => e.stepNo === '30')
     .sort((a, b) => new Date(a.recordedAt) - new Date(b.recordedAt));
-  if (step30s.length === 0) return null;
   const segs = step30s.map(e => ({
     ymd: ymd(e.recordedAt),
     qty: e.qcActualQty != null ? Number(e.qcActualQty) : null,
     closed: true,
   }));
-  // 最後一段：已完成用 step11；進行中用最近一次下班回報（沒有就掛在今天）
   if (o.step11At) {
-    segs.push({ ymd: ymd(o.step11At), qty: o.step11QcActualQty != null ? Number(o.step11QcActualQty) : null, closed: true });
+    // step11 有數量＝舊資料的「最後規格」，補一段；無數量＝純終止，不補段
+    if (o.step11QcActualQty != null) {
+      segs.push({ ymd: ymd(o.step11At), qty: Number(o.step11QcActualQty), closed: true });
+    }
   } else {
+    // 進行中：補一段「目前生產中」（最近一次下班回報量，沒有就掛今天）
     const off = ((o.pause12 && o.pause12.history) || []).filter(e => e.qcActualQty != null);
     const last = off[off.length - 1];
     segs.push({ ymd: last ? ymd(last.startAt || last.endAt) : null, qty: last ? Number(last.qcActualQty) : null, closed: false });
   }
+  // 單規格（0 或 1 段）→ 單列顯示
+  if (segs.length <= 1) return null;
   return segs;
 }
 

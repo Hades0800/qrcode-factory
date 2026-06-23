@@ -947,6 +947,20 @@ let me = JSON.parse(localStorage.getItem('me') || 'null');
 initDropdownMenu();
 let orderNo = '';
 let order = null;
+// 本單生管上傳的規格清單（去重）→「生產規格完成」選單用；@N 由後端對基礎單號配對
+let currentSpecRows = [];
+async function loadOrderSpecRows(no) {
+  try {
+    const r = await api('/api/orders/' + encodeURIComponent(no) + '/upload-rows');
+    const rows = (r.ok && r.data.rows) ? r.data.rows : [];
+    const seen = new Set();
+    return rows.filter(rw => {
+      const k = (rw.productSpec || '').trim();
+      if (!k || seen.has(k)) return false;
+      seen.add(k); return true;
+    });
+  } catch (e) { return []; }
+}
 let scanner = null;
 let scanMode = null;
 let pendingStep = null;
@@ -1207,6 +1221,7 @@ async function setOrder(no) {
     body: { machineNo: selectedMachine },
   });
   if (mr.ok) order = mr.data.order;
+  currentSpecRows = await loadOrderSpecRows(no);   // 載入規格清單供「生產規格完成」選單
   $('orderEmpty').style.display = 'none';
   $('orderShow').style.display = 'block';
   $('orderNoText').textContent = no;
@@ -1884,8 +1899,8 @@ function renderSteps() {
   const finishCard = document.createElement('div');
   const isFinished = !!order.step11At;
   finishCard.className = 'step' + (isFinished ? ' done' : '');
-  let finishBody = '<div class="title">生產結束' + (isFinished ? '<span class="badge ok">×1</span>' : '') + '</div>';
-  finishBody += '<div class="hint">工單完成與結束（含 / 不含附屬設備）</div>';
+  let finishBody = '<div class="title">生產完成終止' + (isFinished ? '<span class="badge ok">×1</span>' : '') + '</div>';
+  finishBody += '<div class="hint">工單「全部規格」完成才記錄（含 / 不含附屬設備、可否獨立生產）。數量請用「生產規格完成」記錄</div>';
   if (isFinished) {
     const noteTxt = order.step11Note ? '（' + escapeHtml(order.step11Note) + '）' : '';
     const qcTag = (order.step11QcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">生產完成數量：${order.step11QcActualQty}</span>` : '';
@@ -1951,9 +1966,9 @@ function renderSteps() {
 
   // — 04 內部分隔 + 更換規格 區段 —
   intBody += `<div style="margin-top:14px;padding-top:14px;border-top:1.5px dashed #f0ad4e;">`;
-  intBody += '<div style="font-size:13px;font-weight:700;color:#b8860b;display:flex;align-items:center;gap:6px;">' + icon('clipboard', 14) + ' 更換規格' +
+  intBody += '<div style="font-size:13px;font-weight:700;color:#b8860b;display:flex;align-items:center;gap:6px;">' + icon('clipboard', 14) + ' 生產規格完成' +
     (specChangeEntries.length ? `<span class="badge ok" style="background:#f0ad4e;">×${specChangeEntries.length}</span>` : '') + '</div>';
-  intBody += '<div class="hint" style="margin-top:2px;">多規格工單切換規格時填入（例：規格 2、規格 3）</div>';
+  intBody += '<div class="hint" style="margin-top:2px;">每個規格生產完成就記錄＋數量（單一規格也要記）；多規格依序填 規格1、規格2、規格3。全部完成後再按「生產完成終止」</div>';
   specChangeEntries.forEach(e => {
     const elapsed = now - new Date(e.recordedAt).getTime();
     const canCancel = elapsed < 5 * 60 * 1000;
@@ -1967,12 +1982,26 @@ function renderSteps() {
     intBody += '</div>';
   });
   if (isPaused) {
-    intBody += '<button class="btn-success btn-block" disabled style="background:#f0ad4e;margin-top:8px;">' + icon('clipboard', 16) + ' 記錄更換</button>';
+    intBody += '<button class="btn-success btn-block" disabled style="background:#f0ad4e;margin-top:8px;">' + icon('clipboard', 16) + ' 記錄規格完成</button>';
   } else {
     intBody += `<div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">`;
-    intBody += `<input type="text" id="specChangeInput" placeholder="新規格描述（例：規格 2）" maxlength="200" style="padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">`;
-    intBody += `<input type="number" id="specChangeQcInput" min="0" step="1" placeholder="前一規格實際生產數量（必填）" style="padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">`;
-    intBody += `<button id="specChangeBtn" style="padding:10px 18px;background:#f0ad4e;color:#fff;border:none;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;">${icon('clipboard', 14)} 記錄</button>`;
+    if (currentSpecRows.length > 0) {
+      // 有上傳規格 → 下拉選單（已記錄過的規格標示「已完成」）
+      const doneSpecs = new Set(specChangeEntries.map(e => (e.note || '').trim()));
+      const opts = currentSpecRows.map((rw, i) => {
+        const spec = (rw.productSpec || '').trim();
+        const done = doneSpecs.has(spec);
+        return `<option value="${escapeHtml(spec)}"${done ? ' disabled' : ''}>規格${i + 1}：${escapeHtml(spec)}${done ? '（已完成）' : ''}</option>`;
+      }).join('');
+      intBody += `<select id="specChangeSelect" style="padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;background:#fff;">
+        <option value="">— 選擇完成的規格 —</option>${opts}
+      </select>`;
+    } else {
+      // 無上傳規格 → 後備手填
+      intBody += `<input type="text" id="specChangeInput" placeholder="規格描述（單一規格填工單規格；多規格填 規格2、規格3）" maxlength="200" style="padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">`;
+    }
+    intBody += `<input type="number" id="specChangeQcInput" min="0" step="1" placeholder="此規格實際生產數量（必填）" style="padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">`;
+    intBody += `<button id="specChangeBtn" style="padding:10px 18px;background:#f0ad4e;color:#fff;border:none;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;">${icon('clipboard', 14)} 記錄規格完成</button>`;
     intBody += `</div>`;
   }
   intBody += `</div>`;
@@ -2054,13 +2083,14 @@ function renderSteps() {
   const specBtn = document.getElementById('specChangeBtn');
   if (specBtn) {
     specBtn.onclick = () => {
+      const sel = document.getElementById('specChangeSelect');
       const input = document.getElementById('specChangeInput');
       const qcInput = document.getElementById('specChangeQcInput');
-      const text = (input?.value || '').trim();
-      if (!text) { toast('請填入規格描述', 'error'); input?.focus(); return; }
+      const text = (sel ? sel.value : (input?.value || '')).trim();
+      if (!text) { toast(sel ? '請選擇完成的規格' : '請填入規格描述', 'error'); (sel || input)?.focus(); return; }
       const qc = Number(qcInput?.value);
-      if (!Number.isInteger(qc) || qc < 0) { toast('請填入前一規格實際生產數量（非負整數）', 'error'); qcInput?.focus(); return; }
-      if (!confirm('確定記錄更換規格為「' + text + '」？\n前一規格數量：' + qc)) return;
+      if (!Number.isInteger(qc) || qc < 0) { toast('請填入此規格實際生產數量（非負整數）', 'error'); qcInput?.focus(); return; }
+      if (!confirm('確定記錄「生產規格完成」：規格「' + text + '」？\n此規格生產數量：' + qc)) return;
       recordSpecChange(text, qc);
     };
   }
@@ -2315,7 +2345,8 @@ function showCompleteModal(prefillBackfill = false) {
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;';
   modal.innerHTML = `
     <div style="background:#fff;border-radius:16px;padding:24px;width:100%;max-width:360px;box-shadow:0 10px 40px rgba(0,0,0,.2);margin:auto;">
-      <h3 style="margin:0 0 6px;font-size:17px;color:var(--ink);">本工單完成生產</h3>
+      <h3 style="margin:0 0 6px;font-size:17px;color:var(--ink);">生產完成終止</h3>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.4;">工單全部規格生產完成才記錄此實態。數量請先用「生產規格完成」記錄。</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">① 請選擇是否含附屬設備：</div>
       <div style="display:flex;flex-direction:column;gap:8px;">
         <button class="btn-secondary cmp-opt" data-aux="含附屬設備" style="padding:12px;font-size:14px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('gear', 18)}<span>含附屬設備</span></button>
@@ -2330,9 +2361,6 @@ function showCompleteModal(prefillBackfill = false) {
           <input type="radio" name="cmpIndep" value="無法分開獨立運作" style="width:16px;height:16px;accent-color:#d23535;">無法分開獨立運作
         </label>
       </div>
-      <div style="margin-top:14px;font-size:12px;color:var(--muted);margin-bottom:8px;">③ 實際生產數量（必填）：</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;line-height:1.4;">單一規格工單：本工單完成的總數量。<br>多規格工單：最後一段規格的生產數量。</div>
-      <input type="number" id="cmpQcInput" min="0" step="1" placeholder="輸入整數" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;box-sizing:border-box;">
       <button id="cmpBackfillToggle" style="width:100%;margin-top:14px;padding:10px;background:none;border:1.5px dashed var(--border);border-radius:10px;color:#b8860b;font-size:13px;cursor:pointer;">${icon('edit', 14)} 補登時間（不填用現在）</button>
       <div id="cmpBackfillWrap" style="display:${prefillBackfill ? '' : 'none'};margin-top:8px;">
         <input type="datetime-local" id="cmpBackfillTime" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;box-sizing:border-box;">
@@ -2356,9 +2384,6 @@ function showCompleteModal(prefillBackfill = false) {
       const indepEl = modal.querySelector('input[name="cmpIndep"]:checked');
       const indepNote = indepEl ? indepEl.value : '可分開獨立運作';
       const note = auxNote + '｜' + indepNote;
-      const qcInput = document.getElementById('cmpQcInput');
-      const qc = Number(qcInput?.value);
-      if (!Number.isInteger(qc) || qc < 0) { toast('請填入實際生產數量（非負整數）', 'error'); qcInput?.focus(); return; }
       const bfTime = document.getElementById('cmpBackfillTime').value;
       let recordedAt = null;
       if (bfTime) {
@@ -2367,10 +2392,10 @@ function showCompleteModal(prefillBackfill = false) {
         if (dt > new Date()) { toast('補登時間不能超過現在', 'error'); return; }
         recordedAt = dt.toISOString();
       }
-      const summary = (recordedAt ? `「${note}」\n補登時間：${bfTime.replace('T', ' ')}` : `「${note}」`) + `\n數量：${qc}`;
-      if (!confirm('確定完成此工單？\n' + summary)) return;
+      const summary = recordedAt ? `「${note}」\n補登時間：${bfTime.replace('T', ' ')}` : `「${note}」`;
+      if (!confirm('確定生產完成終止？（請確認各規格已用「生產規格完成」記錄數量）\n' + summary)) return;
       modal.remove();
-      try { await submitStepWithBody('11', { note, recordedAt, qcActualQty: qc }); } catch (e) {}
+      try { await submitStepWithBody('11', { note, recordedAt }); } catch (e) {}
       finishOrder();
     };
   });

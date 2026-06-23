@@ -609,12 +609,12 @@ export default async function orderRoutes(fastify) {
     if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
     const cols = STEP_COLS[step];
     if (!cols) return reply.code(400).send({ error: '無效步驟' });
-    // step 11（生產完成）必須帶 QC 實際生產數量
+    // step 11（生產完成終止）：數量改由「生產規格完成」記錄，這裡數量為選填（相容舊流程）
     let qcActualQty = null;
-    if (step === '11') {
+    if (step === '11' && rawQc !== undefined && rawQc !== null && rawQc !== '') {
       const n = Number(rawQc);
       if (!Number.isInteger(n) || n < 0) {
-        return reply.code(400).send({ error: '請填入此工單／最後規格的實際生產數量（非負整數）' });
+        return reply.code(400).send({ error: 'QC 數量必須是非負整數' });
       }
       qcActualQty = n;
     }
@@ -655,7 +655,7 @@ export default async function orderRoutes(fastify) {
       leaderId: request.user.id,
     };
     if (cols.note && note) updateData[cols.note] = clipStr(note, 500);
-    if (step === '11') updateData.step11QcActualQty = qcActualQty;
+    if (step === '11' && qcActualQty != null) updateData.step11QcActualQty = qcActualQty;
 
     const updated = await fastify.prisma.order.update({
       where: { orderNo },

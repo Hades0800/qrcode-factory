@@ -1168,7 +1168,7 @@ function buildTimeline(o, isAdmin) {
     if (e.stepNo === '30') {
       const suffix = (e.isManual ? '（補登）' : '');
       // 更換規格的數量屬於剛結束那段 → 顯示在本事件「上方」（qcAbove）
-      items.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + suffix, type: 'spec-change', entryId: e.id, qcAbove: (e.qcActualQty != null ? e.qcActualQty : null) });
+      items.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 生產規格完成：' + escapeHtml(e.note || '') + suffix, type: 'spec-change', entryId: e.id, qcAbove: (e.qcActualQty != null ? e.qcActualQty : null) });
       return;
     }
     const suffix = (e.isManual ? '（補登）' : '');
