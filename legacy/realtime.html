@@ -568,6 +568,16 @@ const STEP_LABELS = [
 
 const me = requireLogin();
 let allOrders = [];
+// @N（過濾網多機台）工單的客戶掛在「@ 之前的基礎單號」；客戶空白時自動從基礎單號帶
+function resolveCustomerName(o) {
+  if (o.customerName) return o.customerName;
+  const at = (o.orderNo || '').indexOf('@');
+  if (at > 0) {
+    const base = allOrders.find(x => x.orderNo === o.orderNo.slice(0, at));
+    if (base && base.customerName) return base.customerName;
+  }
+  return '';
+}
 let activeMachine = '';
 let idleMachinesToday = new Set();
 // 即時頁專用：只顯示 HH:MM
@@ -866,7 +876,7 @@ function renderContent() {
             </div>
             ${hasTags ? `<div class="oc-tags">${scopeTag}${carryOverTag}</div>` : ''}
           </div>
-          <div class="oc-customer">🏢 客戶：${o.customerName ? escapeHtml(o.customerName) : '（未填客戶名稱）'}</div>
+          <div class="oc-customer">🏢 客戶：${escapeHtml(resolveCustomerName(o) || '（未填客戶名稱）')}</div>
           <div id="rt-spec-${escapeHtml(o.orderNo)}" class="rt-spec-area"></div>
           ${o.plannedMachineNo && o.plannedMachineNo !== o.machineNo ? `
           <div style="margin-bottom:8px;padding:6px 10px;background:#fff3cd;border-left:3px solid #f0ad4e;border-radius:4px;font-size:12px;color:#8a6d3b;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
@@ -924,7 +934,11 @@ async function loadSpecCards(o) {
 
   const r = await api('/api/orders/' + encodeURIComponent(o.orderNo) + '/upload-rows');
   const rows = (r.ok && r.data.rows) ? r.data.rows : [];
-  const specs = rows.length > 0 ? rows : [{
+  // 同規格多台（過濾網等）→ 合併重複規格，只留不同規格
+  const specKey = rw => [rw.productSpec || '', rw.moldSpec || '', rw.material || ''].join('|');
+  const seenSpec = new Set();
+  const uniqRows = rows.filter(rw => { const k = specKey(rw); if (seenSpec.has(k)) return false; seenSpec.add(k); return true; });
+  const specs = uniqRows.length > 0 ? uniqRows : [{
     productSpec: o.productSpec, moldSpec: o.moldSpec, material: o.material,
     dispatchQty: o.dispatchQty, bladeCount: o.bladeCount, machineSPM: o.machineSPM,
     unitWeight: o.unitWeight, totalWeight: o.totalWeight,

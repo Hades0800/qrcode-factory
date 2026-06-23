@@ -354,6 +354,16 @@ MACHINES.forEach(m => {
 })();
 
 let allOrders = [];
+// @N（過濾網多機台）工單客戶空白時，從「@ 之前的原始工單」帶客戶
+function resolveCustomerName(o) {
+  if (o.customerName) return o.customerName;
+  const at = (o.orderNo || '').indexOf('@');
+  if (at > 0) {
+    const base = allOrders.find(x => x.orderNo === o.orderNo.slice(0, at));
+    if (base && base.customerName) return base.customerName;
+  }
+  return '';
+}
 // 目前檢視的篩選結果（供匯出用）
 let currentView = { rows: [], custQ: '', machine: '', monthStr: '' };
 
@@ -699,7 +709,7 @@ $('exportBtn').onclick = () => {
   }).map(o => [
     o.orderNo,
     o.machineNo || o.plannedMachineNo || '',
-    o.customerName || '',
+    resolveCustomerName(o) || '',
     o.productSpec || '',
     plannedQtyOf(o) || '',
     actualQtyOf(o) || 0,
@@ -750,7 +760,7 @@ document.addEventListener('click', async (e) => {
     const orderNo = cell.dataset.orderno;
     const segIdx = cell.dataset.segidx ? parseInt(cell.dataset.segidx, 10) : null;
     const o = allOrders.find(x => x.orderNo === orderNo);
-    const customer = (o && o.customerName) ? o.customerName : '（未填客戶名稱）';
+    const customer = (o && resolveCustomerName(o)) ? resolveCustomerName(o) : '（未填客戶名稱）';
 
     // 生產規格：優先用生管上傳的多規格資料（該段 productSpec），與即時/歷史頁同源
     //   規格N（工號-N）對應 upload-rows 第 N 筆；單規格取第一筆
