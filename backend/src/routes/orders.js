@@ -1251,13 +1251,15 @@ export default async function orderRoutes(fastify) {
   });
 
   // 取得工單的上傳原始列（多規格）
+  // 過濾網多機台（@N）：規格配對用「@ 之前的基礎單號」，@1/@2 不參與配對 → 各機台共用同一份規格
   fastify.get('/:orderNo/upload-rows', async (request) => {
     const orderNo = String(request.params.orderNo || '').trim().toUpperCase();
     if (!validOrderNo(orderNo)) return { rows: [] };
-    // 找該工單最新且未取消的 batch
+    const baseNo = orderNo.split('@')[0];
+    // 找該（基礎）工單最新且未取消的 batch
     const latestRow = await fastify.prisma.uploadRow.findFirst({
       where: {
-        orderNo,
+        orderNo: baseNo,
         status: { in: ['created', 'updated'] },
         batch: { cancelledAt: null },
       },
@@ -1266,7 +1268,7 @@ export default async function orderRoutes(fastify) {
     });
     if (!latestRow) return { rows: [] };
     const rows = await fastify.prisma.uploadRow.findMany({
-      where: { orderNo, batchId: latestRow.batchId },
+      where: { orderNo: baseNo, batchId: latestRow.batchId },
       orderBy: { id: 'asc' },
     });
     return { rows };
