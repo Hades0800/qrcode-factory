@@ -1196,7 +1196,8 @@ function buildTimeline(o, isAdmin) {
       time: new Date(e.startAt),
       label: ico + ' ' + e.pauseLabel + note,
       type: e.pauseType === '13' ? 'abnormal' : 'pause',
-      qcAbove: (e.qcActualQty != null ? e.qcActualQty : null),
+      // 下班／隔日生產的當日數量 → 顯示在暫停事件「下方」（隔日分隔線之前）
+      qcBelow: (e.qcActualQty != null ? e.qcActualQty : null),
     });
     if (e.endAt) {
       const dur = e.duration ? fmtDur(e.duration) : '';

@@ -2248,6 +2248,10 @@ function showInterruptModal() {
       </div>
       <div id="intNoteWrap" style="display:none;margin-top:10px;">
         <input type="text" id="intNoteInput" placeholder="" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;box-sizing:border-box;">
+        <div id="intTimeWrap" style="display:none;margin-top:8px;">
+          <label style="font-size:11px;color:var(--muted);">生產紀錄時間（不填用現在）</label>
+          <input type="datetime-local" id="intTimeInput" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;box-sizing:border-box;">
+        </div>
         <button class="btn-primary" id="intNoteConfirm" style="width:100%;margin-top:8px;padding:12px;font-size:15px;">確認中斷</button>
       </div>
       <button id="interruptModalCancel" style="width:100%;margin-top:12px;padding:12px;font-size:14px;background:none;border:1.5px solid var(--border);border-radius:10px;color:var(--muted);cursor:pointer;">取消</button>
@@ -2273,17 +2277,28 @@ function showInterruptModal() {
       const confirmBtn = document.getElementById('intNoteConfirm');
       wrap.style.display = '';
       if (opt === 'offwork') {
-        // 下班時間／隔日生產 — 必須輸入 QC 實際生產數量
+        // 下班時間／隔日生產 — 必須輸入 QC 實際生產數量，可指定生產紀錄時間
         input.placeholder = '實際生產數量（必填，整數）';
         input.type = 'number';
         input.min = '0';
         input.step = '1';
         input.value = '';
+        const timeWrap = document.getElementById('intTimeWrap');
+        const timeInput = document.getElementById('intTimeInput');
+        timeWrap.style.display = '';
+        timeInput.value = '';
         confirmBtn.onclick = () => {
           const qc = Number(input.value);
           if (!Number.isInteger(qc) || qc < 0) { toast('請輸入此規格實際生產數量（非負整數）', 'error'); return; }
+          let startAt = null;
+          if (timeInput.value) {
+            const dt = new Date(timeInput.value);
+            if (isNaN(dt)) { toast('時間格式錯誤', 'error'); return; }
+            if (dt > new Date()) { toast('時間不能超過現在', 'error'); return; }
+            startAt = dt.toISOString();
+          }
           modal.remove();
-          executePause({ type: '12', title: '下班時間／隔日生產' }, '下班時間／隔日生產', qc);
+          executePause({ type: '12', title: '下班時間／隔日生產' }, '下班時間／隔日生產', qc, startAt);
         };
         input.focus();
       } else if (opt === 'abnormal') {
@@ -2395,8 +2410,10 @@ function showCompleteModal(prefillBackfill = false) {
       const summary = recordedAt ? `「${note}」\n補登時間：${bfTime.replace('T', ' ')}` : `「${note}」`;
       if (!confirm('確定生產完成終止？（請確認各規格已用「生產規格完成」記錄數量）\n' + summary)) return;
       modal.remove();
-      try { await submitStepWithBody('11', { note, recordedAt }); } catch (e) {}
-      finishOrder();
+      try {
+        const ok = await submitStepWithBody('11', { note, recordedAt });
+        if (ok) finishOrder();   // 被防呆擋下（如未填製造參數）就不結單，讓使用者去補
+      } catch (e) {}
     };
   });
 }
@@ -2409,19 +2426,21 @@ async function submitStepWithBody(stepId, body) {
   if (!r.ok) {
     toast(r.error, 'error');
     if (r.data && r.data.order) { order = r.data.order; renderSteps(); }
-    return;
+    return false;
   }
   order = r.data.order;
   $('orderUpdated').textContent = '最後更新：' + fmtTime(order.updatedAt);
   renderSteps();
   const stepDef = STEPS.find(s => s.id === stepId) || (stepId === '11' ? ACTIONS_FINISH : null);
   toast('✓ 已記錄 ' + (stepDef ? stepDef.title : '步驟 ' + stepId), 'success');
+  return true;
 }
 
-async function executePause(p, note, qcActualQty) {
+async function executePause(p, note, qcActualQty, startAt) {
   if (!orderNo) return;
   const body = { type: p.type, note, activeStep: getCurrentStep() };
   if (qcActualQty !== undefined && qcActualQty !== null) body.qcActualQty = qcActualQty;
+  if (startAt) body.startAt = startAt;
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/pause', {
     method: 'POST',
     body,

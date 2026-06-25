@@ -24,6 +24,27 @@ export async function setActualStartDate(fastify, order, eventTime) {
   });
 }
 
+// 設備「製造參數」（base 欄）是否已填寫 —— 生產規格完成／生產完成終止的防呆條件
+// 製造參數 = base 單值欄位任一有值，或 baseSpecRows（多規格 SPM/刀數/送料）有內容
+export async function hasManufacturingParams(prisma, orderId) {
+  const ep = await prisma.equipmentParam.findUnique({ where: { orderId } });
+  if (!ep) return false;
+  const baseFields = [
+    ep.baseProductSpecAttr, ep.baseParamFileName, ep.baseParamFileAttr, ep.baseMoldSpec,
+    ep.baseMachineSPM, ep.baseBladeCount, ep.baseFeedSetting, ep.baseCutterStroke, ep.baseStrokeUpdateFreq,
+  ];
+  if (baseFields.some(v => v != null && String(v).trim() !== '')) return true;
+  if (ep.baseSpecRows) {
+    try {
+      const arr = JSON.parse(ep.baseSpecRows);
+      if (Array.isArray(arr) && arr.some(r => r && (
+        (r.spec && String(r.spec).trim()) || r.spm != null || r.blades != null || (r.feed && String(r.feed).trim())
+      ))) return true;
+    } catch (e) { /* ignore */ }
+  }
+  return false;
+}
+
 // 找出同機台上一張已完成工單的結束時間（step11At）
 // 用途：強制下一張工單的第一筆生產時態接續在上一張結束的下一分鐘
 export async function getPrevMachineEndAt(prisma, order) {

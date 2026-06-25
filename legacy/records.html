@@ -757,7 +757,8 @@ function render() {
     // 暫停事件
     ((o.pause12 && o.pause12.history) || []).forEach((e, i) => {
       const isLunch = (e.note || '').includes('中午') || (e.note || '').includes('午休') || (e.note || '').includes('午餐');
-      allItems.push({ time: new Date(e.startAt), label: icon('pause', 13) + ' 暫停' + (e.note ? '（'+escapeHtml(e.note)+'）' : ''), style: 'pause', qcAbove: (e.qcActualQty != null ? e.qcActualQty : null) });
+      // 下班／隔日生產的當日數量 → 顯示在暫停事件「下方」（隔日分隔線之前）
+      allItems.push({ time: new Date(e.startAt), label: icon('pause', 13) + ' 暫停' + (e.note ? '（'+escapeHtml(e.note)+'）' : ''), style: 'pause', qcBelow: (e.qcActualQty != null ? e.qcActualQty : null) });
       if (e.endAt) {
         const dur = e.duration ? fmtDur(e.duration) : '';
         const resumeLabel = isLunch ? icon('play', 13) + ' 午後恢復生產' : icon('play', 13) + ' 恢復生產' + (dur ? '（暫停 ' + dur + '）' : '');
