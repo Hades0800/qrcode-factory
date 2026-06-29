@@ -1949,11 +1949,13 @@ function renderSteps() {
         <option value="">-- 選擇中斷原因 --</option>
         <option value="設備異常停機|13">設備異常停機</option>
         <option value="超過1小時以上的停機|12">超過1小時以上的停機</option>
+        <option value="原料更換|12">原料更換</option>
+        <option value="模裂更換|12">模裂更換</option>
         <option value="中午休息|12">中午休息</option>
         <option value="下班時間／隔日生產|12">下班時間／隔日生產</option>
       </select>
       <input type="text" id="ibf-note" placeholder="補充說明（選填）" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;box-sizing:border-box;">
-      <input type="number" id="ibf-qc" min="0" step="1" placeholder="實際生產數量（下班/隔日生產必填，整數）" style="display:none;width:100%;padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">
+      <input type="number" id="ibf-qc" min="0" step="1" placeholder="生產完成數量（必填，整數）" style="display:none;width:100%;padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">
       <div style="display:flex;gap:6px;">
         <div style="flex:1;"><label style="font-size:11px;color:var(--muted);">開始時間</label><input type="datetime-local" id="ibf-start" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></div>
         <div style="flex:1;"><label style="font-size:11px;color:var(--muted);" id="ibf-end-label">結束時間</label><input type="datetime-local" id="ibf-end" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></div>
@@ -2244,11 +2246,14 @@ function showInterruptModal() {
       <div style="display:flex;flex-direction:column;gap:10px;" id="intOptList">
         <button class="btn-secondary int-opt" data-opt="abnormal" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('alert', 18)}<span>設備異常停機</span></button>
         <button class="btn-secondary int-opt" data-opt="long" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('clock', 18)}<span>超過1小時以上的停機</span></button>
+        <button class="btn-secondary int-opt" data-opt="material" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('box', 18)}<span>原料更換</span></button>
+        <button class="btn-secondary int-opt" data-opt="mold" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('gear', 18)}<span>模裂更換</span></button>
         <button class="btn-secondary int-opt" data-opt="lunch" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('coffee', 18)}<span>中午休息</span></button>
         <button class="btn-secondary int-opt" data-opt="offwork" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('coffee', 18)}<span>下班時間／隔日生產</span></button>
       </div>
       <div id="intNoteWrap" style="display:none;margin-top:10px;">
-        <input type="text" id="intNoteInput" placeholder="" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;box-sizing:border-box;">
+        <input type="number" id="intQcInput" min="0" step="1" placeholder="生產完成數量（必填，整數）" style="width:100%;padding:12px;border:1.5px solid #f0ad4e;border-radius:10px;font-size:15px;box-sizing:border-box;margin-bottom:8px;">
+        <input type="text" id="intNoteInput" placeholder="" style="display:none;width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;box-sizing:border-box;">
         <div id="intTimeWrap" style="display:none;margin-top:8px;">
           <label style="font-size:11px;color:var(--muted);">生產紀錄時間（不填用現在）</label>
           <input type="datetime-local" id="intTimeInput" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;box-sizing:border-box;">
@@ -2262,80 +2267,67 @@ function showInterruptModal() {
   document.getElementById('interruptModalCancel').onclick = () => modal.remove();
   modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
 
+  // 各中斷原因設定：type、標題、說明欄（required/optional/none）、是否可指定時間
+  const REASON_CFG = {
+    abnormal: { type: '13', title: '設備異常停機', note: 'required', notePh: '異常說明（必填，例：模具頓刀）' },
+    long:     { type: '12', title: '超過1小時以上的停機', note: 'optional', notePh: '補充說明（選填，例：模具維修）' },
+    material: { type: '12', title: '原料更換', note: 'optional', notePh: '補充說明（選填）' },
+    mold:     { type: '12', title: '模裂更換', note: 'optional', notePh: '補充說明（選填）' },
+    lunch:    { type: '12', title: '中午休息', note: 'none' },
+    offwork:  { type: '12', title: '下班時間／隔日生產', note: 'none', time: true },
+  };
   modal.querySelectorAll('.int-opt').forEach(btn => {
     btn.onclick = () => {
-      const opt = btn.dataset.opt;
-      if (opt === 'lunch') {
-        // 中午休息 — 不需輸入 QC，直接送
-        modal.remove();
-        executePause({ type: '12', title: '中午休息' }, '中午休息');
-        return;
-      }
-      // 切到輸入區
+      const cfg = REASON_CFG[btn.dataset.opt];
+      if (!cfg) return;
       document.getElementById('intOptList').style.display = 'none';
-      const wrap = document.getElementById('intNoteWrap');
-      const input = document.getElementById('intNoteInput');
+      document.getElementById('intNoteWrap').style.display = '';
+      const qcInput = document.getElementById('intQcInput');
+      const noteInput = document.getElementById('intNoteInput');
+      const timeWrap = document.getElementById('intTimeWrap');
+      const timeInput = document.getElementById('intTimeInput');
       const confirmBtn = document.getElementById('intNoteConfirm');
-      wrap.style.display = '';
-      if (opt === 'offwork') {
-        // 下班時間／隔日生產 — 必須輸入 QC 實際生產數量，可指定生產紀錄時間
-        input.placeholder = '實際生產數量（必填，整數）';
-        input.type = 'number';
-        input.min = '0';
-        input.step = '1';
-        input.value = '';
-        const timeWrap = document.getElementById('intTimeWrap');
-        const timeInput = document.getElementById('intTimeInput');
-        timeWrap.style.display = '';
-        timeInput.value = '';
-        confirmBtn.onclick = () => {
-          const qc = Number(input.value);
-          if (!Number.isInteger(qc) || qc < 0) { toast('請輸入此規格實際生產數量（非負整數）', 'error'); return; }
-          let startAt = null;
-          if (timeInput.value) {
-            const dt = new Date(timeInput.value);
-            if (isNaN(dt)) { toast('時間格式錯誤', 'error'); return; }
-            if (dt > new Date()) { toast('時間不能超過現在', 'error'); return; }
-            startAt = dt.toISOString();
-          }
-          modal.remove();
-          executePause({ type: '12', title: '下班時間／隔日生產' }, '下班時間／隔日生產', qc, startAt);
-        };
-        input.focus();
-      } else if (opt === 'abnormal') {
-        input.placeholder = '異常說明（必填，例：模具頓刀）';
-        input.type = 'text';
-        input.value = '';
-        confirmBtn.onclick = () => {
-          const val = input.value.trim();
-          if (!val) { toast('請輸入異常說明', 'error'); return; }
-          modal.remove();
-          executePause({ type: '13', title: '設備異常停機' }, val);
-        };
-        input.focus();
-      } else { // long
-        input.placeholder = '補充說明（選填，例：模具維修）';
-        input.type = 'text';
-        input.value = '';
-        confirmBtn.onclick = () => {
-          const val = input.value.trim();
-          const note = val ? '超過1小時以上的停機 - ' + val : '超過1小時以上的停機';
-          modal.remove();
-          executePause({ type: '12', title: '超過1小時以上的停機' }, note);
-        };
-        input.focus();
-      }
+      // 所有原因都要填生產完成數量
+      qcInput.value = '';
+      qcInput.style.display = '';
+      // 說明欄（依原因）
+      if (cfg.note === 'none') { noteInput.style.display = 'none'; }
+      else { noteInput.style.display = ''; noteInput.value = ''; noteInput.placeholder = cfg.notePh; }
+      // 時間欄（下班可指定）
+      timeWrap.style.display = cfg.time ? '' : 'none';
+      if (cfg.time) timeInput.value = '';
+      confirmBtn.onclick = () => {
+        const qc = Number(qcInput.value);
+        if (!Number.isInteger(qc) || qc < 0) { toast('請填生產完成數量（非負整數）', 'error'); qcInput.focus(); return; }
+        let detail = '';
+        if (cfg.note !== 'none') {
+          detail = noteInput.value.trim();
+          if (cfg.note === 'required' && !detail) { toast('請填寫' + cfg.title + '說明', 'error'); noteInput.focus(); return; }
+        }
+        // note：異常用純說明；其他用「標題 - 說明」
+        const fullNote = (btn.dataset.opt === 'abnormal') ? detail : (cfg.title + (detail ? ' - ' + detail : ''));
+        let startAt = null;
+        if (cfg.time && timeInput.value) {
+          const dt = new Date(timeInput.value);
+          if (isNaN(dt)) { toast('時間格式錯誤', 'error'); return; }
+          if (dt > new Date()) { toast('時間不能超過現在', 'error'); return; }
+          startAt = dt.toISOString();
+        }
+        modal.remove();
+        executePause({ type: cfg.type, title: cfg.title }, fullNote, qc, startAt);
+      };
+      qcInput.focus();
     };
   });
 }
 
-// 補登原因切換：下班/隔日生產 → 顯示數量欄、結束時間標示為選填
+// 補登原因切換：任何原因都顯示數量欄；下班/隔日生產的結束時間可不填（進行中）
 function onIbfReasonChange() {
   const sel = document.getElementById('ibf-reason').value;
   const isOff = sel.startsWith('下班');
   const qc = document.getElementById('ibf-qc');
   const endLabel = document.getElementById('ibf-end-label');
-  if (qc) qc.style.display = isOff ? '' : 'none';
+  if (qc) qc.style.display = sel ? '' : 'none';
   if (endLabel) endLabel.textContent = isOff ? '結束時間（可不填＝進行中）' : '結束時間';
 }
 
@@ -2351,15 +2343,12 @@ async function submitInterruptBackfill() {
   const endAt = document.getElementById('ibf-end').value;
   if (!startAt) { toast('請填寫開始時間', 'error'); return; }
   if (!isOff && !endAt) { toast('請填寫結束時間', 'error'); return; }   // 下班可不填結束時間
-  let qcActualQty;
-  if (isOff) {
-    const qc = Number(document.getElementById('ibf-qc').value);
-    if (!Number.isInteger(qc) || qc < 0) { toast('下班/隔日生產請填實際生產數量（非負整數）', 'error'); return; }
-    qcActualQty = qc;
-  }
-  const body = { type, note, startAt: new Date(startAt).toISOString() };
+  // 任何原因都要填生產完成數量
+  const qcVal = Number(document.getElementById('ibf-qc').value);
+  if (!Number.isInteger(qcVal) || qcVal < 0) { toast('請填生產完成數量（非負整數）', 'error'); return; }
+  const qcActualQty = qcVal;
+  const body = { type, note, startAt: new Date(startAt).toISOString(), qcActualQty };
   if (endAt) body.endAt = new Date(endAt).toISOString();
-  if (qcActualQty !== undefined) body.qcActualQty = qcActualQty;
   const summary = '原因：' + note + '\n開始：' + startAt + (endAt ? '\n結束：' + endAt : '\n（進行中，未填結束）') + (qcActualQty !== undefined ? '\n數量：' + qcActualQty : '');
   if (!confirm('確認補登？\n' + summary)) return;
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/pause-backfill', { method: 'POST', body });

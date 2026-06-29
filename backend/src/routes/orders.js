@@ -208,7 +208,7 @@ export default async function orderRoutes(fastify) {
     // 除非下列任一介入：
     //   - step 30（切換規格）
     //   - pause 13（異常中斷）開始時間
-    //   - pause 12 中的「中午休息／下班時間」已結束（取 endAt）
+    //   - pause 12 中的「中午休息／下班時間／原料更換／模裂更換」已結束（取 endAt）
     if (stepNo === '40') {
       const lastStep41 = await fastify.prisma.stepEntry.findFirst({
         where: { orderId: order.id, stepNo: '41' },
@@ -234,6 +234,8 @@ export default async function orderRoutes(fastify) {
               { note: { contains: '午休' } },
               { note: { contains: '午餐' } },
               { note: { contains: '下班' } },
+              { note: { contains: '原料更換' } },
+              { note: { contains: '模裂更換' } },
             ],
           },
           orderBy: { endAt: 'desc' },
@@ -714,15 +716,18 @@ export default async function orderRoutes(fastify) {
       where: { orderId: order.id, type, endAt: null },
     });
     if (active) return reply.code(409).send({ error: '已在暫停中，請先恢復' });
-    // 下班時間／隔日生產（type=12 且 note 含「下班」）必須帶 QC 實際生產數量
+    // 生產完成數量：任何中斷原因都可記錄（下班時間／隔日生產為必填）
     let qcActualQty = null;
-    const isOffWork = type === '12' && typeof note === 'string' && note.includes('下班');
-    if (isOffWork) {
+    if (rawQc !== undefined && rawQc !== null && rawQc !== '') {
       const n = Number(rawQc);
       if (!Number.isInteger(n) || n < 0) {
-        return reply.code(400).send({ error: '請填入此規格實際生產數量（非負整數）' });
+        return reply.code(400).send({ error: '生產完成數量必須是非負整數' });
       }
       qcActualQty = n;
+    }
+    const isOffWork = type === '12' && typeof note === 'string' && note.includes('下班');
+    if (isOffWork && qcActualQty === null) {
+      return reply.code(400).send({ error: '請填入此規格實際生產數量（非負整數）' });
     }
     // 可指定暫停（生產紀錄）時間；不帶則用現在
     let pauseStart = new Date();
