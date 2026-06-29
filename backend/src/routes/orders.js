@@ -772,15 +772,24 @@ export default async function orderRoutes(fastify) {
     const { type, note, startAt: startStr, endAt: endStr, qcActualQty: rawQc } = request.body || {};
     if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
     if (!['12', '13'].includes(type)) return reply.code(400).send({ error: '無效類型' });
-    if (!startStr || !endStr) return reply.code(400).send({ error: '請填寫開始和結束時間' });
+    if (!startStr) return reply.code(400).send({ error: '請填寫開始時間' });
     const startAt = new Date(startStr);
-    const endAt = new Date(endStr);
-    if (isNaN(startAt) || isNaN(endAt)) return reply.code(400).send({ error: '時間格式錯誤' });
-    if (endAt <= startAt) return reply.code(400).send({ error: '結束時間必須晚於開始時間' });
-    if (endAt > new Date()) return reply.code(400).send({ error: '補登時間不能超過現在' });
+    if (isNaN(startAt)) return reply.code(400).send({ error: '時間格式錯誤' });
+    if (startAt > new Date()) return reply.code(400).send({ error: '開始時間不能超過現在' });
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) return reply.code(404).send({ error: '找不到工單' });
-    const duration = Math.round((endAt - startAt) / 1000);
+    // 結束時間選填：有填→已結束暫停（算時長）；不填→進行中暫停（如下班尚未恢復生產）
+    let endAt = null, duration = null;
+    if (endStr) {
+      endAt = new Date(endStr);
+      if (isNaN(endAt)) return reply.code(400).send({ error: '時間格式錯誤' });
+      if (endAt <= startAt) return reply.code(400).send({ error: '結束時間必須晚於開始時間' });
+      if (endAt > new Date()) return reply.code(400).send({ error: '補登時間不能超過現在' });
+      duration = Math.round((endAt - startAt) / 1000);
+    } else {
+      const activeSame = await fastify.prisma.pauseEvent.findFirst({ where: { orderId: order.id, type, endAt: null } });
+      if (activeSame) return reply.code(409).send({ error: '已有進行中的暫停，請先恢復或填結束時間' });
+    }
     const backfillNote = '【補登】' + (note || '');
     // 補登暫停的 QC 實際生產數量：選填（事後補登可能已不知道）
     let qcActualQty = null;

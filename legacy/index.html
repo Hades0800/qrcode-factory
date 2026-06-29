@@ -1945,7 +1945,7 @@ function renderSteps() {
     intBody += `<button id="interruptBfBtn" class="btn-secondary" style="flex:0 0 auto;padding:10px 14px;font-size:13px;color:#b8860b;">${icon('edit', 14)} 補登</button>`;
     intBody += `</div>`;
     intBody += `<div class="backfill-form" id="interrupt-bf" style="display:none;flex-direction:column;gap:6px;">
-      <select id="ibf-reason" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;">
+      <select id="ibf-reason" onchange="onIbfReasonChange()" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;">
         <option value="">-- 選擇中斷原因 --</option>
         <option value="設備異常停機|13">設備異常停機</option>
         <option value="超過1小時以上的停機|12">超過1小時以上的停機</option>
@@ -1953,9 +1953,10 @@ function renderSteps() {
         <option value="下班時間／隔日生產|12">下班時間／隔日生產</option>
       </select>
       <input type="text" id="ibf-note" placeholder="補充說明（選填）" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;box-sizing:border-box;">
+      <input type="number" id="ibf-qc" min="0" step="1" placeholder="實際生產數量（下班/隔日生產必填，整數）" style="display:none;width:100%;padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">
       <div style="display:flex;gap:6px;">
         <div style="flex:1;"><label style="font-size:11px;color:var(--muted);">開始時間</label><input type="datetime-local" id="ibf-start" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></div>
-        <div style="flex:1;"><label style="font-size:11px;color:var(--muted);">結束時間</label><input type="datetime-local" id="ibf-end" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></div>
+        <div style="flex:1;"><label style="font-size:11px;color:var(--muted);" id="ibf-end-label">結束時間</label><input type="datetime-local" id="ibf-end" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></div>
       </div>
       <div style="display:flex;gap:6px;">
         <button class="btn-primary" style="flex:1;" onclick="submitInterruptBackfill()">確認補登</button>
@@ -2328,25 +2329,44 @@ function showInterruptModal() {
   });
 }
 
+// 補登原因切換：下班/隔日生產 → 顯示數量欄、結束時間標示為選填
+function onIbfReasonChange() {
+  const sel = document.getElementById('ibf-reason').value;
+  const isOff = sel.startsWith('下班');
+  const qc = document.getElementById('ibf-qc');
+  const endLabel = document.getElementById('ibf-end-label');
+  if (qc) qc.style.display = isOff ? '' : 'none';
+  if (endLabel) endLabel.textContent = isOff ? '結束時間（可不填＝進行中）' : '結束時間';
+}
+
 async function submitInterruptBackfill() {
   if (!orderNo) return;
   const sel = document.getElementById('ibf-reason').value;
   if (!sel) { toast('請選擇中斷原因', 'error'); return; }
   const [reason, type] = sel.split('|');
+  const isOff = reason.includes('下班');
   const detail = document.getElementById('ibf-note').value.trim();
   const note = detail ? reason + ' - ' + detail : reason;
   const startAt = document.getElementById('ibf-start').value;
   const endAt = document.getElementById('ibf-end').value;
-  if (!startAt || !endAt) { toast('請填寫開始和結束時間', 'error'); return; }
-  if (!confirm('確認補登？\n原因：' + note + '\n開始：' + startAt + '\n結束：' + endAt)) return;
-  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/pause-backfill', {
-    method: 'POST',
-    body: { type, note, startAt: new Date(startAt).toISOString(), endAt: new Date(endAt).toISOString() },
-  });
+  if (!startAt) { toast('請填寫開始時間', 'error'); return; }
+  if (!isOff && !endAt) { toast('請填寫結束時間', 'error'); return; }   // 下班可不填結束時間
+  let qcActualQty;
+  if (isOff) {
+    const qc = Number(document.getElementById('ibf-qc').value);
+    if (!Number.isInteger(qc) || qc < 0) { toast('下班/隔日生產請填實際生產數量（非負整數）', 'error'); return; }
+    qcActualQty = qc;
+  }
+  const body = { type, note, startAt: new Date(startAt).toISOString() };
+  if (endAt) body.endAt = new Date(endAt).toISOString();
+  if (qcActualQty !== undefined) body.qcActualQty = qcActualQty;
+  const summary = '原因：' + note + '\n開始：' + startAt + (endAt ? '\n結束：' + endAt : '\n（進行中，未填結束）') + (qcActualQty !== undefined ? '\n數量：' + qcActualQty : '');
+  if (!confirm('確認補登？\n' + summary)) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/pause-backfill', { method: 'POST', body });
   if (!r.ok) { toast(r.error || '補登失敗', 'error'); return; }
   order = r.data.order;
   renderSteps();
-  toast('✓ 已補登中斷', 'success');
+  toast('✓ 已補登' + (isOff && !endAt ? '（進行中）' : '中斷'), 'success');
 }
 
 // 工單完成 modal（含/不含附屬設備 + 主/附屬獨立運作 + 補登時間）
