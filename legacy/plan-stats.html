@@ -781,50 +781,30 @@ document.addEventListener('click', async (e) => {
         .sort((a, b) => new Date(a.recordedAt) - new Date(b.recordedAt));
       if (step30s[segIdx - 1]) segNote = (step30s[segIdx - 1].note || '').trim();
     }
-    const matchedRow = segNote ? (rows.find(r => (r.productSpec || '').trim() === segNote) || null) : null;
+    // 是否「真多規格」：生管實際上傳多筆規格（每段各一筆）。
+    //   真多規格 → 每段取自己的上傳列（先用 note 配對／跳順位也對，否則用位置；配不到留空）
+    //   單規格、或「單一上傳被現場用更換規格拆段」→ 跟單規格一樣顯示工單/上傳的規格、派工數、重量
+    const isMultiUpload = rows.length > 1;
+    let segRow = null;
+    if (segIdx && isMultiUpload) {
+      segRow = (segNote ? rows.find(r => (r.productSpec || '').trim() === segNote) : null) || rows[segIdx - 1] || null;
+    }
+    const baseRow = rows[0] || null;
+    const pick = key => {
+      const v = (segIdx && isMultiUpload)
+        ? (segRow ? segRow[key] : null)               // 真多規格：只看該段（配不到就 null）
+        : (baseRow && baseRow[key] != null && baseRow[key] !== '' ? baseRow[key] : (o ? o[key] : null));
+      return (v != null && v !== '') ? v : null;
+    };
 
     // 生產規格
-    let spec;
-    if (matchedRow && matchedRow.productSpec) {
-      spec = matchedRow.productSpec;                 // 配到該段實際規格的上傳列
-    } else if (segNote) {
-      spec = segNote;                                // 有記錄但沒配到上傳列 → 顯示記錄的規格
-    } else if (rows.length > 0) {
-      const row = rows[(segIdx ? segIdx - 1 : 0)] || rows[0];
-      spec = (row && row.productSpec) ? row.productSpec : ((o && o.productSpec) || '（未填生產規格）');
-    } else if (o && o.productSpec) {
-      const parts = o.productSpec.split('/').map(s => s.trim()).filter(Boolean);
-      const idx = segIdx ? segIdx - 1 : 0;
-      spec = (parts.length > 1 && parts[idx]) ? parts[idx] : o.productSpec;
-    } else {
-      spec = '（未填生產規格）';
+    let spec = pick('productSpec');
+    if (spec == null) {
+      if (segIdx && isMultiUpload && segNote) spec = segNote;   // 真多規格但配不到 → 退而顯示記錄的規格
+      else spec = '（未填生產規格）';
     }
-
-    // 派工數：優先用「配到該段規格」那筆；配不到時——多規格退回位置（相容舊資料），單規格用工單值
-    let qty = null;
-    if (matchedRow && matchedRow.dispatchQty != null && matchedRow.dispatchQty !== '') {
-      qty = matchedRow.dispatchQty;
-    } else if (segIdx) {
-      const qrow = rows[segIdx - 1];
-      if (qrow && qrow.dispatchQty != null && qrow.dispatchQty !== '') qty = qrow.dispatchQty;
-    } else {
-      const qrow = rows[0];
-      if (qrow && qrow.dispatchQty != null && qrow.dispatchQty !== '') qty = qrow.dispatchQty;
-      else if (o && o.dispatchQty != null) qty = o.dispatchQty;
-    }
-
-    // 全部總重量（Excel「總數／全部總重量」欄）：與派工數同一套規格配對
-    let weight = null;
-    if (matchedRow && matchedRow.totalWeight != null && matchedRow.totalWeight !== '') {
-      weight = matchedRow.totalWeight;
-    } else if (segIdx) {
-      const wrow = rows[segIdx - 1];
-      if (wrow && wrow.totalWeight != null && wrow.totalWeight !== '') weight = wrow.totalWeight;
-    } else {
-      const wrow = rows[0];
-      if (wrow && wrow.totalWeight != null && wrow.totalWeight !== '') weight = wrow.totalWeight;
-      else if (o && o.totalWeight != null) weight = o.totalWeight;
-    }
+    const qty = pick('dispatchQty');           // 派工數
+    const weight = pick('totalWeight');        // 全部總重量
 
     specPop.querySelector('.pop-order').textContent = '工單 ' + orderNo + (segIdx ? '-' + segIdx + '（規格' + segIdx + '）' : '');
     specPop.querySelector('.pop-spec').textContent = spec;
