@@ -85,8 +85,7 @@
   table.gs td.eff-bad { color: var(--brand); }
 
   /* 圖表 */
-  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
+  .chart-grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
   .chart-title { font-size: 14px; font-weight: 700; text-align: center; margin-bottom: 12px; color: var(--ink); }
   .chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .chart-area { display: flex; align-items: flex-end; gap: 6px; height: 240px; padding: 18px 4px 0; min-width: max-content; }
@@ -334,9 +333,11 @@ function render() {
 
   // 逐日計算
   const days = [];
-  for (let d = 1; d <= lastDay; d++) {
+  // 一次顯示整月 30(28~31) 天；日期未到（本月今天之後）留空白
+  for (let d = 1; d <= daysInMonth; d++) {
+    const isFuture = todayInThisMonth && d > lastDay;
     const ds = monthStr + '-' + String(d).padStart(2, '0');
-    const dayOrders = allOrders.filter(o => orderMatchesMachine(o, machine) && orderIsOnDate(o, ds));
+    const dayOrders = isFuture ? [] : allOrders.filter(o => orderMatchesMachine(o, machine) && orderIsOnDate(o, ds));
     let prepSec = 0, prodSec = 0, abnSec = 0;
     dayOrders.forEach(o => {
       const ph = computeOrderPhasesForDay(o, ds);
@@ -345,11 +346,12 @@ function render() {
     const prepMin = Math.round(prepSec / 60);
     const prodMin = Math.round(prodSec / 60);
     const abnMin = Math.round(abnSec / 60);
-    const stdMin = Math.round(stdByDay[ds] || 0);
+    const stdMin = isFuture ? 0 : Math.round(stdByDay[ds] || 0);
     const loss = prodMin - stdMin;
-    const eff = target.workMinutes > 0 ? (prodMin / target.workMinutes * 100) : null;
-    const hasActivity = dayOrders.length > 0 || stdMin > 0;
-    days.push({ d, ds, prepMin, prodMin, abnMin, stdMin, loss, eff, hasActivity });
+    // 未到日期：達成度留空白（null → 圖上不畫柱、不顯示 %）
+    const eff = isFuture ? null : (target.workMinutes > 0 ? (prodMin / target.workMinutes * 100) : null);
+    const hasActivity = !isFuture && (dayOrders.length > 0 || stdMin > 0);
+    days.push({ d, ds, prepMin, prodMin, abnMin, stdMin, loss, eff, hasActivity, isFuture });
   }
 
   // 月平均（以「有生產活動的天數」為分母）
@@ -368,11 +370,11 @@ function render() {
   // ── 表格 ──
   const dayHeaders = days.map(x => `<th>${mm}/${x.d}</th>`).join('');
   const cells = (key, fmt) => days.map(x => `<td class="v">${fmt(x[key], x)}</td>`).join('');
-  const minFmt = v => (v || v === 0) ? v : '';
+  const minFmt = (v, x) => (x && x.isFuture) ? '' : ((v || v === 0) ? v : '');
   const effFmt = (v) => v == null ? '—' : v.toFixed(0) + '%';
 
   const effCellClass = (x) => x.eff == null ? '' : (x.eff >= 100 ? 'eff-good' : (x.eff < 80 ? 'eff-bad' : ''));
-  const effCells = days.map(x => `<td class="v ${effCellClass(x)}">${x.eff == null ? '—' : x.eff.toFixed(0) + '%'}</td>`).join('');
+  const effCells = days.map(x => `<td class="v ${effCellClass(x)}">${x.isFuture ? '' : (x.eff == null ? '—' : x.eff.toFixed(0) + '%')}</td>`).join('');
 
   $('tableArea').innerHTML = `
     <table class="gs">
@@ -414,7 +416,7 @@ function render() {
   `;
 
   // ── 圖表（只畫有活動的天，跟附圖一致）──
-  const chartDays = active.length > 0 ? active : days;
+  const chartDays = days;   // 一次顯示整月所有天（未到的留空白）
 
   // 效率達成度長條圖（最高刻度取 max(120, 實際最大)）
   const effMaxVal = Math.max(120, ...chartDays.map(x => x.eff || 0));
