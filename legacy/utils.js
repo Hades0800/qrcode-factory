@@ -101,10 +101,11 @@ function todayYmd() {
 // 各機台每日工時目標（分鐘）— 本日匯總用
 // workMinutes = 穩定生產目標、prepMinutes = 生產準備目標、capacityKg = 產能目標
 const MACHINE_TARGETS = {
-  'No1-350': { workMinutes: 280, prepMinutes: 200, capacityKg: 10000 },
-  'No2-250': { workMinutes: 210, prepMinutes: 270, capacityKg: 1800  },
-  'No3-60':  { workMinutes: 320, prepMinutes: 160, capacityKg: 1200  },
-  'No4-90':  { workMinutes: 320, prepMinutes: 160, capacityKg: 1200  },
+  // workMinutes=效率負荷(穩定生產)、prepMinutes=生產準備(含試模)；生產效益率=work/prep（衍生值，不存）
+  'No1-350': { workMinutes: 360, prepMinutes: 120, capacityKg: 12500 },
+  'No2-250': { workMinutes: 320, prepMinutes: 160, capacityKg: 2800  },
+  'No3-60':  { workMinutes: 420, prepMinutes:  60, capacityKg: 1400  },
+  'No4-90':  { workMinutes: 360, prepMinutes: 160, capacityKg: 1600  },
   'No5-40':  { workMinutes: 420, prepMinutes:  60, capacityKg: 500   },
   'No6-40':  { workMinutes: 420, prepMinutes:  60, capacityKg: 500   },
   // ── 擴張網／筋網機（待填實際產能目標）──

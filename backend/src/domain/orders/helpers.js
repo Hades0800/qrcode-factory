@@ -45,6 +45,14 @@ export async function hasManufacturingParams(prisma, orderId) {
   return false;
 }
 
+// 設備參數「檔名」是否已填 —— 生產完成終止的防呆條件（所有機台）
+// 設備參數檔名 = paramFileName（原始）或 baseParamFileName（製造），任一有填即可
+export async function hasEquipmentParamFile(prisma, orderId) {
+  const ep = await prisma.equipmentParam.findUnique({ where: { orderId } });
+  if (!ep) return false;
+  return [ep.paramFileName, ep.baseParamFileName].some(v => v != null && String(v).trim() !== '');
+}
+
 // 找出同機台上一張已完成工單的結束時間（step11At）
 // 用途：強制下一張工單的第一筆生產時態接續在上一張結束的下一分鐘
 export async function getPrevMachineEndAt(prisma, order) {

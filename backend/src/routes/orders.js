@@ -15,12 +15,16 @@ import {
   setActualStartDate,
   getPrevMachineEndAt,
   hasManufacturingParams,
+  hasEquipmentParamFile,
 } from '../domain/orders/helpers.js';
 
 // 生產規格完成／生產完成終止前，設備「製造參數」必須已填（防呆）
 // 僅限傳統機台 No1–No6；過濾網／筋網機 No12–No20 不套用此防呆
 const NEED_MFG_PARAMS_MSG = '請先填寫設備的「製造參數」才能記錄生產規格完成／生產完成終止';
 const MFG_PARAM_REQUIRED_MACHINES = new Set(['No1-350','No2-250','No3-60','No4-90','No5-40','No6-40']);
+
+// 生產完成終止前，設備「參數檔名」必須已上傳（防呆）—— 所有機台皆套用
+const NEED_EP_FILE_MSG = '請先上傳設備參數（設備參數檔名）才能記錄生產完成終止';
 
 export default async function orderRoutes(fastify) {
   fastify.addHook('onRequest', fastify.authenticate);
@@ -641,6 +645,11 @@ export default async function orderRoutes(fastify) {
     // 防呆：生產完成終止前，設備「製造參數」必須已填（僅 No1–No6）
     if (step === '11' && MFG_PARAM_REQUIRED_MACHINES.has(order.machineNo) && !(await hasManufacturingParams(fastify.prisma, order.id))) {
       return reply.code(400).send({ error: NEED_MFG_PARAMS_MSG });
+    }
+
+    // 防呆：生產完成終止前，設備「參數檔名」必須已上傳（所有機台）
+    if (step === '11' && !(await hasEquipmentParamFile(fastify.prisma, order.id))) {
+      return reply.code(400).send({ error: NEED_EP_FILE_MSG });
     }
 
     if (order[cols.time]) {
