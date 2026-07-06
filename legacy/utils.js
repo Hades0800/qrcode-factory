@@ -98,6 +98,29 @@ function todayYmd() {
   return t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0');
 }
 
+// ── 排產排序（三頁共用：即時 / 歷史 / 生產進度統計）──────────────
+// 規則：計畫日期 → 計畫序號(planSeq＝生管 Excel 列順序) → 工單號
+//   planSeq 是上傳時記下的 Excel 原始列順序，同一天照它排＝還原生管排定順序
+//   舊工單沒有 planSeq(null) → 排在有序號者之後，再以工單號 fallback
+//   ※「照生管上傳順序」的規則只有這一份，三頁都呼叫，避免各頁各寫一份而走樣
+function plannedYmdLocal(d) {
+  if (!d) return null;
+  const dt = (d instanceof Date) ? d : new Date(d);
+  if (isNaN(dt)) return null;
+  return dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+}
+function plannedYmdOf(o) {
+  return plannedYmdLocal(o.plannedDate) || plannedYmdLocal(o.productionDate) || '';
+}
+function scheduleCmp(a, b) {
+  const pa = plannedYmdOf(a), pb = plannedYmdOf(b);
+  if (pa !== pb) return pa < pb ? -1 : 1;
+  const sa = a.planSeq != null ? a.planSeq : Infinity;
+  const sb = b.planSeq != null ? b.planSeq : Infinity;
+  if (sa !== sb) return sa - sb;
+  return (a.orderNo || '').localeCompare(b.orderNo || '');
+}
+
 // 各機台每日工時目標（分鐘）— 本日匯總用
 // workMinutes = 穩定生產目標、prepMinutes = 生產準備目標、capacityKg = 產能目標
 const MACHINE_TARGETS = {

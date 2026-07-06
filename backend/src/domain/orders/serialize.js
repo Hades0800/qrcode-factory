@@ -57,6 +57,7 @@ export function serializeOrder(o) {
     //   actualStartDate = 第一筆活動的台灣日期（現場第一次掃 QR 那天）
     //   productionDate  = 兼容舊邏輯，等同於 actualStartDate || plannedDate
     plannedDate: o.plannedDate || o.productionDate || null,
+    planSeq: o.planSeq != null ? o.planSeq : null, // 計畫序號：同一天排序用（生管 Excel 列順序）
     actualStartDate: o.actualStartDate || null,
     productionDate: o.actualStartDate || o.plannedDate || o.productionDate || null,
     specType: o.specType || null,           // 'new' | 'mass' | null

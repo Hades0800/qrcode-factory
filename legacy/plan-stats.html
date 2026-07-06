@@ -394,6 +394,7 @@ function ymd(d) {
 function getPlannedYmd(o) {
   return ymd(o.plannedDate) || ymd(o.productionDate);
 }
+// 排產排序 scheduleCmp() 已移到共用的 utils.js（三頁共用同一份規則）
 // 工單的完成日期
 function getCompletionYmd(o) {
   return ymd(o.step11At);
@@ -590,13 +591,8 @@ function render() {
     return;
   }
 
-  // 依計畫日期 → 工單號 排序
-  rows.sort((a, b) => {
-    const pa = getPlannedYmd(a) || '';
-    const pb = getPlannedYmd(b) || '';
-    if (pa !== pb) return pa < pb ? -1 : 1;
-    return (a.orderNo || '').localeCompare(b.orderNo || '');
-  });
+  // 依計畫日期 → 計畫序號(Excel 列順序) → 工單號 排序
+  rows.sort(scheduleCmp);
 
   // 表格
   let html = '<table class="ps-grid"><thead><tr>';
@@ -710,11 +706,7 @@ $('exportBtn').onclick = () => {
   const { rows, custQ, orderQ, machine, monthStr } = currentView;
   if (!rows || rows.length === 0) { alert('目前沒有可匯出的工單'); return; }
   const headers = ['工單號','機台','客戶','生產規格','派工數','實際生產數量','完成進度','計畫日期','實際開始日','完成日期'];
-  const data = rows.slice().sort((a, b) => {
-    const pa = getPlannedYmd(a) || '', pb = getPlannedYmd(b) || '';
-    if (pa !== pb) return pa < pb ? -1 : 1;
-    return (a.orderNo || '').localeCompare(b.orderNo || '');
-  }).map(o => [
+  const data = rows.slice().sort(scheduleCmp).map(o => [
     o.orderNo,
     o.machineNo || o.plannedMachineNo || '',
     resolveCustomerName(o) || '',

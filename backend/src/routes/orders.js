@@ -858,7 +858,7 @@ export default async function orderRoutes(fastify) {
     const processedOrderNos = [];
     const rawRows = []; // 收集原始資料
 
-    for (const row of rows) {
+    for (const [rowIndex, row] of rows.entries()) {
       const orderNo = String(row.orderNo || '').toUpperCase();
       const rawRow = {
         batchId: batch.id,
@@ -893,6 +893,7 @@ export default async function orderRoutes(fastify) {
 
         const data = {
           plannedDate: batchProductionDate, // 計畫日期：可被新上傳覆寫
+          planSeq: rowIndex,                // 計畫序號：Excel 列順序，每次上傳覆寫
           productSpec: rawRow.productSpec,
           customerName: rawRow.customerName,
           moldSpec: rawRow.moldSpec,

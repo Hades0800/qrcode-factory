@@ -739,16 +739,7 @@ function renderContent() {
       if (!o.step11At && ((o.pause12 && o.pause12.active) || (o.pause13 && o.pause13.active))) return true;
       return false;
     })
-    .sort((a, b) => {
-      // 依實際生產順位：以第一次有動作的時間為準，最早開始的排最前
-      // 尚未開始生產的工單排到最後（依 updatedAt 由新到舊）
-      const aFirst = getFirstActivityTime(a);
-      const bFirst = getFirstActivityTime(b);
-      if (aFirst === null && bFirst === null) return new Date(b.updatedAt) - new Date(a.updatedAt);
-      if (aFirst === null) return 1;
-      if (bFirst === null) return -1;
-      return aFirst - bFirst;
-    });
+    .sort(scheduleCmp); // 依生管上傳順序：計畫日期 → 計畫序號 → 工單號（共用 utils.js）
 
   const totalOrders = machineOrders.length;
   const completedOrders = machineOrders.filter(o => o.step11At).length;
@@ -1039,11 +1030,11 @@ function renderDailySummaryCard(machineId, machineOrders) {
   const todayOrders = (machineOrders || []).filter(o => orderIsOnDate(o, ymd));
   if (todayOrders.length === 0) return '';
   const t = MACHINE_TARGETS[machineId] || { workMinutes: 0, prepMinutes: 0 };
-  const rows = todayOrders.map(o => {
+  const rows = todayOrders.slice().sort(scheduleCmp).map(o => {
     const p = computeOrderPhasesForDay(o, ymd);
     return { orderNo: o.orderNo, isCrossDay: isCrossDayOrder(o, ymd), ...p };
   });
-  // 隔日生產的工單排到最前面，其他維持原順序
+  // 先照生管上傳順序，再把隔日生產的排到最前面（穩定排序：同組維持上傳順序）
   rows.sort((a, b) => (a.isCrossDay === b.isCrossDay) ? 0 : (a.isCrossDay ? -1 : 1));
   const sumPrep = rows.reduce((s, r) => s + r.prepSec, 0);
   const sumProd = rows.reduce((s, r) => s + r.prodSec, 0);

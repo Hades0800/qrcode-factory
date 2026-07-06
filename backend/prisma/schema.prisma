@@ -41,6 +41,7 @@ model Order {
   // 匯入欄位（生管 Excel 上傳）
   productionDate DateTime?  // 已棄用：保留兼容，新邏輯改用 plannedDate / actualStartDate
   plannedDate    DateTime?  // 計畫日期：Excel 上傳的日期，可被新上傳覆寫（生管的計畫）
+  planSeq        Int?       // 計畫序號：上傳 Excel 的列順序（同一天內用它排序，還原生管排定順序）；每次上傳覆寫
   actualStartDate DateTime? // 實際開始日期：第一筆 stepEntry/pauseEvent 的台灣日期，永久鎖定（現場事實）
   // 規格類型（現場技術員選擇）
   specType         String?  // 'new' = 新製規格、'mass' = 量產規格

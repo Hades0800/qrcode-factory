@@ -665,16 +665,8 @@ function getFirstActivityTime(o) {
 }
 
 function sortByProductionOrder(list) {
-  // 依實際生產順位：第一次有動作的時間，由早到晚
-  // 尚未開始的排到最後（依 updatedAt 由新到舊）
-  return list.slice().sort((a, b) => {
-    const aFirst = getFirstActivityTime(a);
-    const bFirst = getFirstActivityTime(b);
-    if (aFirst === null && bFirst === null) return new Date(b.updatedAt) - new Date(a.updatedAt);
-    if (aFirst === null) return 1;
-    if (bFirst === null) return -1;
-    return aFirst - bFirst;
-  });
+  // 依生管上傳順序：計畫日期 → 計畫序號(planSeq) → 工單號（共用 utils.js 的 scheduleCmp）
+  return list.slice().sort(scheduleCmp);
 }
 
 function render() {
@@ -1225,8 +1217,8 @@ function buildSummaryGroups(from, to) {
     });
     Object.keys(byMachine).sort().forEach(m => {
       const t = MACHINE_TARGETS[m] || { workMinutes: 0, prepMinutes: 0 };
-      const orderRows = byMachine[m].map(o => ({ orderNo: o.orderNo, isCrossDay: isCrossDayOrder(o, ymd), ...computeOrderPhasesForDay(o, ymd) }));
-      // 隔日生產的工單排到最前面，其他維持原順序
+      const orderRows = byMachine[m].slice().sort(scheduleCmp).map(o => ({ orderNo: o.orderNo, isCrossDay: isCrossDayOrder(o, ymd), ...computeOrderPhasesForDay(o, ymd) }));
+      // 先照生管上傳順序，再把隔日生產的排到最前面（穩定排序：同組維持上傳順序）
       orderRows.sort((a, b) => (a.isCrossDay === b.isCrossDay) ? 0 : (a.isCrossDay ? -1 : 1));
       const sumPrep = orderRows.reduce((s, r) => s + r.prepSec, 0);
       const sumProd = orderRows.reduce((s, r) => s + r.prodSec, 0);
