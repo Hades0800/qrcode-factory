@@ -1304,21 +1304,24 @@ export default async function orderRoutes(fastify) {
     const orderNo = String(request.params.orderNo || '').trim().toUpperCase();
     if (!validOrderNo(orderNo)) return { rows: [] };
     const baseNo = orderNo.split('@')[0];
-    // 找該（基礎）工單最新且未取消的 batch
-    const latestRow = await fastify.prisma.uploadRow.findFirst({
+    // 跨批次「合併」規格：一張工單的規格可能分散在多次上傳
+    //   （一單多規格、跨天改版都會這樣；同號不同規格的列會被上傳邏輯標成 skipped，但仍是有效規格）。
+    //   只排除 error 與已取消批次；依 productSpec 去重，較新批次的值覆蓋較舊的。
+    //   → QC 看得到這張工單「所有」規格，避免像 1890 那筆選不到而漏做／改用備註硬記。
+    const allRows = await fastify.prisma.uploadRow.findMany({
       where: {
         orderNo: baseNo,
-        status: { in: ['created', 'updated'] },
+        status: { not: 'error' },
         batch: { cancelledAt: null },
       },
-      orderBy: { batchId: 'desc' },
-      select: { batchId: true },
+      orderBy: [{ batchId: 'asc' }, { id: 'asc' }], // 舊→新，讓較新批次覆蓋
     });
-    if (!latestRow) return { rows: [] };
-    const rows = await fastify.prisma.uploadRow.findMany({
-      where: { orderNo: baseNo, batchId: latestRow.batchId },
-      orderBy: { id: 'asc' },
-    });
+    // 依 productSpec 去重：Map.set 會更新值但保留首次出現的排列位置 → 舊規格在前、新規格接續在後
+    const bySpec = new Map();
+    for (const r of allRows) {
+      bySpec.set((r.productSpec || '').trim(), r);
+    }
+    const rows = [...bySpec.values()];
     return { rows };
   });
 
