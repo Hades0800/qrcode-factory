@@ -5,11 +5,12 @@
 <meta charset="UTF-8">
 <title>上鎧鋼鐵 - 機台 QR Code 列印</title>
 <link rel="icon" href="logo.jpg">
+<link rel="stylesheet" href="tokens.css">
 <style>
   @page { size: A4 portrait; margin: 10mm; }
   * { box-sizing: border-box; }
   body {
-    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    font-family: var(--font-sans);
     margin: 0;
     padding: 10mm;
     background: #fff;
@@ -22,10 +23,10 @@
     gap: 8mm;
     margin-bottom: 4mm;
     padding-bottom: 3mm;
-    border-bottom: 2px solid #d23535;
+    border-bottom: 2px solid var(--brand);
   }
   .header-row img { height: 14mm; width: auto; }
-  .header-row h1 { font-size: 14pt; margin: 0; color: #1c1c1e; font-weight: 800; }
+  .header-row h1 { font-size: 14pt; margin: 0; color: var(--ink); font-weight: 800; }
   .header-row .sub { font-size: 9pt; color: #666; margin-top: 1mm; }
   .grid {
     display: grid;
@@ -34,7 +35,7 @@
     width: 100%;
   }
   .qr-card {
-    border: 2px solid #1c1c1e;
+    border: 2px solid var(--ink);
     border-radius: 4mm;
     padding: 4mm 3mm;
     text-align: center;
@@ -49,10 +50,10 @@
     font-size: 28pt;
     font-weight: 900;
     line-height: 1;
-    color: #d23535;
+    color: var(--brand);
     letter-spacing: -1px;
   }
-  .qr-card .label { font-size: 11pt; font-weight: 700; margin: 2mm 0 1mm; color: #1c1c1e; }
+  .qr-card .label { font-size: 11pt; font-weight: 700; margin: 2mm 0 1mm; color: var(--ink); }
   .qr-card img { display: block; width: 46mm; height: 46mm; margin: 2mm 0; }
   .qr-card .code { font-size: 8pt; color: #888; margin-top: 1mm; }
   @media print {

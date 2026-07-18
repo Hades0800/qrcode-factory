@@ -9,16 +9,10 @@
 <link rel="icon" href="logo.jpg">
 <link rel="stylesheet" href="styles.css">
 <style>
-  :root {
-    --brand: #d23535; --brand-dark: #a82828; --brand-soft: #fdf2f2;
-    --ink: #1c1c1e; --text: #2c2c2e; --muted: #6e6e73;
-    --border: #e5e5ea; --bg: #f2f2f5; --card: #ffffff;
-    --success: #2ea043; --warn: #f5c518;
-    --prep: #e87000; --prod: #1d5fd6; --std: #5f6670;
-  }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* 設計 token 已統一至 styles.css（CIS 3.0），請勿在此重複定義 */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
-    margin: 0; font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    margin: 0; font-family: var(--font-sans);
     background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased;
   }
   header {
@@ -62,7 +56,7 @@
   .toolbar input, .toolbar select { padding: 8px 10px; font-size: 14px; border: 1.5px solid var(--border); border-radius: 8px; background: #fff; color: var(--ink); }
   button { appearance: none; border: none; border-radius: 8px; font-size: 14px; padding: 9px 14px; cursor: pointer; font-weight: 600; font-family: inherit; transition: transform .08s, background .15s; }
   button:active { transform: scale(.98); }
-  .btn-secondary { background: #f2f2f5; color: var(--ink); border: 1.5px solid var(--border); }
+  .btn-secondary { background: var(--bg); color: var(--ink); border: 1.5px solid var(--border); }
   .btn-secondary:hover { background: #e8e8eb; }
 
   .gs-title { font-size: 20px; font-weight: 800; color: var(--ink); margin: 0 0 4px; }

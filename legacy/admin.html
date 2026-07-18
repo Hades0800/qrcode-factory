@@ -11,22 +11,11 @@
 <link rel="preconnect" href="https://shangkai-manu-record.zeabur.app" crossorigin>
 <link rel="dns-prefetch" href="https://shangkai-manu-record.zeabur.app">
 <style>
-  :root {
-    --brand: #d23535;
-    --brand-dark: #a82828;
-    --brand-soft: #fdf2f2;
-    --ink: #1c1c1e;
-    --text: #2c2c2e;
-    --muted: #6e6e73;
-    --border: #e5e5ea;
-    --bg: #f2f2f5;
-    --card: #ffffff;
-    --success: #2ea043;
-  }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* 設計 token 已統一至 styles.css（CIS 3.0），請勿在此重複定義 */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0;
-    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    font-family: var(--font-sans);
     background: var(--bg);
     color: var(--text);
     -webkit-font-smoothing: antialiased;
@@ -139,9 +128,9 @@
     transition: transform .08s, background .15s;
   }
   button:active { transform: scale(.98); }
-  .btn-primary { background: var(--brand); color: #fff; box-shadow: 0 2px 6px rgba(210,53,53,.2); }
+  .btn-primary { background: var(--brand-text); color: #fff; box-shadow: 0 2px 6px rgba(240,29,15,.2); }
   .btn-primary:hover { background: var(--brand-dark); }
-  .btn-secondary { background: #f2f2f5; color: var(--ink); border: 1.5px solid var(--border); }
+  .btn-secondary { background: var(--bg); color: var(--ink); border: 1.5px solid var(--border); }
   .btn-secondary:hover { background: #e8e8eb; }
   .btn-danger { background: #fff; color: var(--brand); border: 1.5px solid var(--brand); }
   .btn-danger:hover { background: var(--brand-soft); }
@@ -553,7 +542,7 @@ function recoveryRowHtml(tab, it) {
       + '<div style="flex:1;min-width:160px;"><strong>' + escapeHtml(it.orderNo) + '</strong>'
       + '<div style="color:#888;font-size:12px;">' + escapeHtml(spec) + '</div></div>'
       + '<button class="btn-primary" data-restore="' + escapeHtml(it.orderNo) + '" style="padding:6px 12px;font-size:12px;">救回</button>'
-      + '<button data-purge="' + escapeHtml(it.orderNo) + '" style="padding:6px 12px;font-size:12px;background:#1c1c1e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
+      + '<button data-purge="' + escapeHtml(it.orderNo) + '" style="padding:6px 12px;font-size:12px;background:var(--ink);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
       + '</div>';
   }
   if (tab === 'reset') {
@@ -718,7 +707,7 @@ async function findOrderNo() {
       if (o.deletedAt) {
         action = '<div style="display:flex;gap:4px;flex-wrap:wrap;">'
           + '<button class="btn-secondary" data-restore="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;">救回</button>'
-          + '<button data-purge="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:#1c1c1e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
+          + '<button data-purge="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:var(--ink);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
           + '</div>';
       } else {
         const restoreRecBtn = softCount > 0
@@ -727,7 +716,7 @@ async function findOrderNo() {
         action = '<div style="display:flex;gap:4px;flex-wrap:wrap;">'
           + restoreRecBtn
           + '<button class="btn-danger" data-finddel="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;">刪除</button>'
-          + '<button data-purge="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:#1c1c1e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
+          + '<button data-purge="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:var(--ink);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
           + '</div>';
       }
       html += '<tr>'
@@ -753,7 +742,7 @@ async function findOrderNo() {
       let rowStatus;
       if (u.status === 'error') {
         const msg = String(u.errorMsg || '').slice(0, 200);
-        rowStatus = '<span style="color:var(--brand);font-size:11px;background:#fdf2f2;padding:2px 6px;border-radius:4px;" title="' + escapeHtml(msg) + '">失敗</span>';
+        rowStatus = '<span style="color:var(--brand);font-size:11px;background:var(--brand-soft);padding:2px 6px;border-radius:4px;" title="' + escapeHtml(msg) + '">失敗</span>';
       } else if (u.status === 'created') {
         rowStatus = '<span style="color:var(--success);font-size:11px;">新建</span>';
       } else if (u.status === 'updated') {

@@ -11,22 +11,11 @@
 <link rel="preconnect" href="https://shangkai-manu-record.zeabur.app" crossorigin>
 <link rel="dns-prefetch" href="https://shangkai-manu-record.zeabur.app">
 <style>
-  :root {
-    --brand: #d23535;
-    --brand-dark: #a82828;
-    --brand-soft: #fdf2f2;
-    --ink: #1c1c1e;
-    --text: #2c2c2e;
-    --muted: #6e6e73;
-    --border: #e5e5ea;
-    --bg: #f2f2f5;
-    --card: #ffffff;
-    --success: #2ea043;
-  }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* 設計 token 已統一至 styles.css（CIS 3.0），請勿在此重複定義 */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0;
-    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    font-family: var(--font-sans);
     background: var(--bg);
     zoom: 1.15;
     color: var(--text);
@@ -117,9 +106,9 @@
     transition: transform .08s, background .15s;
   }
   button:active { transform: scale(.98); }
-  .btn-primary { background: var(--brand); color: #fff; box-shadow: 0 2px 6px rgba(210,53,53,.2); }
+  .btn-primary { background: var(--brand-text); color: #fff; box-shadow: 0 2px 6px rgba(240,29,15,.2); }
   .btn-primary:hover { background: var(--brand-dark); }
-  .btn-secondary { background: #f2f2f5; color: var(--ink); border: 1.5px solid var(--border); }
+  .btn-secondary { background: var(--bg); color: var(--ink); border: 1.5px solid var(--border); }
   .btn-secondary:hover { background: #e8e8eb; }
 
   .stats {

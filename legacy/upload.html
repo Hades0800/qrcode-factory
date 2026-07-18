@@ -12,15 +12,10 @@
 <link rel="dns-prefetch" href="https://shangkai-manu-record.zeabur.app">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
-  :root {
-    --brand: #d23535; --brand-dark: #a82828; --brand-soft: #fdf2f2;
-    --ink: #1c1c1e; --text: #2c2c2e; --muted: #6e6e73;
-    --border: #e5e5ea; --bg: #f2f2f5; --card: #fff;
-    --success: #2ea043; --success-soft: #e6f7ea;
-  }
-  * { box-sizing: border-box; }
+  /* 設計 token 已統一至 styles.css（CIS 3.0），請勿在此重複定義 */
+* { box-sizing: border-box; }
   body {
-    margin: 0; font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    margin: 0; font-family: var(--font-sans);
     background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased;
   }
   header {
@@ -80,7 +75,7 @@
     transition: all .15s;
   }
   .page-tab:hover { color: var(--brand); }
-  .page-tab.active { color: #fff; background: var(--brand); box-shadow: 0 2px 6px rgba(210,53,53,.25); }
+  .page-tab.active { color: #fff; background: var(--brand); box-shadow: 0 2px 6px rgba(240,29,15,.25); }
   .card {
     background: var(--card); border-radius: 14px; padding: 20px; margin-bottom: 14px;
     box-shadow: 0 1px 3px rgba(0,0,0,.04);
@@ -96,7 +91,7 @@
   }
   button:active { transform: scale(.98); }
   button:disabled { opacity: .5; }
-  .btn-primary { background: var(--brand); color: #fff; box-shadow: 0 2px 6px rgba(210,53,53,.25); }
+  .btn-primary { background: var(--brand-text); color: #fff; box-shadow: 0 2px 6px rgba(240,29,15,.25); }
   .btn-success { background: var(--success); color: #fff; box-shadow: 0 2px 6px rgba(46,160,67,.25); }
   .btn-block { width: 100%; }
 
@@ -767,7 +762,7 @@ async function loadBatches() {
     const prodDate = b.productionDate ? String(b.productionDate).slice(0, 10) : '';
     const orderList = (b.orderNos || []);
     return `
-      <div style="margin-bottom:12px;padding:16px 20px;background:${isCancelled ? '#f9f9f9' : 'var(--card)'};border:1px solid ${isCancelled ? '#e5e5ea' : 'var(--border)'};border-radius:12px;transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.06)'" onmouseout="this.style.boxShadow='none'">
+      <div style="margin-bottom:12px;padding:16px 20px;background:${isCancelled ? '#f9f9f9' : 'var(--card)'};border:1px solid ${isCancelled ? 'var(--border)' : 'var(--border)'};border-radius:12px;transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.06)'" onmouseout="this.style.boxShadow='none'">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
           <div>
             <div style="display:flex;align-items:center;gap:8px;text-align:left;">

@@ -6,7 +6,7 @@
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#d23535">
+<meta name="theme-color" content="var(--brand)">
 <title>上鎧鋼鐵 - 即時生產</title>
 <link rel="icon" href="logo.jpg">
 <link rel="apple-touch-icon" href="logo.jpg">
@@ -14,25 +14,11 @@
 <link rel="preconnect" href="https://shangkai-manu-record.zeabur.app" crossorigin>
 <link rel="dns-prefetch" href="https://shangkai-manu-record.zeabur.app">
 <style>
-  :root {
-    --brand: #d23535;
-    --brand-dark: #a82828;
-    --brand-soft: #fdf2f2;
-    --ink: #1c1c1e;
-    --text: #2c2c2e;
-    --muted: #6e6e73;
-    --border: #e5e5ea;
-    --bg: #f2f2f5;
-    --card: #ffffff;
-    --success: #2ea043;
-    --success-soft: #e6f7ea;
-    --safe-top: env(safe-area-inset-top, 0);
-    --safe-bottom: env(safe-area-inset-bottom, 0);
-  }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* 設計 token 已統一至 styles.css（CIS 3.0），請勿在此重複定義 */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; margin: 0; }
   body {
-    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    font-family: var(--font-sans);
     background: var(--bg);
     color: var(--text);
     zoom: 1.15;
@@ -810,7 +796,7 @@ function renderContent() {
         </div>
         <div class="stat ${idleMachinesToday.has(activeMachine) ? '' : 'highlight'}">
           <div class="s-label">機台編號</div>
-          <div class="s-value" style="font-size:18px;">${escapeHtml(m.num)}-${escapeHtml(m.spec)}${idleMachinesToday.has(activeMachine) ? ' <span style="font-size:12px;color:var(--muted);background:#e5e5ea;padding:2px 8px;border-radius:10px;">今日無工令</span>' : ''}</div>
+          <div class="s-value" style="font-size:18px;">${escapeHtml(m.num)}-${escapeHtml(m.spec)}${idleMachinesToday.has(activeMachine) ? ' <span style="font-size:12px;color:var(--muted);background:var(--border);padding:2px 8px;border-radius:10px;">今日無工令</span>' : ''}</div>
         </div>
         <div class="stat">
           <div class="s-label">今日工單數</div>
@@ -1303,7 +1289,7 @@ function rtSpecRowHtml(spec, spm, blades, feed) {
     <input data-sf="spm" value="${escapeHtml(val(spm))}" type="number" min="0" step="0.1" placeholder="SPM" style="width:48px;padding:6px 5px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;">
     <input data-sf="blades" value="${escapeHtml(val(blades))}" type="number" min="0" placeholder="刀數" style="width:48px;padding:6px 5px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;">
     <input data-sf="feed" value="${escapeHtml(val(feed))}" placeholder="送料" maxlength="50" style="width:48px;padding:6px 5px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;">
-    <button type="button" onclick="this.closest('.spec-row').remove()" title="刪除" style="flex-shrink:0;width:24px;height:24px;border:none;border-radius:6px;background:#f2f2f5;color:var(--brand);font-weight:700;cursor:pointer;line-height:1;">×</button>
+    <button type="button" onclick="this.closest('.spec-row').remove()" title="刪除" style="flex-shrink:0;width:24px;height:24px;border:none;border-radius:6px;background:var(--bg);color:var(--brand);font-weight:700;cursor:pointer;line-height:1;">×</button>
   </div>`;
 }
 function addSpecRow(btn) {
@@ -1454,7 +1440,7 @@ updBanner.id = 'rtUpdateBanner';
 updBanner.textContent = '🔔 有新資料，點此更新';
 updBanner.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:998;display:none;'
   + 'background:var(--brand);color:#fff;font-size:13px;font-weight:700;padding:9px 18px;border-radius:999px;'
-  + 'box-shadow:0 4px 16px rgba(210,53,53,.35);cursor:pointer;';
+  + 'box-shadow:0 4px 16px rgba(240,29,15,.35);cursor:pointer;';
 document.body.appendChild(updBanner);
 updBanner.onclick = () => {
   if (!pendingData) { updBanner.style.display = 'none'; return; }

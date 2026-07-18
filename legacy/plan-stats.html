@@ -9,23 +9,11 @@
 <link rel="icon" href="logo.jpg">
 <link rel="stylesheet" href="styles.css">
 <style>
-  :root {
-    --brand: #d23535;
-    --brand-dark: #a82828;
-    --brand-soft: #fdf2f2;
-    --ink: #1c1c1e;
-    --text: #2c2c2e;
-    --muted: #6e6e73;
-    --border: #e5e5ea;
-    --bg: #f2f2f5;
-    --card: #ffffff;
-    --success: #2ea043;
-    --warn: #f5c518;
-  }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* 設計 token 已統一至 styles.css（CIS 3.0），請勿在此重複定義 */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0;
-    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    font-family: var(--font-sans);
     background: var(--bg);
     zoom: 1.15;
     color: var(--text);
@@ -92,9 +80,9 @@
     font-family: inherit; transition: transform .08s, background .15s;
   }
   button:active { transform: scale(.98); }
-  .btn-primary { background: var(--brand); color: #fff; box-shadow: 0 2px 6px rgba(210,53,53,.2); }
+  .btn-primary { background: var(--brand-text); color: #fff; box-shadow: 0 2px 6px rgba(240,29,15,.2); }
   .btn-primary:hover { background: var(--brand-dark); }
-  .btn-secondary { background: #f2f2f5; color: var(--ink); border: 1.5px solid var(--border); }
+  .btn-secondary { background: var(--bg); color: var(--ink); border: 1.5px solid var(--border); }
   .btn-secondary:hover { background: #e8e8eb; }
 
   /* 統計卡片 */
@@ -131,7 +119,7 @@
     width: 14px; height: 14px; border-radius: 50%;
     box-shadow: 0 0 0 1px rgba(0,0,0,.06);
   }
-  .ps-dot.red    { background: #d23535; }
+  .ps-dot.red    { background: var(--brand); }
   .ps-dot.yellow { background: #f5c518; }
   .ps-dot.green  { background: #2ea043; }
 
@@ -187,7 +175,7 @@
   td.ps-order-col.ps-order-click:hover { color: var(--brand); text-decoration: underline; }
   #psSpecPop {
     position: fixed; z-index: 1000; display: none; max-width: 280px;
-    background: #1c1c1e; color: #fff; padding: 10px 12px; border-radius: 10px;
+    background: var(--ink); color: #fff; padding: 10px 12px; border-radius: 10px;
     font-size: 13px; line-height: 1.5; box-shadow: 0 6px 24px rgba(0,0,0,.28);
   }
   #psSpecPop .pop-order { font-size: 11px; color: #bbb; margin-bottom: 3px; }
