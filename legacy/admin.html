@@ -331,6 +331,19 @@
   </div>
 
   <div class="card">
+    <h2>修正生產完成數量</h2>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">
+      QC 輸入錯誤時用這裡更正。可修改「中斷／下班暫停」「生產規格完成」「生產完成終止」的生產完成數量（可改成 0，清空則留白），
+      也可以刪除重複或誤記的整筆紀錄。刪除是軟刪除，能從上面「回收桶」救回，每次修改都會寫入操作紀錄。
+    </p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <input type="text" id="qtyFixInput" placeholder="工單號，例：F1150629004" autocapitalize="characters" autocomplete="off" style="flex:1;min-width:180px;">
+      <button class="btn-primary" id="qtyFixBtn" style="white-space:nowrap;">載入生產紀錄</button>
+    </div>
+    <div id="qtyFixResult" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="card">
     <h2>系統工具</h2>
     <button class="btn-primary btn-block" id="migrateDatesBtn" style="margin-bottom:6px;">遷移：拆分計畫日期 / 實際開始日期</button>
     <p style="font-size:12px;color:var(--muted);margin:0 0 14px;">把舊 productionDate 拆成「計畫日期 (plannedDate)」與「實際開始日期 (actualStartDate)」。執行後即時頁、紀錄頁、製造概覽會以實際日期為準，並標出計畫日期不同處。建議只跑一次。</p>
@@ -922,6 +935,127 @@ $('custFillBtn').onclick = async () => {
 };
 
 // ── 更正工單號 ──
+// ===== 修正生產完成數量（QC 輸入錯誤更正）=====
+let qtyFixOrderNo = '';
+
+function qtyFixTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return '—';
+  const p = n => String(n).padStart(2, '0');
+  return p(d.getMonth()+1) + '/' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+// 數量輸入 + 儲存/刪除按鈕（共用列樣式）
+// key 格式：'se-<id>'（生產規格完成）/ 'pe-<id>'（暫停）/ 's11'（生產完成終止）
+function qtyFixRow(label, sub, qty, key, canDelete) {
+  return '<tr>'
+    + '<td style="padding:6px 8px;vertical-align:top;">'
+      + '<div style="font-weight:600;">' + escapeHtml(label) + '</div>'
+      + (sub ? '<div style="font-size:11px;color:var(--muted);margin-top:2px;">' + escapeHtml(sub) + '</div>' : '')
+    + '</td>'
+    + '<td style="padding:6px 8px;white-space:nowrap;">'
+      + '<input type="number" min="0" step="1" value="' + (qty == null ? '' : qty) + '"'
+        + ' data-qtyinput="' + key + '" style="width:90px;padding:5px 7px;border:1px solid var(--border);border-radius:6px;">'
+    + '</td>'
+    + '<td style="padding:6px 8px;white-space:nowrap;">'
+      + '<button data-qtysave="' + key + '" style="padding:5px 12px;font-size:12px;background:var(--brand);color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;">儲存</button>'
+      + (canDelete ? ' <button data-qtydel="' + key + '" style="padding:5px 12px;font-size:12px;background:#f0ad4e;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;">刪除整筆</button>' : '')
+    + '</td>'
+    + '</tr>';
+}
+
+async function loadQtyFix() {
+  const no = $('qtyFixInput').value.trim().toUpperCase();
+  if (!no) { toast('請輸入工單號', 'error'); return; }
+  $('qtyFixBtn').disabled = true;
+  const r = await api('/api/admin/order-records/' + encodeURIComponent(no));
+  $('qtyFixBtn').disabled = false;
+  if (!r.ok) {
+    $('qtyFixResult').innerHTML = '<span style="color:var(--brand);font-weight:600;">✗ ' + escapeHtml(r.error || '查詢失敗') + '</span>';
+    return;
+  }
+  const d = r.data;
+  qtyFixOrderNo = d.orderNo;
+
+  let html = '<div style="font-size:13px;margin-bottom:8px;">'
+    + '<strong>' + escapeHtml(d.orderNo) + '</strong>'
+    + (d.machineNo ? ' <span style="color:var(--muted);">' + escapeHtml(d.machineNo) + '</span>' : '')
+    + (d.productSpec ? '<div style="font-size:11px;color:var(--muted);margin-top:2px;">' + escapeHtml(d.productSpec) + '</div>' : '')
+    + '</div>';
+
+  const rows = [];
+  // 生產規格完成（step30）
+  (d.specEntries || []).forEach(e => {
+    rows.push(qtyFixRow('生產規格完成', qtyFixTime(e.recordedAt) + (e.note ? '｜' + e.note : ''),
+      e.qcActualQty, 'se-' + e.id, true));
+  });
+  // 暫停事件（中斷 / 下班 / 中午休息…）
+  (d.pauses || []).forEach(e => {
+    const kind = e.type === '13' ? '異常停止' : '正常暫停';
+    rows.push(qtyFixRow(kind + (e.note ? '（' + e.note + '）' : ''),
+      qtyFixTime(e.startAt) + ' → ' + qtyFixTime(e.endAt),
+      e.qcActualQty, 'pe-' + e.id, true));
+  });
+  // 生產完成終止（step11）—— 只有數量可改，不能刪
+  if (d.step11At) {
+    rows.push(qtyFixRow('生產完成終止', qtyFixTime(d.step11At), d.step11QcActualQty, 's11', false));
+  }
+
+  if (rows.length === 0) {
+    html += '<div style="color:var(--muted);padding:8px 0;">這張工單目前沒有可修正的生產數量紀錄</div>';
+  } else {
+    html += '<div style="overflow-x:auto;"><table style="min-width:520px;border-collapse:collapse;">'
+      + '<thead><tr>'
+      + '<th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--muted);">生產事件</th>'
+      + '<th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--muted);">生產完成數量</th>'
+      + '<th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--muted);">操作</th>'
+      + '</tr></thead><tbody>' + rows.join('') + '</tbody></table></div>'
+      + '<p style="font-size:11px;color:var(--muted);margin:8px 0 0;">數量留白＝清空（不計數）。改成 0 代表該段實際沒有產出。</p>';
+  }
+  $('qtyFixResult').innerHTML = html;
+
+  // key → 對應端點
+  const urlFor = key => {
+    if (key === 's11') return '/api/admin/orders/' + encodeURIComponent(qtyFixOrderNo) + '/step11-qty';
+    const id = key.slice(3);
+    return key.startsWith('se-') ? '/api/admin/step-entries/' + id : '/api/admin/pause-events/' + id;
+  };
+  const labelFor = key => key === 's11' ? '生產完成終止數量'
+    : key.startsWith('se-') ? '生產規格完成數量' : '暫停生產數量';
+
+  $('qtyFixResult').querySelectorAll('[data-qtysave]').forEach(b => {
+    b.onclick = async () => {
+      const key = b.dataset.qtysave;
+      const input = $('qtyFixResult').querySelector('[data-qtyinput="' + key + '"]');
+      const raw = (input.value || '').trim();
+      if (raw !== '' && !/^\d+$/.test(raw)) { toast('數量必須是 0 以上的整數', 'error'); return; }
+      b.disabled = true;
+      const r2 = await api(urlFor(key), { method: 'PATCH', body: { qcActualQty: raw === '' ? null : Number(raw) } });
+      b.disabled = false;
+      if (!r2.ok) { toast(r2.error || '修改失敗', 'error'); return; }
+      toast(labelFor(key) + '已更新為 ' + (raw === '' ? '（空白）' : raw), 'success');
+      loadQtyFix();
+    };
+  });
+  $('qtyFixResult').querySelectorAll('[data-qtydel]').forEach(b => {
+    b.onclick = async () => {
+      const key = b.dataset.qtydel;
+      const what = key.startsWith('se-') ? '「生產規格完成」' : '暫停';
+      if (!confirm('確定刪除這筆' + what + '紀錄？\n\n這是軟刪除，可從上面「回收桶」救回。')) return;
+      b.disabled = true;
+      const r2 = await api(urlFor(key), { method: 'DELETE' });
+      b.disabled = false;
+      if (!r2.ok) { toast(r2.error || '刪除失敗', 'error'); return; }
+      toast('已刪除該筆紀錄', 'success');
+      loadQtyFix();
+    };
+  });
+}
+
+$('qtyFixBtn').onclick = loadQtyFix;
+$('qtyFixInput').onkeydown = e => { if (e.key === 'Enter') loadQtyFix(); };
+
 $('renameBtn').onclick = async () => {
   const from = $('renameFrom').value.trim().toUpperCase();
   const to = $('renameTo').value.trim().toUpperCase();
