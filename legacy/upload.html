@@ -245,6 +245,7 @@
             <th>製造單號</th>
             <th>生產日期</th>
             <th>生產規格</th>
+            <th>製造規格</th>
             <th>模具規格</th>
             <th>領用材料</th>
             <th>機台</th>
@@ -341,6 +342,8 @@ const FIELD_MAP = {
   '製造單號': 'orderNo', '工單號': 'orderNo', '工單編號': 'orderNo',
   // 生產規格 / 品名
   '品名規格': 'productSpec', '生產規格': 'productSpec', '品名': 'productSpec',
+  // 製造規格（與 SPM/刀數同層，生管另填）
+  '製造規格': 'manuSpec',
   // 客戶名稱（公司編號欄＝編號+名稱，後端會自動去掉編號）
   '客戶名稱': 'customerName', '客戶': 'customerName', '客戶名': 'customerName',
   '公司編號': 'customerName',
@@ -502,6 +505,7 @@ function renderPreview() {
       <td>${orderCell}</td>
       <td>${escapeHtml(r.productionDate || '')}</td>
       <td>${escapeHtml(r.productSpec || '')}</td>
+      <td>${escapeHtml(r.manuSpec || '')}</td>
       <td>${escapeHtml(r.moldSpec || '')}</td>
       <td>${escapeHtml(r.material || '')}</td>
       <td>${escapeHtml(r.machineNo || '')}</td>

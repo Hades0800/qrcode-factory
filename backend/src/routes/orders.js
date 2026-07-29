@@ -864,6 +864,7 @@ export default async function orderRoutes(fastify) {
         batchId: batch.id,
         orderNo: orderNo || String(row.orderNo || ''),
         productSpec: clipStr(row.productSpec, 200),
+        manuSpec: clipStr(row.manuSpec, 200),
         customerName: clipStr(stripCustomerCode(row.customerName), 100),
         moldSpec: clipStr(row.moldSpec, 100),
         material: clipStr(row.material, 200),
@@ -895,6 +896,7 @@ export default async function orderRoutes(fastify) {
           plannedDate: batchProductionDate, // 計畫日期：可被新上傳覆寫
           planSeq: rowIndex,                // 計畫序號：Excel 列順序，每次上傳覆寫
           productSpec: rawRow.productSpec,
+          manuSpec: rawRow.manuSpec,        // 製造規格（生管 Excel）
           customerName: rawRow.customerName,
           moldSpec: rawRow.moldSpec,
           material: rawRow.material,

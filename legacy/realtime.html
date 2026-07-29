@@ -916,7 +916,7 @@ async function loadSpecCards(o) {
   const seenSpec = new Set();
   const uniqRows = rows.filter(rw => { const k = specKey(rw); if (seenSpec.has(k)) return false; seenSpec.add(k); return true; });
   const specs = uniqRows.length > 0 ? uniqRows : [{
-    productSpec: o.productSpec, moldSpec: o.moldSpec, material: o.material,
+    productSpec: o.productSpec, manuSpec: o.manuSpec, moldSpec: o.moldSpec, material: o.material,
     dispatchQty: o.dispatchQty, bladeCount: o.bladeCount, machineSPM: o.machineSPM,
     unitWeight: o.unitWeight, totalWeight: o.totalWeight,
   }];
@@ -926,6 +926,7 @@ async function loadSpecCards(o) {
     area.innerHTML = `
       <div class="spec-cards-wrap"><div class="spec-cards">
         <div class="spec-card wide"><div class="sc-label">🔧 生產規格</div><div class="sc-value">${s.productSpec ? escapeHtml(s.productSpec) : '—'}</div></div>
+        <div class="spec-card wide"><div class="sc-label">📐 製造規格</div><div class="sc-value">${s.manuSpec ? escapeHtml(s.manuSpec) : '—'}</div></div>
         <div class="spec-card"><div class="sc-label">⚙ 模具</div><div class="sc-value">${s.moldSpec ? escapeHtml(s.moldSpec) : '—'}</div></div>
         <div class="spec-card"><div class="sc-label" style="display:inline-flex;align-items:center;gap:4px;">${icon('box', 12)}領料</div><div class="sc-value">${s.material ? escapeHtml(s.material) : '—'}</div></div>
       </div></div>
@@ -944,6 +945,7 @@ async function loadSpecCards(o) {
         ${specs.map((s, i) => {
           const fields = [
             { label: '生產規格', value: s.productSpec, bold: true },
+            { label: '製造規格', value: s.manuSpec, bold: true },
             { label: '模具', value: s.moldSpec },
             { label: '領料', value: s.material, alwaysShow: true },
             { label: '派工數', value: s.dispatchQty, unit: '片' },

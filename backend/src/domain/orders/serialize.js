@@ -72,6 +72,7 @@ export function serializeOrder(o) {
     operatorName: o.operatorName || null,           // 設備操作人員姓名（第五步）
     totalWorkers: (o.totalWorkers ?? null),         // 全部作業人數（第五步）
     productSpec: o.productSpec || '',
+    manuSpec: o.manuSpec || '',          // 製造規格（生管 Excel）
     customerName: o.customerName || '',
     moldSpec: o.moldSpec || '', material: o.material || '',
     dispatchQty: o.dispatchQty, bladeCount: o.bladeCount,
