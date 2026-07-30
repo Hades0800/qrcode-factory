@@ -497,8 +497,18 @@ function render() {
   const orderQ = ($('filterOrder').value || '').trim().toUpperCase();
   const crossMachine = !!(orderQ || custQ);   // 跨機台檢視（每列標機台）
 
+  // 過濾網多機台：凡是有 @N 變體的基礎單號，實際生產在 @1/@2/@3，
+  // 其「裸單號」不列入統計（只顯示各機台 @N）。裸單號通常是現場漏打 @ 後綴而生。
+  const baseNosWithAt = new Set();
+  allOrders.forEach(o => {
+    const at = (o.orderNo || '').indexOf('@');
+    if (at > 0) baseNosWithAt.add(o.orderNo.slice(0, at));
+  });
+
   // 篩選：計畫日期落在此月份 +（工單號 / 客戶 / 機台，優先序：工單號 > 客戶 > 機台）
   const rows = allOrders.filter(o => {
+    // 裸單號但已有 @N 變體 → 隱藏（實際生產在 @1/@2/@3）
+    if ((o.orderNo || '').indexOf('@') === -1 && baseNosWithAt.has(o.orderNo)) return false;
     if (orderQ) {
       // 工單號查詢：帶出該單與其各機台 @N 紀錄（F1150622001 → 含 @1/@2/@3）
       if (!(o.orderNo === orderQ || o.orderNo.startsWith(orderQ + '@'))) return false;
