@@ -3,9 +3,8 @@
 //  - GET  /:orderNo  → 讀取（沒有就回 null）
 //  - 寫入前驗證：工單必須存在且為「今日有活動」的工單
 
-const ORDER_NO_RE = /^[A-Z]\d{10}$/;
-function validOrderNo(s) { return typeof s === 'string' && ORDER_NO_RE.test(s); }
-function clipStr(s, max) { return s == null ? null : String(s).slice(0, max); }
+import { validOrderNo, clipStr } from '../lib/validation.js';
+
 function intOrNull(v) {
   if (v == null || v === '') return null;
   const n = Number(v);
@@ -73,7 +72,9 @@ export default async function equipmentParamRoutes(fastify) {
           ADD COLUMN IF NOT EXISTS "baseBladeCount" INTEGER,
           ADD COLUMN IF NOT EXISTS "baseFeedSetting" TEXT,
           ADD COLUMN IF NOT EXISTS "baseCutterStroke" TEXT,
-          ADD COLUMN IF NOT EXISTS "baseStrokeUpdateFreq" TEXT
+          ADD COLUMN IF NOT EXISTS "baseStrokeUpdateFreq" TEXT,
+          ADD COLUMN IF NOT EXISTS "specRows" TEXT,
+          ADD COLUMN IF NOT EXISTS "baseSpecRows" TEXT
       `);
       await fastify.prisma.$executeRawUnsafe(
         'CREATE INDEX IF NOT EXISTS "EquipmentParam_orderNo_idx" ON "EquipmentParam"("orderNo")'
@@ -111,6 +112,20 @@ export default async function equipmentParamRoutes(fastify) {
       if (!ok) return reply.code(400).send({ error: '此工單號今日無生產活動，無法上傳設備參數' });
     }
 
+    // 多規格陣列正規化：[{spec,spm,blades}] → 過濾空列、限制範圍 → JSON 字串（空陣列存 null）
+    const normalizeSpecRows = (input) => {
+      if (!Array.isArray(input)) return null;
+      const rows = input.map(r => ({
+        spec: (r && r.spec != null) ? String(r.spec).trim().slice(0, 50) : '',
+        spm: (r && r.spm != null && r.spm !== '' && Number.isFinite(Number(r.spm)))
+          ? Math.max(0, Math.min(1e5, Number(r.spm))) : null,
+        blades: (r && r.blades != null && r.blades !== '' && Number.isFinite(Number(r.blades)))
+          ? Math.max(0, Math.min(1e6, Math.round(Number(r.blades)))) : null,
+        feed: (r && r.feed != null) ? String(r.feed).trim().slice(0, 50) : '',
+      })).filter(r => r.spec || r.spm != null || r.blades != null || r.feed);
+      return rows.length ? JSON.stringify(rows) : null;
+    };
+
     const b = request.body || {};
     const data = {
       // 參數值
@@ -135,6 +150,9 @@ export default async function equipmentParamRoutes(fastify) {
       baseFeedSetting:      clipStr(b.baseFeedSetting, 200),
       baseCutterStroke:     clipStr(b.baseCutterStroke, 200),
       baseStrokeUpdateFreq: clipStr(b.baseStrokeUpdateFreq, 200),
+      // 多規格（原始 / 製造）
+      specRows:     normalizeSpecRows(b.specRows),
+      baseSpecRows: normalizeSpecRows(b.baseSpecRows),
     };
 
     // upsert with raw SQL（避免 Prisma client 沒 regenerate 時拋錯）
@@ -145,6 +163,7 @@ export default async function equipmentParamRoutes(fastify) {
         "feedSetting", "cutterStroke", "strokeUpdateFreq",
         "baseProductSpecAttr", "baseParamFileName", "baseParamFileAttr", "baseMoldSpec", "baseMachineSPM", "baseBladeCount",
         "baseFeedSetting", "baseCutterStroke", "baseStrokeUpdateFreq",
+        "specRows", "baseSpecRows",
         "createdBy", "createdByName", "createdAt", "updatedAt"
       ) VALUES (
         ${order.id}, ${orderNo}, ${data.operation}, ${data.totalWorkers}, ${data.paramFileName},
@@ -152,6 +171,7 @@ export default async function equipmentParamRoutes(fastify) {
         ${data.feedSetting}, ${data.cutterStroke}, ${data.strokeUpdateFreq},
         ${data.baseProductSpecAttr}, ${data.baseParamFileName}, ${data.baseParamFileAttr}, ${data.baseMoldSpec}, ${data.baseMachineSPM}, ${data.baseBladeCount},
         ${data.baseFeedSetting}, ${data.baseCutterStroke}, ${data.baseStrokeUpdateFreq},
+        ${data.specRows}, ${data.baseSpecRows},
         ${request.user.id}, ${request.user.displayName || null}, NOW(), NOW()
       )
       ON CONFLICT ("orderId") DO UPDATE SET
@@ -175,6 +195,8 @@ export default async function equipmentParamRoutes(fastify) {
         "baseFeedSetting" = EXCLUDED."baseFeedSetting",
         "baseCutterStroke" = EXCLUDED."baseCutterStroke",
         "baseStrokeUpdateFreq" = EXCLUDED."baseStrokeUpdateFreq",
+        "specRows" = EXCLUDED."specRows",
+        "baseSpecRows" = EXCLUDED."baseSpecRows",
         "updatedAt" = NOW(),
         "deletedAt" = NULL
     `;

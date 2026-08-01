@@ -6,7 +6,7 @@
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#d23535">
+<meta name="theme-color" content="var(--brand)">
 <title>上鎧鋼鐵 - 即時生產</title>
 <link rel="icon" href="logo.jpg">
 <link rel="apple-touch-icon" href="logo.jpg">
@@ -14,25 +14,11 @@
 <link rel="preconnect" href="https://shangkai-manu-record.zeabur.app" crossorigin>
 <link rel="dns-prefetch" href="https://shangkai-manu-record.zeabur.app">
 <style>
-  :root {
-    --brand: #d23535;
-    --brand-dark: #a82828;
-    --brand-soft: #fdf2f2;
-    --ink: #1c1c1e;
-    --text: #2c2c2e;
-    --muted: #6e6e73;
-    --border: #e5e5ea;
-    --bg: #f2f2f5;
-    --card: #ffffff;
-    --success: #2ea043;
-    --success-soft: #e6f7ea;
-    --safe-top: env(safe-area-inset-top, 0);
-    --safe-bottom: env(safe-area-inset-bottom, 0);
-  }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* 設計 token 已統一至 styles.css（CIS 3.0），請勿在此重複定義 */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; margin: 0; }
   body {
-    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    font-family: var(--font-sans);
     background: var(--bg);
     color: var(--text);
     zoom: 1.15;
@@ -243,6 +229,7 @@
   }
   .order-card .oc-pill.scope { background: #fff3cd; color: #b8860b; border: 1.5px solid #f0ad4e; }
   .order-card .oc-pill.carryover { background: #f0ad4e; color: #fff; }
+  .order-card .oc-customer { font-size: 13px; font-weight: 600; color: var(--ink); margin: 2px 0 10px; word-break: break-word; }
 
   /* 工單摘要條 — 橫向 meta 條，跟訂單規格的卡片視覺刻意切開 */
   .order-info {
@@ -372,6 +359,10 @@
     font-weight: 600;
   }
   .timeline li.current .tl-time { color: var(--brand); font-weight: 700; }
+  /* QC 數量獨立列：更換規格/下班 → 事件上方（加大間距）；完成 → 事件下方 */
+  .timeline li.qc-row { padding: 2px 0 2px 28px; }
+  .timeline li.qc-above { margin-top: 14px; }
+  .timeline li.qc-below { margin-bottom: 12px; }
   .timeline li .tl-label {
     color: var(--ink);
     margin-top: 2px;
@@ -485,6 +476,15 @@
   .rt-ep-section.ep-closed > .ep-header .ep-chev { transform: rotate(-90deg); }
   .rt-ep-section.ep-closed > .ep-body { display: none !important; }
   .rt-ep-section.ep-closed { padding-bottom: 6px !important; }
+
+  /* ===== 手機版：設備參數多規格列（規格/SPM/刀數/送料）好觸控 ===== */
+  @media (max-width: 700px) {
+    .spec-row input[data-sf] { min-height: 38px !important; font-size: 14px !important; }
+    .spec-row input[data-sf="spm"],
+    .spec-row input[data-sf="blades"],
+    .spec-row input[data-sf="feed"] { width: 52px !important; }
+    .spec-row > button { width: 30px !important; height: 30px !important; font-size: 16px !important; }
+  }
 </style>
 </head>
 <body>
@@ -502,7 +502,8 @@
     <a href="index.html">生產實態紀錄</a>
     <a href="records.html">歷史實態紀錄</a>
     <a href="realtime.html" class="nav-active">即時生產資訊</a>
-    <a href="plan-stats.html">計畫達成統計</a>
+    <a href="plan-stats.html">生產進度統計</a>
+    <a href="goal-stats.html">目標達成統計</a>
     <a href="upload.html" id="uploadLink" style="display:none;">📤 上傳</a>
     <a href="admin.html" id="adminLink" style="display:none;">⚙ 管理</a>
     <div class="menu-sep"></div>
@@ -526,6 +527,13 @@ const MACHINES = [
   { id: 'No4-90',  num: 'No4', spec: '90' },
   { id: 'No5-40',  num: 'No5', spec: '40' },
   { id: 'No6-40',  num: 'No6', spec: '40' },
+  { id: 'No12', num: 'No12', spec: '過濾網' },
+  { id: 'No13', num: 'No13', spec: '過濾網' },
+  { id: 'No16', num: 'No16', spec: '過濾網' },
+  { id: 'No17', num: 'No17', spec: '過濾網' },
+  { id: 'No18', num: 'No18', spec: '過濾網' },
+  { id: 'No19', num: 'No19', spec: '有筋' },
+  { id: 'No20', num: 'No20', spec: '免拆模' },
 ];
 
 // 機台目標統一從 utils.js 的 MACHINE_TARGETS 取
@@ -546,6 +554,16 @@ const STEP_LABELS = [
 
 const me = requireLogin();
 let allOrders = [];
+// @N（過濾網多機台）工單的客戶掛在「@ 之前的基礎單號」；客戶空白時自動從基礎單號帶
+function resolveCustomerName(o) {
+  if (o.customerName) return o.customerName;
+  const at = (o.orderNo || '').indexOf('@');
+  if (at > 0) {
+    const base = allOrders.find(x => x.orderNo === o.orderNo.slice(0, at));
+    if (base && base.customerName) return base.customerName;
+  }
+  return '';
+}
 let activeMachine = '';
 let idleMachinesToday = new Set();
 // 即時頁專用：只顯示 HH:MM
@@ -707,33 +725,47 @@ function renderContent() {
       if (!o.step11At && ((o.pause12 && o.pause12.active) || (o.pause13 && o.pause13.active))) return true;
       return false;
     })
-    .sort((a, b) => {
-      // 依實際生產順位：以第一次有動作的時間為準，最早開始的排最前
-      // 尚未開始生產的工單排到最後（依 updatedAt 由新到舊）
-      const aFirst = getFirstActivityTime(a);
-      const bFirst = getFirstActivityTime(b);
-      if (aFirst === null && bFirst === null) return new Date(b.updatedAt) - new Date(a.updatedAt);
-      if (aFirst === null) return 1;
-      if (bFirst === null) return -1;
-      return aFirst - bFirst;
-    });
+    .sort(scheduleCmp); // 依生管上傳順序：計畫日期 → 計畫序號 → 工單號（共用 utils.js）
 
   const totalOrders = machineOrders.length;
   const completedOrders = machineOrders.filter(o => o.step11At).length;
 
+  // 一張工單的「實際生產數量」
+  //   已完成(step11)：Σ 各段更換規格 QC + 完成 QC（單一規格時 step30Sum=0，等於完成量）
+  //   未完成但有下班回報（隔日生產）：Σ 各段更換規格 QC + 最後一次下班 QC
+  //   兩者都沒有：只算已結束規格段（step30）的量
+  function actualQtyOf(o) {
+    const step30Sum = (o.stepEntries || [])
+      .filter(e => e.stepNo === '30' && e.qcActualQty != null)
+      .reduce((s, e) => s + (Number(e.qcActualQty) || 0), 0);
+    if (o.step11At && o.step11QcActualQty != null) {
+      return step30Sum + (Number(o.step11QcActualQty) || 0);
+    }
+    // 下班回報：pause12 history 中帶 qcActualQty 的就是「下班」事件
+    const offWork = ((o.pause12 && o.pause12.history) || []).filter(e => e.qcActualQty != null);
+    if (offWork.length > 0) {
+      return step30Sum + (Number(offWork[offWork.length - 1].qcActualQty) || 0);
+    }
+    return step30Sum;
+  }
+
   // 生產產能 / 達成度
-  // 實際生產重量（kg）= 已完成工單的 totalWeight 加總
+  // 實際生產重量（kg）= Σ (單重 × 實際生產數量)
   // 目標產能（kg/日）從機台標準表查
   const std = MACHINE_STANDARDS[activeMachine] || { capacityKg: 0, workMinutes: 0 };
-  const doneWeight = machineOrders.filter(o => o.step11At).reduce((s, o) => s + (Number(o.totalWeight) || 0), 0);
+  const doneWeight = machineOrders.reduce((s, o) => {
+    const qty = actualQtyOf(o);
+    const unitW = Number(o.unitWeight) || 0;
+    return s + unitW * qty;
+  }, 0);
   const capacityRate = std.capacityKg > 0 ? (doneWeight / std.capacityKg * 100).toFixed(1) : null;
 
-  // 標準工時（分鐘）= 刀數 / SPM × 派工數
+  // 標準工時（分鐘）= 刀數 / SPM × 實際生產數量
   // 累計今日該機台所有工單的標準工時（不再乘規格/原料係數，係數僅作為紀錄）
   const stdMinutes = machineOrders.reduce((s, o) => {
     const blades = Number(o.bladeCount) || 0;
     const spm = Number(o.machineSPM) || 0;
-    const qty = Number(o.dispatchQty) || 0;
+    const qty = actualQtyOf(o);
     if (blades > 0 && spm > 0 && qty > 0) {
       return s + (blades / spm * qty);
     }
@@ -764,7 +796,7 @@ function renderContent() {
         </div>
         <div class="stat ${idleMachinesToday.has(activeMachine) ? '' : 'highlight'}">
           <div class="s-label">機台編號</div>
-          <div class="s-value" style="font-size:18px;">${escapeHtml(m.num)}-${escapeHtml(m.spec)}${idleMachinesToday.has(activeMachine) ? ' <span style="font-size:12px;color:var(--muted);background:#e5e5ea;padding:2px 8px;border-radius:10px;">今日無工令</span>' : ''}</div>
+          <div class="s-value" style="font-size:18px;">${escapeHtml(m.num)}-${escapeHtml(m.spec)}${idleMachinesToday.has(activeMachine) ? ' <span style="font-size:12px;color:var(--muted);background:var(--border);padding:2px 8px;border-radius:10px;">今日無工令</span>' : ''}</div>
         </div>
         <div class="stat">
           <div class="s-label">今日工單數</div>
@@ -821,6 +853,7 @@ function renderContent() {
             </div>
             ${hasTags ? `<div class="oc-tags">${scopeTag}${carryOverTag}</div>` : ''}
           </div>
+          <div class="oc-customer">🏢 客戶：${escapeHtml(resolveCustomerName(o) || '（未填客戶名稱）')}</div>
           <div id="rt-spec-${escapeHtml(o.orderNo)}" class="rt-spec-area"></div>
           ${o.plannedMachineNo && o.plannedMachineNo !== o.machineNo ? `
           <div style="margin-bottom:8px;padding:6px 10px;background:#fff3cd;border-left:3px solid #f0ad4e;border-radius:4px;font-size:12px;color:#8a6d3b;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
@@ -835,7 +868,7 @@ function renderContent() {
             <span class="oi-item"><span class="oi-icon">${icon('user', 14)}</span><span class="oi-label">小組長</span><span class="oi-value">${escapeHtml(o.leaderName || '—')}</span></span>
             ${o.specType ? `<span class="oi-item"><span class="oi-icon">${icon(o.specType === 'new' ? 'sparkles' : 'box', 14)}</span><span class="oi-label">規格</span><span class="oi-value">${o.specType === 'new' ? escapeHtml(formatNewSpecLabel(o.newSpecAspects)) : '量產規格'}</span></span>` : ''}
             ${o.materialType ? `<span class="oi-item"><span class="oi-icon">${icon('layers', 14)}</span><span class="oi-label">原料</span><span class="oi-value">${o.materialType === 'coil' ? '捲料' : '板料'}</span></span>` : ''}
-            ${(o.auxEquipment || o.auxEquipmentCustom) ? `<span class="oi-item"><span class="oi-icon">${icon('gear', 14)}</span><span class="oi-label">輔助設備</span><span class="oi-value">${escapeHtml(auxEquipmentLabel(o.auxEquipment, o.auxEquipmentCustom))}</span></span>` : ''}
+            ${(o.auxEquipment || o.auxEquipmentCustom) ? `<span class="oi-item"><span class="oi-icon">${icon('gear', 14)}</span><span class="oi-label">輔助設備</span><span class="oi-value">${escapeHtml(auxEquipmentLabel(o.auxEquipment, o.auxEquipmentCustom, o.auxEquipmentNos))}</span></span>` : ''}
           </div>
           <div class="rt-ep-section ep-closed" data-coll-id="equip-${escapeHtml(o.orderNo)}" style="margin-top:14px;background:var(--bg);border-radius:8px;padding:10px;">
             <h3 class="ep-header" style="margin:0 0 8px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;" onclick="this.parentNode.classList.toggle('ep-closed')"><span class="ep-chev">▼</span>設備參數</h3>
@@ -878,8 +911,12 @@ async function loadSpecCards(o) {
 
   const r = await api('/api/orders/' + encodeURIComponent(o.orderNo) + '/upload-rows');
   const rows = (r.ok && r.data.rows) ? r.data.rows : [];
-  const specs = rows.length > 0 ? rows : [{
-    productSpec: o.productSpec, moldSpec: o.moldSpec, material: o.material,
+  // 同規格多台（過濾網等）→ 合併重複規格，只留不同規格
+  const specKey = rw => [rw.productSpec || '', rw.moldSpec || '', rw.material || ''].join('|');
+  const seenSpec = new Set();
+  const uniqRows = rows.filter(rw => { const k = specKey(rw); if (seenSpec.has(k)) return false; seenSpec.add(k); return true; });
+  const specs = uniqRows.length > 0 ? uniqRows : [{
+    productSpec: o.productSpec, manuSpec: o.manuSpec, moldSpec: o.moldSpec, material: o.material,
     dispatchQty: o.dispatchQty, bladeCount: o.bladeCount, machineSPM: o.machineSPM,
     unitWeight: o.unitWeight, totalWeight: o.totalWeight,
   }];
@@ -889,6 +926,7 @@ async function loadSpecCards(o) {
     area.innerHTML = `
       <div class="spec-cards-wrap"><div class="spec-cards">
         <div class="spec-card wide"><div class="sc-label">🔧 生產規格</div><div class="sc-value">${s.productSpec ? escapeHtml(s.productSpec) : '—'}</div></div>
+        <div class="spec-card wide"><div class="sc-label">📐 製造規格</div><div class="sc-value">${s.manuSpec ? escapeHtml(s.manuSpec) : '—'}</div></div>
         <div class="spec-card"><div class="sc-label">⚙ 模具</div><div class="sc-value">${s.moldSpec ? escapeHtml(s.moldSpec) : '—'}</div></div>
         <div class="spec-card"><div class="sc-label" style="display:inline-flex;align-items:center;gap:4px;">${icon('box', 12)}領料</div><div class="sc-value">${s.material ? escapeHtml(s.material) : '—'}</div></div>
       </div></div>
@@ -907,6 +945,7 @@ async function loadSpecCards(o) {
         ${specs.map((s, i) => {
           const fields = [
             { label: '生產規格', value: s.productSpec, bold: true },
+            { label: '製造規格', value: s.manuSpec, bold: true },
             { label: '模具', value: s.moldSpec },
             { label: '領料', value: s.material, alwaysShow: true },
             { label: '派工數', value: s.dispatchQty, unit: '片' },
@@ -979,11 +1018,11 @@ function renderDailySummaryCard(machineId, machineOrders) {
   const todayOrders = (machineOrders || []).filter(o => orderIsOnDate(o, ymd));
   if (todayOrders.length === 0) return '';
   const t = MACHINE_TARGETS[machineId] || { workMinutes: 0, prepMinutes: 0 };
-  const rows = todayOrders.map(o => {
+  const rows = todayOrders.slice().sort(scheduleCmp).map(o => {
     const p = computeOrderPhasesForDay(o, ymd);
     return { orderNo: o.orderNo, isCrossDay: isCrossDayOrder(o, ymd), ...p };
   });
-  // 隔日生產的工單排到最前面，其他維持原順序
+  // 先照生管上傳順序，再把隔日生產的排到最前面（穩定排序：同組維持上傳順序）
   rows.sort((a, b) => (a.isCrossDay === b.isCrossDay) ? 0 : (a.isCrossDay ? -1 : 1));
   const sumPrep = rows.reduce((s, r) => s + r.prepSec, 0);
   const sumProd = rows.reduce((s, r) => s + r.prodSec, 0);
@@ -1097,10 +1136,9 @@ function buildTimeline(o, isAdmin) {
       if (s.key === 'step11At' && o.step11Note) {
         label += '（' + escapeHtml(o.step11Note) + '）';
       }
-      if (s.key === 'step11At' && o.step11QcActualQty != null) {
-        label += ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${o.step11QcActualQty}</span>`;
-      }
-      items.push({ time: new Date(o[s.key]), label, type: 'step', entryId: null });
+      // 完成的 QC 數量 → 顯示在本事件「下方」（qcBelow）
+      const qcBelow = (s.key === 'step11At' && o.step11QcActualQty != null) ? o.step11QcActualQty : null;
+      items.push({ time: new Date(o[s.key]), label, type: 'step', entryId: null, qcBelow });
     }
   });
 
@@ -1108,8 +1146,8 @@ function buildTimeline(o, isAdmin) {
   (o.stepEntries || []).forEach(e => {
     if (e.stepNo === '30') {
       const suffix = (e.isManual ? '（補登）' : '');
-      const qcTxt = (e.qcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span>` : '';
-      items.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + qcTxt + suffix, type: 'spec-change', entryId: e.id });
+      // 更換規格的數量屬於剛結束那段 → 顯示在本事件「上方」（qcAbove）
+      items.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 生產規格完成：' + escapeHtml(e.note || '') + suffix, type: 'spec-change', entryId: e.id, qcAbove: (e.qcActualQty != null ? e.qcActualQty : null) });
       return;
     }
     const suffix = (e.isManual ? '（補登）' : '');
@@ -1132,12 +1170,13 @@ function buildTimeline(o, isAdmin) {
   ];
   pauseEvents.forEach(e => {
     const note = e.note ? '（' + escapeHtml(e.note) + '）' : '';
-    const qcTxt = (e.qcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span>` : '';
     const ico = e.pauseType === '13' ? icon('alert', 13) : icon('pause', 13);
     items.push({
       time: new Date(e.startAt),
-      label: ico + ' ' + e.pauseLabel + note + qcTxt,
+      label: ico + ' ' + e.pauseLabel + note,
       type: e.pauseType === '13' ? 'abnormal' : 'pause',
+      // 下班／隔日生產的當日數量 → 顯示在暫停事件「下方」（隔日分隔線之前）
+      qcBelow: (e.qcActualQty != null ? e.qcActualQty : null),
     });
     if (e.endAt) {
       const dur = e.duration ? fmtDur(e.duration) : '';
@@ -1197,41 +1236,89 @@ function buildTimeline(o, isAdmin) {
     }
 
     const delBtn = isAdmin && it.entryId ? ` <button data-del-entry="${it.entryId}" data-order="${escapeHtml(o.orderNo)}" style="background:var(--brand);color:#fff;border:none;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700;cursor:pointer;margin-left:6px;">✕</button>` : '';
-    return dayDivider + `
+    // QC 數量：更換規格/下班 → 事件上方（跨日時在隔日分隔線之前）；完成 → 事件下方
+    const qcBadge = q => `<span style="background:#1f6feb;color:#fff;font-size:11px;padding:3px 12px;border-radius:8px;font-weight:700;">生產完成數量：${q}</span>`;
+    const qcAboveRow = (it.qcAbove != null) ? `<li class="qc-row qc-above">${qcBadge(it.qcAbove)}</li>` : '';
+    const qcBelowRow = (it.qcBelow != null) ? `<li class="qc-row qc-below">${qcBadge(it.qcBelow)}</li>` : '';
+    return qcAboveRow + dayDivider + `
       <li class="${cls}">
         <div class="tl-dot"></div>
         <div class="tl-time">${dateStr}<span style="font-size:10px;color:var(--muted);font-weight:500;">${diffStr}</span></div>
         <div class="tl-label">${displayLabel}${delBtn}</div>
       </li>
-    `;
+    ` + qcBelowRow;
   }).join('');
 }
 
 // 設備參數展開
+// 單值欄位（生產規格 / SPM / 刀數 改用下方多規格小表）
 const RT_EP_FIELDS = [
-  ['productSpecAttr', '生產規格'],
   ['paramFileName', '設備參數檔名'],
   ['paramFileAttr', '參數檔案屬性'],
   ['moldSpec', '模具規格'],
-  ['machineSPM', '機器SPM'],
-  ['bladeCount', '生產刀數'],
-  ['feedSetting', '送料設定'],
   ['cutterStroke', '大刀座位置'],
   ['strokeUpdateFreq', '位置更新頻度'],
 ];
+// 解析多規格陣列；舊資料 fallback：從單值欄位組成一列
+function rtParseSpecRows(ep, prefix) {
+  const key = prefix ? 'baseSpecRows' : 'specRows';
+  let arr = [];
+  const raw = ep && ep[key];
+  if (raw) { try { arr = JSON.parse(raw) || []; } catch (e) { arr = []; } }
+  if (!Array.isArray(arr)) arr = [];
+  if (arr.length === 0 && ep) {
+    const sK = prefix ? 'baseProductSpecAttr' : 'productSpecAttr';
+    const pK = prefix ? 'baseMachineSPM' : 'machineSPM';
+    const bK = prefix ? 'baseBladeCount' : 'bladeCount';
+    const spec = ep[sK], spm = ep[pK], blades = ep[bK];
+    if ((spec != null && spec !== '') || spm != null || blades != null) {
+      arr = [{ spec: spec || '', spm: spm, blades: blades }];
+    }
+  }
+  // 舊資料相容：送料設定原為單一欄位（如「20，25，16」），依序帶入各規格列
+  const feedKey = prefix ? 'baseFeedSetting' : 'feedSetting';
+  const feedRaw = ep && ep[feedKey];
+  if (feedRaw && arr.length && arr.some(r => r.feed == null || r.feed === '')) {
+    const parts = String(feedRaw).split(/[,，、\s]+/).filter(s => s !== '');
+    arr.forEach((r, i) => { if ((r.feed == null || r.feed === '') && parts[i] != null) r.feed = parts[i]; });
+  }
+  return arr;
+}
+function rtSpecRowHtml(spec, spm, blades, feed) {
+  const val = v => (v == null ? '' : String(v));
+  return `<div class="spec-row" data-spec-row style="display:flex;gap:5px;align-items:center;margin-bottom:4px;">
+    <input data-sf="spec" value="${escapeHtml(val(spec))}" placeholder="規格" maxlength="50" style="flex:1;min-width:0;padding:6px 7px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;">
+    <input data-sf="spm" value="${escapeHtml(val(spm))}" type="number" min="0" step="0.1" placeholder="SPM" style="width:48px;padding:6px 5px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;">
+    <input data-sf="blades" value="${escapeHtml(val(blades))}" type="number" min="0" placeholder="刀數" style="width:48px;padding:6px 5px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;">
+    <input data-sf="feed" value="${escapeHtml(val(feed))}" placeholder="送料" maxlength="50" style="width:48px;padding:6px 5px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:#fff;">
+    <button type="button" onclick="this.closest('.spec-row').remove()" title="刪除" style="flex-shrink:0;width:24px;height:24px;border:none;border-radius:6px;background:var(--bg);color:var(--brand);font-weight:700;cursor:pointer;line-height:1;">×</button>
+  </div>`;
+}
+function addSpecRow(btn) {
+  const box = btn.closest('[data-spec-col]').querySelector('.spec-rows');
+  box.insertAdjacentHTML('beforeend', rtSpecRowHtml('', '', '', ''));
+}
 function renderRtEquipmentColumn(ep, prefix) {
-  // prefix='' 表示參數值；prefix='base' 表示基礎參數
-  return RT_EP_FIELDS.map(([k, label]) => {
+  // prefix='' 表示參數值（原始）；prefix='base' 表示基礎參數（製造）
+  const col = prefix ? 'base' : 'orig';
+  const rows = rtParseSpecRows(ep, prefix);
+  const specTable = `
+    <div data-spec-col="${col}" style="margin-bottom:8px;">
+      <div style="display:flex;gap:5px;font-size:10px;color:var(--muted);font-weight:700;padding:0 2px 3px;">
+        <span style="flex:1;">生產規格</span><span style="width:48px;text-align:center;">SPM</span><span style="width:48px;text-align:center;">刀數</span><span style="width:48px;text-align:center;">送料</span><span style="width:24px;"></span>
+      </div>
+      <div class="spec-rows">${rows.map(r => rtSpecRowHtml(r.spec, r.spm, r.blades, r.feed)).join('')}</div>
+      <button type="button" onclick="addSpecRow(this)" style="margin-top:2px;width:100%;padding:5px;border:1px dashed var(--border);border-radius:6px;background:#fafafa;font-size:11px;color:var(--brand);cursor:pointer;font-weight:600;">＋ 新增規格</button>
+    </div>`;
+  const singleFields = RT_EP_FIELDS.map(([k, label]) => {
     const fieldKey = prefix ? prefix + k[0].toUpperCase() + k.slice(1) : k;
     const v = ep ? (ep[fieldKey] ?? '') : '';
-    const isNum = (k === 'machineSPM' || k === 'bladeCount');
-    const type = isNum ? 'number' : 'text';
-    const step = (k === 'machineSPM') ? ' step="0.1" min="0"' : (isNum ? ' min="0"' : '');
     return `<div style="display:grid;grid-template-columns:88px 1fr;align-items:center;gap:6px;padding:3px 0;">
       <label style="color:var(--muted);font-size:11px;">${label}</label>
-      <input type="${type}"${step} data-ep-field="${fieldKey}" value="${escapeHtml(String(v))}" maxlength="200" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;width:100%;background:#fff;">
+      <input type="text" data-ep-field="${fieldKey}" value="${escapeHtml(String(v))}" maxlength="200" style="padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px;width:100%;background:#fff;">
     </div>`;
   }).join('');
+  return specTable + singleFields;
 }
 function renderRtEquipment(ep, orderNo) {
   const placeholder = ep ? '' : '<div style="color:var(--muted);font-size:11px;text-align:center;padding:4px 0 6px;">尚未上傳，請填寫後儲存</div>';
@@ -1259,15 +1346,24 @@ async function saveRtEquipment(orderNo, btn) {
   const body = {};
   wrap.querySelectorAll('[data-ep-field]').forEach(input => {
     const k = input.dataset.epField;
-    let v = (input.value || '').trim();
-    if (v === '') { body[k] = null; return; }
-    if (k === 'machineSPM' || k === 'bladeCount') {
-      const n = Number(v);
-      body[k] = Number.isFinite(n) ? n : null;
-    } else {
-      body[k] = v;
-    }
+    const v = (input.value || '').trim();
+    body[k] = v === '' ? null : v;
   });
+  // 多規格小表（製造=base / 原始=orig）
+  const collectSpec = (colName) => {
+    const out = [];
+    wrap.querySelectorAll('[data-spec-col="' + colName + '"] [data-spec-row]').forEach(row => {
+      const spec = (row.querySelector('[data-sf="spec"]').value || '').trim();
+      const spmRaw = (row.querySelector('[data-sf="spm"]').value || '').trim();
+      const bladesRaw = (row.querySelector('[data-sf="blades"]').value || '').trim();
+      const feedRaw = (row.querySelector('[data-sf="feed"]').value || '').trim();
+      if (!spec && !spmRaw && !bladesRaw && !feedRaw) return;
+      out.push({ spec, spm: spmRaw === '' ? null : Number(spmRaw), blades: bladesRaw === '' ? null : Number(bladesRaw), feed: feedRaw });
+    });
+    return out;
+  };
+  body.specRows = collectSpec('orig');
+  body.baseSpecRows = collectSpec('base');
   btn.disabled = true;
   const r = await api('/api/equipment-params/' + encodeURIComponent(orderNo), {
     method: 'POST',
@@ -1299,8 +1395,100 @@ async function loadRtEquipment(orderNo) {
 }
 
 initDropdownMenu();
+
+// ====== 自動更新（提示版）======
+// 畫面永遠不會自己重畫。背景每 30 秒檢查一次，發現資料有變只顯示
+// 「有新資料」橫幅，你點了才套用更新。手動操作（記錄/儲存）仍立即更新。
+// 只追蹤「生產相關（實態）」變動 → 才跳「有新資料」通知（畫面不自動重畫）；
+// 其他（客戶名稱、規格、派工數、計畫日期、換機台、updatedAt…）不通知，等下次刷新頁面才一起更新。
+function dataFingerprint(orders, idleArr) {
+  const hasProd = o => !!(o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At ||
+    o.step11At || o.step21At || o.step22At || o.step23At || (o.stepEntries && o.stepEntries.length) ||
+    (o.pause12 && ((o.pause12.history && o.pause12.history.length) || o.pause12.active)) ||
+    (o.pause13 && ((o.pause13.history && o.pause13.history.length) || o.pause13.active)));
+  const pauseSig = p => {
+    if (!p) return '';
+    const a = p.active ? ('A' + (p.active.startAt || '')) : '';
+    const hist = (p.history || []).map(e => (e.startAt || '') + '~' + (e.endAt || '') + '#' + (e.qcActualQty ?? '')).join(',');
+    return a + '|' + hist;
+  };
+  const sig = (orders || []).filter(hasProd).map(o =>
+    o.orderNo +
+    ':' + [o.step1At, o.step2At, o.step3At, o.step4At, o.step5At, o.step6At, o.step7At,
+           o.step21At, o.step22At, o.step23At, o.step11At].map(t => t || '').join('') +
+    ':' + (o.step11QcActualQty ?? '') +
+    ':' + (o.stepEntries || []).map(e => e.stepNo + '@' + (e.recordedAt || '') + '#' + (e.qcActualQty ?? '')).join(',') +
+    ':' + pauseSig(o.pause12) + ':' + pauseSig(o.pause13)
+  ).join(';');
+  const s = sig + '||' + (idleArr || []).slice().sort().join(',');
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  return s.length + ':' + h;
+}
+function idleSetFromEvents(events) {
+  const now = new Date();
+  return (events || []).filter(e => {
+    const d = new Date(e.createdAt);
+    return d.getFullYear() === now.getFullYear() &&
+           d.getMonth() === now.getMonth() &&
+           d.getDate() === now.getDate();
+  }).map(e => e.machineNo);
+}
+let currentFp = dataFingerprint(allOrders, Array.from(idleMachinesToday));
+let pendingData = null;
+
+const updBanner = document.createElement('div');
+updBanner.id = 'rtUpdateBanner';
+updBanner.textContent = '🔔 有新資料，點此更新';
+updBanner.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:998;display:none;'
+  + 'background:var(--brand);color:#fff;font-size:13px;font-weight:700;padding:9px 18px;border-radius:999px;'
+  + 'box-shadow:0 4px 16px rgba(240,29,15,.35);cursor:pointer;';
+document.body.appendChild(updBanner);
+updBanner.onclick = () => {
+  if (!pendingData) { updBanner.style.display = 'none'; return; }
+  allOrders = pendingData.orders;
+  idleMachinesToday = new Set(pendingData.idle);
+  currentFp = pendingData.fp;
+  pendingData = null;
+  try {
+    localStorage.setItem(CACHE_RT, JSON.stringify({
+      orders: allOrders,
+      idleMachines: Array.from(idleMachinesToday),
+      savedAt: Date.now(),
+    }));
+  } catch (e) {}
+  updBanner.style.display = 'none';
+  renderMachineTabs();
+  renderContent();
+};
+
+async function checkForUpdates() {
+  const [ordersRes, idleRes] = await Promise.all([
+    api('/api/orders?limit=200'),
+    api('/api/idle-events?limit=50'),
+  ]);
+  if (!ordersRes.ok) return;
+  const orders = ordersRes.data.orders || [];
+  const idle = idleRes.ok ? idleSetFromEvents(idleRes.data.events) : Array.from(idleMachinesToday);
+  const fp = dataFingerprint(orders, idle);
+  if (fp === currentFp) { pendingData = null; updBanner.style.display = 'none'; return; }
+  pendingData = { orders, idle, fp };
+  updBanner.style.display = 'block';
+}
+
+// loadOrders（手動/操作後）每次跑完都代表畫面已是最新 → 更新指紋、收掉橫幅
+const _loadOrders = loadOrders;
+loadOrders = async function() {
+  await _loadOrders();
+  currentFp = dataFingerprint(allOrders, Array.from(idleMachinesToday));
+  pendingData = null;
+  updBanner.style.display = 'none';
+};
+
+setInterval(() => { if (!document.hidden) checkForUpdates(); }, 30000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdates(); });
+
 loadOrders();
-setInterval(loadOrders, 30000);
 
 </script>
 </body>

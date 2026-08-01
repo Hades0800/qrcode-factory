@@ -140,15 +140,48 @@ function todayYmd() {
   return t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0');
 }
 
+// ── 排產排序（三頁共用：即時 / 歷史 / 生產進度統計）──────────────
+// 規則：計畫日期 → 計畫序號(planSeq＝生管 Excel 列順序) → 工單號
+//   planSeq 是上傳時記下的 Excel 原始列順序，同一天照它排＝還原生管排定順序
+//   舊工單沒有 planSeq(null) → 排在有序號者之後，再以工單號 fallback
+//   ※「照生管上傳順序」的規則只有這一份，三頁都呼叫，避免各頁各寫一份而走樣
+function plannedYmdLocal(d) {
+  if (!d) return null;
+  const dt = (d instanceof Date) ? d : new Date(d);
+  if (isNaN(dt)) return null;
+  return dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+}
+function plannedYmdOf(o) {
+  return plannedYmdLocal(o.plannedDate) || plannedYmdLocal(o.productionDate) || '';
+}
+function scheduleCmp(a, b) {
+  const pa = plannedYmdOf(a), pb = plannedYmdOf(b);
+  if (pa !== pb) return pa < pb ? -1 : 1;
+  const sa = a.planSeq != null ? a.planSeq : Infinity;
+  const sb = b.planSeq != null ? b.planSeq : Infinity;
+  if (sa !== sb) return sa - sb;
+  return (a.orderNo || '').localeCompare(b.orderNo || '');
+}
+
 // 各機台每日工時目標（分鐘）— 本日匯總用
 // workMinutes = 穩定生產目標、prepMinutes = 生產準備目標、capacityKg = 產能目標
 const MACHINE_TARGETS = {
-  'No1-350': { workMinutes: 280, prepMinutes: 200, capacityKg: 10000 },
-  'No2-250': { workMinutes: 210, prepMinutes: 270, capacityKg: 1800  },
-  'No3-60':  { workMinutes: 320, prepMinutes: 160, capacityKg: 1200  },
-  'No4-90':  { workMinutes: 320, prepMinutes: 160, capacityKg: 1200  },
+  // workMinutes=效率負荷(穩定生產)、prepMinutes=生產準備(含試模)；生產效益率=work/prep（衍生值，不存）
+  'No1-350': { workMinutes: 360, prepMinutes: 120, capacityKg: 12500 },
+  'No2-250': { workMinutes: 320, prepMinutes: 160, capacityKg: 2800  },
+  'No3-60':  { workMinutes: 420, prepMinutes:  60, capacityKg: 1400  },
+  'No4-90':  { workMinutes: 360, prepMinutes: 160, capacityKg: 1600  },
   'No5-40':  { workMinutes: 420, prepMinutes:  60, capacityKg: 500   },
   'No6-40':  { workMinutes: 420, prepMinutes:  60, capacityKg: 500   },
+  // ── 擴張網／筋網機（待填實際產能目標）──
+  // 下列為占位 0，目標達成統計會顯示 0% 直到填入真實值（工時/備料分鐘、產能 kg）。
+  'No12': { workMinutes: 0, prepMinutes: 0, capacityKg: 0 },
+  'No13': { workMinutes: 0, prepMinutes: 0, capacityKg: 0 },
+  'No16': { workMinutes: 0, prepMinutes: 0, capacityKg: 0 },
+  'No17': { workMinutes: 0, prepMinutes: 0, capacityKg: 0 },
+  'No18': { workMinutes: 0, prepMinutes: 0, capacityKg: 0 },
+  'No19': { workMinutes: 0, prepMinutes: 0, capacityKg: 0 },
+  'No20': { workMinutes: 0, prepMinutes: 0, capacityKg: 0 },
 };
 
 // 一張工單在「特定一天」內的工時分配（秒）
@@ -363,11 +396,21 @@ const AUX_EQUIPMENT_LABELS = {
   other:   '其他設備',
 };
 // codes: 逗號字串、陣列、或單一 key；custom: 使用者自訂名稱
-function auxEquipmentLabel(codes, custom) {
+// nos：{ code: '編號' } 物件（或 JSON 字串）；有編號就顯示成「編號 設備名」
+function auxEquipmentLabel(codes, custom, nos) {
   let arr = [];
   if (Array.isArray(codes)) arr = codes;
   else if (typeof codes === 'string' && codes) arr = codes.split(',');
-  const names = arr.map(c => AUX_EQUIPMENT_LABELS[String(c).trim()]).filter(Boolean);
+  let noMap = {};
+  if (nos && typeof nos === 'object' && !Array.isArray(nos)) noMap = nos;
+  else if (typeof nos === 'string' && nos) { try { noMap = JSON.parse(nos) || {}; } catch (e) { noMap = {}; } }
+  const names = arr.map(c => {
+    const code = String(c).trim();
+    const name = AUX_EQUIPMENT_LABELS[code];
+    if (!name) return null;
+    const no = noMap[code];
+    return (no && String(no).trim()) ? (String(no).trim() + ' ' + name) : name;
+  }).filter(Boolean);
   if (custom && String(custom).trim()) names.push(String(custom).trim());
   return names.join('、');
 }

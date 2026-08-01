@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { audit } from '../lib/audit.js';
 
 export default async function adminRoutes(fastify) {
   fastify.addHook('onRequest', fastify.authenticate);
@@ -286,6 +287,121 @@ export default async function adminRoutes(fastify) {
       })),
       uploadRows,
     };
+  });
+
+  // ─── 修正生產完成數量（QC 輸入錯誤修正）─────────────────────────
+  // 三種數量：暫停事件（中斷/下班/中午休息）、生產規格完成(step30)、生產完成終止(step11)
+  // 刪除一律走軟刪除（中介層自動轉 deletedAt），可從「回收桶」救回
+  // 每次修改都寫稽核紀錄（誰改的、改前→改後）
+
+  // 數量解析：'' / null → 清空(null)；0 是合法值；非法回傳 undefined
+  const parseQty = (raw) => {
+    if (raw === null || raw === undefined || raw === '') return null;
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 0 || n > 1000000) return undefined;
+    return n;
+  };
+  const qtyText = v => (v === null || v === undefined ? '空白' : String(v));
+
+  // 讀取工單的可修正生產紀錄（唯讀；不像 /api/orders/:orderNo 會自動建單）
+  fastify.get('/order-records/:orderNo', async (request, reply) => {
+    const orderNo = String(request.params.orderNo || '').trim().toUpperCase();
+    if (!orderNo) return reply.code(400).send({ error: '請輸入工單號' });
+    const order = await fastify.prisma.order.findUnique({
+      where: { orderNo },
+      include: {
+        pauseEvents: { where: { deletedAt: null }, orderBy: { startAt: 'asc' } },
+        stepEntries: { where: { deletedAt: null }, orderBy: { recordedAt: 'asc' } },
+      },
+    });
+    if (!order) return reply.code(404).send({ error: '找不到此工單（或已被刪除）' });
+    return {
+      ok: true,
+      orderNo: order.orderNo,
+      machineNo: order.machineNo || '',
+      productSpec: order.productSpec || '',
+      step11At: order.step11At,
+      step11QcActualQty: order.step11QcActualQty ?? null,
+      pauses: order.pauseEvents.map(e => ({
+        id: e.id, type: e.type, note: e.note || '',
+        startAt: e.startAt, endAt: e.endAt, duration: e.duration,
+        qcActualQty: e.qcActualQty ?? null,
+      })),
+      specEntries: order.stepEntries
+        .filter(e => e.stepNo === '30')
+        .map(e => ({ id: e.id, note: e.note || '', recordedAt: e.recordedAt, qcActualQty: e.qcActualQty ?? null })),
+    };
+  });
+
+  // 修改暫停事件的生產完成數量
+  fastify.patch('/pause-events/:id', async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: 'id 不正確' });
+    const qty = parseQty(request.body?.qcActualQty);
+    if (qty === undefined) return reply.code(400).send({ error: '數量必須是 0 以上的整數' });
+    const ev = await fastify.prisma.pauseEvent.findUnique({ where: { id } });
+    if (!ev) return reply.code(404).send({ error: '找不到這筆暫停紀錄' });
+    const order = await fastify.prisma.order.findFirst({ where: { id: ev.orderId, deletedAt: undefined }, select: { orderNo: true } });
+    await fastify.prisma.pauseEvent.update({ where: { id }, data: { qcActualQty: qty } });
+    await audit(fastify.prisma, request, 'edit_pause_qty', order?.orderNo || String(ev.orderId),
+      `暫停#${id}（${ev.note || '-'}）生產完成數量 ${qtyText(ev.qcActualQty)} → ${qtyText(qty)}`);
+    return { ok: true };
+  });
+
+  // 刪除誤記的暫停事件（軟刪除，可從回收桶救回）
+  fastify.delete('/pause-events/:id', async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: 'id 不正確' });
+    const ev = await fastify.prisma.pauseEvent.findUnique({ where: { id } });
+    if (!ev) return reply.code(404).send({ error: '找不到這筆暫停紀錄' });
+    const order = await fastify.prisma.order.findFirst({ where: { id: ev.orderId, deletedAt: undefined }, select: { orderNo: true } });
+    await fastify.prisma.pauseEvent.delete({ where: { id } }); // 中介層 → deletedAt
+    await audit(fastify.prisma, request, 'delete_pause_event', order?.orderNo || String(ev.orderId),
+      `刪除暫停#${id}（${ev.note || '-'}）數量 ${qtyText(ev.qcActualQty)}`);
+    return { ok: true };
+  });
+
+  // 修改生產規格完成(step30)的數量
+  fastify.patch('/step-entries/:id', async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: 'id 不正確' });
+    const qty = parseQty(request.body?.qcActualQty);
+    if (qty === undefined) return reply.code(400).send({ error: '數量必須是 0 以上的整數' });
+    const en = await fastify.prisma.stepEntry.findUnique({ where: { id } });
+    if (!en) return reply.code(404).send({ error: '找不到這筆生產紀錄' });
+    if (en.stepNo !== '30') return reply.code(400).send({ error: '只有「生產規格完成」才有生產完成數量' });
+    const order = await fastify.prisma.order.findFirst({ where: { id: en.orderId, deletedAt: undefined }, select: { orderNo: true } });
+    await fastify.prisma.stepEntry.update({ where: { id }, data: { qcActualQty: qty } });
+    await audit(fastify.prisma, request, 'edit_step_qty', order?.orderNo || String(en.orderId),
+      `生產規格完成#${id}（${en.note || '-'}）數量 ${qtyText(en.qcActualQty)} → ${qtyText(qty)}`);
+    return { ok: true };
+  });
+
+  // 刪除誤記的生產規格完成(step30)（軟刪除）
+  fastify.delete('/step-entries/:id', async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: 'id 不正確' });
+    const en = await fastify.prisma.stepEntry.findUnique({ where: { id } });
+    if (!en) return reply.code(404).send({ error: '找不到這筆生產紀錄' });
+    if (en.stepNo !== '30') return reply.code(400).send({ error: '這裡只能刪除「生產規格完成」紀錄' });
+    const order = await fastify.prisma.order.findFirst({ where: { id: en.orderId, deletedAt: undefined }, select: { orderNo: true } });
+    await fastify.prisma.stepEntry.delete({ where: { id } }); // 中介層 → deletedAt
+    await audit(fastify.prisma, request, 'delete_step_entry', order?.orderNo || String(en.orderId),
+      `刪除生產規格完成#${id}（${en.note || '-'}）數量 ${qtyText(en.qcActualQty)}`);
+    return { ok: true };
+  });
+
+  // 修改生產完成終止(step11)的數量
+  fastify.patch('/orders/:orderNo/step11-qty', async (request, reply) => {
+    const orderNo = String(request.params.orderNo || '').trim().toUpperCase();
+    const qty = parseQty(request.body?.qcActualQty);
+    if (qty === undefined) return reply.code(400).send({ error: '數量必須是 0 以上的整數' });
+    const order = await fastify.prisma.order.findUnique({ where: { orderNo }, select: { id: true, step11QcActualQty: true } });
+    if (!order) return reply.code(404).send({ error: '找不到此工單' });
+    await fastify.prisma.order.update({ where: { orderNo }, data: { step11QcActualQty: qty } });
+    await audit(fastify.prisma, request, 'edit_step11_qty', orderNo,
+      `生產完成終止數量 ${qtyText(order.step11QcActualQty)} → ${qtyText(qty)}`);
+    return { ok: true };
   });
 
   // 列出有「軟刪除生產紀錄」但工單仍使用中的工單（reset-production 之後可救回）

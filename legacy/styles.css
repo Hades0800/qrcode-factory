@@ -1,33 +1,25 @@
 /* ══════════════════════════════
    上鎧鋼鐵 廠務工單系統 — 共用樣式
+   視覺依據：上鎧鋼鐵 CIS 3.0 (2026-07)
+   ※ 色彩／字體變數統一定義在 tokens.css
    ══════════════════════════════ */
 
-/* ── CSS 變數 ── */
-:root {
-  --brand: #d23535;
-  --brand-dark: #a82828;
-  --brand-soft: #fdf2f2;
-  --ink: #1c1c1e;
-  --text: #2c2c2e;
-  --muted: #6e6e73;
-  --border: #e5e5ea;
-  --bg: #f2f2f5;
-  --card: #ffffff;
-  --success: #2ea043;
-  --success-soft: #e6f7ea;
-  --safe-top: env(safe-area-inset-top, 0);
-  --safe-bottom: env(safe-area-inset-bottom, 0);
-}
+@import url('tokens.css');
 
 /* ── Reset ── */
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 body {
   margin: 0;
-  font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+  font-family: var(--font-sans);
+  font-size: 16px;            /* CIS 內文基準 1x = 16px */
+  letter-spacing: var(--track-body);
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
+/* CIS 標題：Semibold + 寬字距。字級依工具型介面密度收斂，
+   保留 CIS 的階層比例，不套用品牌主視覺的 64px */
+h1, h2, h3 { color: var(--ink); font-weight: 600; letter-spacing: var(--track-title); }
 
 /* ── Header ── */
 header {
@@ -159,7 +151,7 @@ button {
 }
 button:active { transform: scale(.97); }
 button:disabled { opacity: .5; cursor: not-allowed; }
-.btn-primary { background: var(--brand); color: #fff; box-shadow: 0 2px 6px rgba(210,53,53,.25); }
+.btn-primary { background: var(--brand-text); color: #fff; box-shadow: 0 2px 6px rgba(240,29,15,.25); }
 .btn-primary:hover:not(:disabled) { background: var(--brand-dark); }
 .btn-secondary { background: #fff; color: var(--ink); border: 1.5px solid var(--border); }
 .btn-secondary:hover:not(:disabled) { background: #f7f7f9; }
@@ -194,7 +186,7 @@ input[type=text], input[type=password], input[type=date], textarea, select {
 input:focus, textarea:focus, select:focus {
   outline: none;
   border-color: var(--brand);
-  box-shadow: 0 0 0 3px rgba(210,53,53,.12);
+  box-shadow: 0 0 0 3px rgba(240,29,15,.12);
 }
 textarea { min-height: 70px; resize: vertical; }
 

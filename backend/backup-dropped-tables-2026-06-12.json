@@ -1,0 +1,180 @@
+{
+  "Permission": [
+    {
+      "id": 1,
+      "key": "view_records",
+      "name": "歷史實態紀錄",
+      "category": "頁面",
+      "sortOrder": 1
+    },
+    {
+      "id": 2,
+      "key": "view_plan_stats",
+      "name": "計畫達成統計",
+      "category": "頁面",
+      "sortOrder": 2
+    },
+    {
+      "id": 3,
+      "key": "view_goal_stats",
+      "name": "目標達成統計",
+      "category": "頁面",
+      "sortOrder": 3
+    },
+    {
+      "id": 4,
+      "key": "upload",
+      "name": "上傳工單",
+      "category": "操作",
+      "sortOrder": 4
+    },
+    {
+      "id": 5,
+      "key": "modify_records",
+      "name": "修改/取消/補登生產紀錄",
+      "category": "操作",
+      "sortOrder": 5
+    },
+    {
+      "id": 6,
+      "key": "delete_order",
+      "name": "刪除工單",
+      "category": "操作",
+      "sortOrder": 6
+    },
+    {
+      "id": 7,
+      "key": "manage_accounts",
+      "name": "帳號管理",
+      "category": "管理",
+      "sortOrder": 7
+    },
+    {
+      "id": 8,
+      "key": "admin_tools",
+      "name": "回收桶/重設/永久刪除/稽核/診斷",
+      "category": "管理",
+      "sortOrder": 8
+    }
+  ],
+  "Role": [
+    {
+      "id": 1,
+      "key": "admin",
+      "name": "管理員",
+      "isSystem": true,
+      "sortOrder": 1,
+      "createdAt": "2026-06-08T14:43:15.343Z"
+    },
+    {
+      "id": 2,
+      "key": "qc",
+      "name": "品管",
+      "isSystem": true,
+      "sortOrder": 2,
+      "createdAt": "2026-06-08T14:43:15.353Z"
+    },
+    {
+      "id": 3,
+      "key": "pm",
+      "name": "生管",
+      "isSystem": true,
+      "sortOrder": 3,
+      "createdAt": "2026-06-08T14:43:15.356Z"
+    },
+    {
+      "id": 4,
+      "key": "tech",
+      "name": "技術員",
+      "isSystem": true,
+      "sortOrder": 4,
+      "createdAt": "2026-06-08T14:43:15.360Z"
+    }
+  ],
+  "RolePermission": [
+    {
+      "roleId": 1,
+      "permissionId": 1
+    },
+    {
+      "roleId": 1,
+      "permissionId": 2
+    },
+    {
+      "roleId": 1,
+      "permissionId": 3
+    },
+    {
+      "roleId": 1,
+      "permissionId": 4
+    },
+    {
+      "roleId": 1,
+      "permissionId": 5
+    },
+    {
+      "roleId": 1,
+      "permissionId": 6
+    },
+    {
+      "roleId": 1,
+      "permissionId": 7
+    },
+    {
+      "roleId": 1,
+      "permissionId": 8
+    },
+    {
+      "roleId": 2,
+      "permissionId": 1
+    },
+    {
+      "roleId": 2,
+      "permissionId": 2
+    },
+    {
+      "roleId": 2,
+      "permissionId": 3
+    },
+    {
+      "roleId": 2,
+      "permissionId": 5
+    },
+    {
+      "roleId": 3,
+      "permissionId": 1
+    },
+    {
+      "roleId": 3,
+      "permissionId": 2
+    },
+    {
+      "roleId": 3,
+      "permissionId": 3
+    },
+    {
+      "roleId": 3,
+      "permissionId": 5
+    },
+    {
+      "roleId": 3,
+      "permissionId": 4
+    },
+    {
+      "roleId": 3,
+      "permissionId": 6
+    },
+    {
+      "roleId": 4,
+      "permissionId": 1
+    },
+    {
+      "roleId": 4,
+      "permissionId": 2
+    },
+    {
+      "roleId": 4,
+      "permissionId": 3
+    }
+  ]
+}

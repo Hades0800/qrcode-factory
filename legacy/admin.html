@@ -11,22 +11,11 @@
 <link rel="preconnect" href="https://shangkai-manu-record.zeabur.app" crossorigin>
 <link rel="dns-prefetch" href="https://shangkai-manu-record.zeabur.app">
 <style>
-  :root {
-    --brand: #d23535;
-    --brand-dark: #a82828;
-    --brand-soft: #fdf2f2;
-    --ink: #1c1c1e;
-    --text: #2c2c2e;
-    --muted: #6e6e73;
-    --border: #e5e5ea;
-    --bg: #f2f2f5;
-    --card: #ffffff;
-    --success: #2ea043;
-  }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* 設計 token 已統一至 styles.css（CIS 3.0），請勿在此重複定義 */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0;
-    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    font-family: var(--font-sans);
     background: var(--bg);
     color: var(--text);
     -webkit-font-smoothing: antialiased;
@@ -139,9 +128,9 @@
     transition: transform .08s, background .15s;
   }
   button:active { transform: scale(.98); }
-  .btn-primary { background: var(--brand); color: #fff; box-shadow: 0 2px 6px rgba(210,53,53,.2); }
+  .btn-primary { background: var(--brand-text); color: #fff; box-shadow: 0 2px 6px rgba(240,29,15,.2); }
   .btn-primary:hover { background: var(--brand-dark); }
-  .btn-secondary { background: #f2f2f5; color: var(--ink); border: 1.5px solid var(--border); }
+  .btn-secondary { background: var(--bg); color: var(--ink); border: 1.5px solid var(--border); }
   .btn-secondary:hover { background: #e8e8eb; }
   .btn-danger { background: #fff; color: var(--brand); border: 1.5px solid var(--brand); }
   .btn-danger:hover { background: var(--brand-soft); }
@@ -223,7 +212,8 @@
     <a href="index.html">生產實態紀錄</a>
     <a href="records.html">歷史實態紀錄</a>
     <a href="realtime.html">即時生產資訊</a>
-    <a href="plan-stats.html">計畫達成統計</a>
+    <a href="plan-stats.html">生產進度統計</a>
+    <a href="goal-stats.html">目標達成統計</a>
     <a href="#" id="logoutLink">登出</a>
   </div>
 </header>
@@ -310,6 +300,59 @@
   </div>
 
   <div class="card">
+    <h2>客戶名稱補登</h2>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">
+      用簡表一次補齊工單的客戶名稱：Excel 只需「製造單號」與「客戶名稱」兩欄，依工單號配對（日期等其他欄位可有可無，會被忽略）。
+      只更新客戶名稱——計畫日期、規格、生產紀錄都不會動。
+    </p>
+    <input type="file" id="custFile" accept=".xlsx,.xls" style="display:none;">
+    <button class="btn-primary btn-block" id="custPickBtn">選擇 Excel 簡表</button>
+    <div id="custFileName" style="margin-top:8px;font-size:13px;color:var(--muted);"></div>
+    <div id="custPreview" style="display:none;margin-top:12px;">
+      <div id="custStats" style="font-size:13px;margin-bottom:8px;"></div>
+      <div style="max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:8px;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead><tr style="background:var(--bg);"><th style="text-align:left;padding:6px 10px;">#</th><th style="text-align:left;padding:6px 10px;">製造單號</th><th style="text-align:left;padding:6px 10px;">客戶名稱</th></tr></thead>
+          <tbody id="custPreviewBody"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:10px;">
+        <button class="btn-primary btn-block" id="custFillBtn">確認補登</button>
+        <button class="btn-secondary btn-block" id="custCancelBtn">取消</button>
+      </div>
+    </div>
+    <div id="custResult" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card">
+    <h2>更正工單號</h2>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">
+      把打錯的工單號改成正確的——所有生產紀錄、設備參數、上傳資料都會跟著保留。
+      目標工單號若已存在（含回收桶）會擋下。
+    </p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <input type="text" id="renameFrom" placeholder="原工單號（錯的）" autocapitalize="characters" autocomplete="off" style="flex:1;min-width:150px;">
+      <span style="color:var(--muted);font-weight:700;">→</span>
+      <input type="text" id="renameTo" placeholder="新工單號（對的）" autocapitalize="characters" autocomplete="off" style="flex:1;min-width:150px;">
+      <button class="btn-primary" id="renameBtn" style="white-space:nowrap;">更正</button>
+    </div>
+    <div id="renameResult" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card">
+    <h2>修正生產完成數量</h2>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">
+      QC 輸入錯誤時用這裡更正。可修改「中斷／下班暫停」「生產規格完成」「生產完成終止」的生產完成數量（可改成 0，清空則留白），
+      也可以刪除重複或誤記的整筆紀錄。刪除是軟刪除，能從上面「回收桶」救回，每次修改都會寫入操作紀錄。
+    </p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <input type="text" id="qtyFixInput" placeholder="工單號，例：F1150629004" autocapitalize="characters" autocomplete="off" style="flex:1;min-width:180px;">
+      <button class="btn-primary" id="qtyFixBtn" style="white-space:nowrap;">載入生產紀錄</button>
+    </div>
+    <div id="qtyFixResult" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="card">
     <h2>系統工具</h2>
     <button class="btn-primary btn-block" id="migrateDatesBtn" style="margin-bottom:6px;">遷移：拆分計畫日期 / 實際開始日期</button>
     <p style="font-size:12px;color:var(--muted);margin:0 0 14px;">把舊 productionDate 拆成「計畫日期 (plannedDate)」與「實際開始日期 (actualStartDate)」。執行後即時頁、紀錄頁、製造概覽會以實際日期為準，並標出計畫日期不同處。建議只跑一次。</p>
@@ -324,6 +367,7 @@
 
 <div id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="config.js"></script>
 <script src="utils.js?v=20260522a"></script>
 <script>
@@ -607,7 +651,7 @@ function recoveryRowHtml(tab, it) {
       + '<div style="flex:1;min-width:160px;"><strong>' + escapeHtml(it.orderNo) + '</strong>'
       + '<div style="color:#888;font-size:12px;">' + escapeHtml(spec) + '</div></div>'
       + '<button class="btn-primary" data-restore="' + escapeHtml(it.orderNo) + '" style="padding:6px 12px;font-size:12px;">救回</button>'
-      + '<button data-purge="' + escapeHtml(it.orderNo) + '" style="padding:6px 12px;font-size:12px;background:#1c1c1e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
+      + '<button data-purge="' + escapeHtml(it.orderNo) + '" style="padding:6px 12px;font-size:12px;background:var(--ink);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
       + '</div>';
   }
   if (tab === 'reset') {
@@ -772,7 +816,7 @@ async function findOrderNo() {
       if (o.deletedAt) {
         action = '<div style="display:flex;gap:4px;flex-wrap:wrap;">'
           + '<button class="btn-secondary" data-restore="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;">救回</button>'
-          + '<button data-purge="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:#1c1c1e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
+          + '<button data-purge="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:var(--ink);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
           + '</div>';
       } else {
         const restoreRecBtn = softCount > 0
@@ -781,7 +825,7 @@ async function findOrderNo() {
         action = '<div style="display:flex;gap:4px;flex-wrap:wrap;">'
           + restoreRecBtn
           + '<button class="btn-danger" data-finddel="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;">刪除</button>'
-          + '<button data-purge="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:#1c1c1e;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
+          + '<button data-purge="' + escapeHtml(o.orderNo) + '" style="padding:6px 10px;font-size:12px;background:var(--ink);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;" title="從 DB 永久抹除，無法救回">永久刪除</button>'
           + '</div>';
       }
       html += '<tr>'
@@ -807,7 +851,7 @@ async function findOrderNo() {
       let rowStatus;
       if (u.status === 'error') {
         const msg = String(u.errorMsg || '').slice(0, 200);
-        rowStatus = '<span style="color:var(--brand);font-size:11px;background:#fdf2f2;padding:2px 6px;border-radius:4px;" title="' + escapeHtml(msg) + '">失敗</span>';
+        rowStatus = '<span style="color:var(--brand);font-size:11px;background:var(--brand-soft);padding:2px 6px;border-radius:4px;" title="' + escapeHtml(msg) + '">失敗</span>';
       } else if (u.status === 'created') {
         rowStatus = '<span style="color:var(--success);font-size:11px;">新建</span>';
       } else if (u.status === 'updated') {
@@ -908,6 +952,226 @@ document.querySelectorAll('.rec-tab').forEach(tabEl => {
     renderRecovery();
   };
 });
+
+// ── 客戶名稱補登：簡表（製造單號＋客戶名稱）一次補齊 ──
+let custRows = [];
+const CUST_ORDER_KEYS = ['製造單號', '工單號', '工單編號', '工單'];
+const CUST_NAME_KEYS = ['客戶名稱', '客戶', '客戶名', '客戶簡稱', '客戶全名'];
+const custNormHeader = s => String(s || '').trim().replace(/[\s　()（）\-_－\/／:：]/g, '').toLowerCase();
+
+$('custPickBtn').onclick = () => $('custFile').click();
+$('custFile').onchange = e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { toast('檔案過大（上限 5MB）', 'error'); return; }
+  if (!/\.(xlsx|xls)$/i.test(file.name)) { toast('請選擇 .xlsx 或 .xls 檔', 'error'); return; }
+  $('custFileName').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const wb = XLSX.read(ev.target.result, { type: 'array', cellDates: true });
+      const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '', raw: true });
+      parseCustRows(json);
+    } catch (err) { toast('Excel 解析失敗：' + err.message, 'error'); }
+  };
+  reader.readAsArrayBuffer(file);
+};
+
+function parseCustRows(json) {
+  if (!json.length) { toast('Excel 沒有資料', 'error'); return; }
+  const headers = Object.keys(json[0]);
+  const orderKey = headers.find(h => CUST_ORDER_KEYS.map(custNormHeader).includes(custNormHeader(h)));
+  const nameKey = headers.find(h => CUST_NAME_KEYS.map(custNormHeader).includes(custNormHeader(h)));
+  if (!orderKey) { toast('找不到「製造單號」欄位，請確認第一列表頭', 'error'); return; }
+  if (!nameKey) { toast('找不到「客戶名稱」欄位，請確認第一列表頭', 'error'); return; }
+  custRows = json
+    .map(r => ({
+      orderNo: String(r[orderKey] || '').trim().toUpperCase(),
+      customerName: String(r[nameKey] || '').trim(),
+    }))
+    .filter(r => r.orderNo || r.customerName)
+    .map(r => ({ ...r, _valid: /^[A-Z]\d{10}$/.test(r.orderNo) && !!r.customerName }));
+  if (!custRows.length) { toast('Excel 沒有可用的資料列', 'error'); return; }
+  const valid = custRows.filter(r => r._valid).length;
+  const invalid = custRows.length - valid;
+  $('custResult').innerHTML = '';
+  $('custPreview').style.display = 'block';
+  $('custStats').innerHTML = `共 <strong>${custRows.length}</strong> 筆，有效 <strong>${valid}</strong> 筆` +
+    (invalid ? `，<span style="color:var(--brand);">略過 ${invalid} 筆（工單號格式錯誤或客戶名稱空白）</span>` : '');
+  $('custPreviewBody').innerHTML = custRows.map((r, i) =>
+    `<tr style="border-top:1px solid var(--border);${r._valid ? '' : 'opacity:.45;'}">` +
+    `<td style="padding:5px 10px;">${i + 1}</td>` +
+    `<td style="padding:5px 10px;">${escapeHtml(r.orderNo) || '—'}</td>` +
+    `<td style="padding:5px 10px;">${escapeHtml(r.customerName) || '—'}</td></tr>`
+  ).join('');
+}
+
+$('custCancelBtn').onclick = () => {
+  custRows = [];
+  $('custPreview').style.display = 'none';
+  $('custFileName').textContent = '';
+  $('custFile').value = '';
+};
+
+$('custFillBtn').onclick = async () => {
+  const clean = custRows.filter(r => r._valid).map(r => ({ orderNo: r.orderNo, customerName: r.customerName }));
+  if (!clean.length) { toast('沒有有效資料', 'error'); return; }
+  if (!confirm('確定補登 ' + clean.length + ' 筆客戶名稱？只更新客戶欄位，其他資料不會動。')) return;
+  $('custFillBtn').disabled = true;
+  const r = await api('/api/orders/bulk-fill-customer', { method: 'POST', body: { rows: clean } });
+  $('custFillBtn').disabled = false;
+  if (!r.ok) { toast(r.error || '補登失敗', 'error'); return; }
+  const d = r.data;
+  toast('客戶名稱補登完成', 'success');
+  $('custPreview').style.display = 'none';
+  $('custResult').innerHTML =
+    `<div style="font-size:13px;line-height:1.9;">` +
+    `<span style="color:var(--success);font-weight:600;">✓ 補上 ${d.filled} 筆、覆蓋 ${d.overwritten} 筆、原本相同 ${d.unchanged} 筆</span>` +
+    (d.notFound.length ? `<div style="color:var(--brand);">⚠ 找不到工單 ${d.notFound.length} 筆：${d.notFound.map(escapeHtml).join('、')}</div>` : '') +
+    (d.errors.length ? `<div style="color:var(--brand);">⚠ 錯誤 ${d.errors.length} 筆：${d.errors.map(escapeHtml).join('、')}</div>` : '') +
+    `</div>`;
+};
+
+// ── 更正工單號 ──
+// ===== 修正生產完成數量（QC 輸入錯誤更正）=====
+let qtyFixOrderNo = '';
+
+function qtyFixTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return '—';
+  const p = n => String(n).padStart(2, '0');
+  return p(d.getMonth()+1) + '/' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+// 數量輸入 + 儲存/刪除按鈕（共用列樣式）
+// key 格式：'se-<id>'（生產規格完成）/ 'pe-<id>'（暫停）/ 's11'（生產完成終止）
+function qtyFixRow(label, sub, qty, key, canDelete) {
+  return '<tr>'
+    + '<td style="padding:6px 8px;vertical-align:top;">'
+      + '<div style="font-weight:600;">' + escapeHtml(label) + '</div>'
+      + (sub ? '<div style="font-size:11px;color:var(--muted);margin-top:2px;">' + escapeHtml(sub) + '</div>' : '')
+    + '</td>'
+    + '<td style="padding:6px 8px;white-space:nowrap;">'
+      + '<input type="number" min="0" step="1" value="' + (qty == null ? '' : qty) + '"'
+        + ' data-qtyinput="' + key + '" style="width:90px;padding:5px 7px;border:1px solid var(--border);border-radius:6px;">'
+    + '</td>'
+    + '<td style="padding:6px 8px;white-space:nowrap;">'
+      + '<button data-qtysave="' + key + '" style="padding:5px 12px;font-size:12px;background:var(--brand);color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;">儲存</button>'
+      + (canDelete ? ' <button data-qtydel="' + key + '" style="padding:5px 12px;font-size:12px;background:#f0ad4e;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;">刪除整筆</button>' : '')
+    + '</td>'
+    + '</tr>';
+}
+
+async function loadQtyFix() {
+  const no = $('qtyFixInput').value.trim().toUpperCase();
+  if (!no) { toast('請輸入工單號', 'error'); return; }
+  $('qtyFixBtn').disabled = true;
+  const r = await api('/api/admin/order-records/' + encodeURIComponent(no));
+  $('qtyFixBtn').disabled = false;
+  if (!r.ok) {
+    $('qtyFixResult').innerHTML = '<span style="color:var(--brand);font-weight:600;">✗ ' + escapeHtml(r.error || '查詢失敗') + '</span>';
+    return;
+  }
+  const d = r.data;
+  qtyFixOrderNo = d.orderNo;
+
+  let html = '<div style="font-size:13px;margin-bottom:8px;">'
+    + '<strong>' + escapeHtml(d.orderNo) + '</strong>'
+    + (d.machineNo ? ' <span style="color:var(--muted);">' + escapeHtml(d.machineNo) + '</span>' : '')
+    + (d.productSpec ? '<div style="font-size:11px;color:var(--muted);margin-top:2px;">' + escapeHtml(d.productSpec) + '</div>' : '')
+    + '</div>';
+
+  const rows = [];
+  // 生產規格完成（step30）
+  (d.specEntries || []).forEach(e => {
+    rows.push(qtyFixRow('生產規格完成', qtyFixTime(e.recordedAt) + (e.note ? '｜' + e.note : ''),
+      e.qcActualQty, 'se-' + e.id, true));
+  });
+  // 暫停事件（中斷 / 下班 / 中午休息…）
+  (d.pauses || []).forEach(e => {
+    const kind = e.type === '13' ? '異常停止' : '正常暫停';
+    rows.push(qtyFixRow(kind + (e.note ? '（' + e.note + '）' : ''),
+      qtyFixTime(e.startAt) + ' → ' + qtyFixTime(e.endAt),
+      e.qcActualQty, 'pe-' + e.id, true));
+  });
+  // 生產完成終止（step11）—— 只有數量可改，不能刪
+  if (d.step11At) {
+    rows.push(qtyFixRow('生產完成終止', qtyFixTime(d.step11At), d.step11QcActualQty, 's11', false));
+  }
+
+  if (rows.length === 0) {
+    html += '<div style="color:var(--muted);padding:8px 0;">這張工單目前沒有可修正的生產數量紀錄</div>';
+  } else {
+    html += '<div style="overflow-x:auto;"><table style="min-width:520px;border-collapse:collapse;">'
+      + '<thead><tr>'
+      + '<th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--muted);">生產事件</th>'
+      + '<th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--muted);">生產完成數量</th>'
+      + '<th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--muted);">操作</th>'
+      + '</tr></thead><tbody>' + rows.join('') + '</tbody></table></div>'
+      + '<p style="font-size:11px;color:var(--muted);margin:8px 0 0;">數量留白＝清空（不計數）。改成 0 代表該段實際沒有產出。</p>';
+  }
+  $('qtyFixResult').innerHTML = html;
+
+  // key → 對應端點
+  const urlFor = key => {
+    if (key === 's11') return '/api/admin/orders/' + encodeURIComponent(qtyFixOrderNo) + '/step11-qty';
+    const id = key.slice(3);
+    return key.startsWith('se-') ? '/api/admin/step-entries/' + id : '/api/admin/pause-events/' + id;
+  };
+  const labelFor = key => key === 's11' ? '生產完成終止數量'
+    : key.startsWith('se-') ? '生產規格完成數量' : '暫停生產數量';
+
+  $('qtyFixResult').querySelectorAll('[data-qtysave]').forEach(b => {
+    b.onclick = async () => {
+      const key = b.dataset.qtysave;
+      const input = $('qtyFixResult').querySelector('[data-qtyinput="' + key + '"]');
+      const raw = (input.value || '').trim();
+      if (raw !== '' && !/^\d+$/.test(raw)) { toast('數量必須是 0 以上的整數', 'error'); return; }
+      b.disabled = true;
+      const r2 = await api(urlFor(key), { method: 'PATCH', body: { qcActualQty: raw === '' ? null : Number(raw) } });
+      b.disabled = false;
+      if (!r2.ok) { toast(r2.error || '修改失敗', 'error'); return; }
+      toast(labelFor(key) + '已更新為 ' + (raw === '' ? '（空白）' : raw), 'success');
+      loadQtyFix();
+    };
+  });
+  $('qtyFixResult').querySelectorAll('[data-qtydel]').forEach(b => {
+    b.onclick = async () => {
+      const key = b.dataset.qtydel;
+      const what = key.startsWith('se-') ? '「生產規格完成」' : '暫停';
+      if (!confirm('確定刪除這筆' + what + '紀錄？\n\n這是軟刪除，可從上面「回收桶」救回。')) return;
+      b.disabled = true;
+      const r2 = await api(urlFor(key), { method: 'DELETE' });
+      b.disabled = false;
+      if (!r2.ok) { toast(r2.error || '刪除失敗', 'error'); return; }
+      toast('已刪除該筆紀錄', 'success');
+      loadQtyFix();
+    };
+  });
+}
+
+$('qtyFixBtn').onclick = loadQtyFix;
+$('qtyFixInput').onkeydown = e => { if (e.key === 'Enter') loadQtyFix(); };
+
+$('renameBtn').onclick = async () => {
+  const from = $('renameFrom').value.trim().toUpperCase();
+  const to = $('renameTo').value.trim().toUpperCase();
+  if (!from || !to) { toast('請填原工單號與新工單號', 'error'); return; }
+  if (!/^[A-Z]\d{10}$/.test(from) || !/^[A-Z]\d{10}$/.test(to)) { toast('工單號格式錯誤（1 英文字母 + 10 數字）', 'error'); return; }
+  if (from === to) { toast('新舊工單號相同', 'error'); return; }
+  if (!confirm('確定把工單號「' + from + '」更正為「' + to + '」？\n\n生產紀錄、設備參數、上傳資料都會保留。')) return;
+  $('renameBtn').disabled = true;
+  const r = await api('/api/orders/rename', { method: 'POST', body: { fromOrderNo: from, toOrderNo: to } });
+  $('renameBtn').disabled = false;
+  if (!r.ok) {
+    $('renameResult').innerHTML = '<span style="color:var(--brand);font-weight:600;">✗ ' + escapeHtml(r.error || '更正失敗') + '</span>';
+    return;
+  }
+  toast('工單號已更正', 'success');
+  $('renameResult').innerHTML = '<span style="color:var(--success);font-weight:600;">✓ ' + escapeHtml(r.data.from) + ' → ' + escapeHtml(r.data.to) + ' 已更正（保留所有紀錄）</span>';
+  $('renameFrom').value = ''; $('renameTo').value = '';
+};
 
 if (API_URL.startsWith('PASTE_')) {
   toast('尚未設定 API_URL，請先部署後端', 'error');

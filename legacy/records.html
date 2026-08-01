@@ -11,22 +11,11 @@
 <link rel="preconnect" href="https://shangkai-manu-record.zeabur.app" crossorigin>
 <link rel="dns-prefetch" href="https://shangkai-manu-record.zeabur.app">
 <style>
-  :root {
-    --brand: #d23535;
-    --brand-dark: #a82828;
-    --brand-soft: #fdf2f2;
-    --ink: #1c1c1e;
-    --text: #2c2c2e;
-    --muted: #6e6e73;
-    --border: #e5e5ea;
-    --bg: #f2f2f5;
-    --card: #ffffff;
-    --success: #2ea043;
-  }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* 設計 token 已統一至 styles.css（CIS 3.0），請勿在此重複定義 */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0;
-    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    font-family: var(--font-sans);
     background: var(--bg);
     zoom: 1.15;
     color: var(--text);
@@ -117,9 +106,9 @@
     transition: transform .08s, background .15s;
   }
   button:active { transform: scale(.98); }
-  .btn-primary { background: var(--brand); color: #fff; box-shadow: 0 2px 6px rgba(210,53,53,.2); }
+  .btn-primary { background: var(--brand-text); color: #fff; box-shadow: 0 2px 6px rgba(240,29,15,.2); }
   .btn-primary:hover { background: var(--brand-dark); }
-  .btn-secondary { background: #f2f2f5; color: var(--ink); border: 1.5px solid var(--border); }
+  .btn-secondary { background: var(--bg); color: var(--ink); border: 1.5px solid var(--border); }
   .btn-secondary:hover { background: #e8e8eb; }
 
   .stats {
@@ -196,6 +185,7 @@
   }
   .rec-card .rc-badge.done { background: var(--success); color: #fff; }
   .rec-card .rc-badge.active { background: var(--brand-soft); color: var(--brand); }
+  .rec-card .rc-customer { font-size: 13px; font-weight: 600; color: var(--ink); margin-top: 8px; word-break: break-word; }
   .rec-card .rc-tags {
     display: flex;
     flex-wrap: wrap;
@@ -293,6 +283,10 @@
     background: linear-gradient(to bottom, #fff8e8 0%, transparent 100%);
   }
   .rc-timeline li.spec-change::before { display: none; }
+  /* QC 數量獨立列：更換規格/下班 → 事件上方（加大間距）；完成 → 事件下方 */
+  .rc-timeline li.qc-row { padding: 2px 0 2px 28px; }
+  .rc-timeline li.qc-above { margin-top: 14px; }
+  .rc-timeline li.qc-below { margin-bottom: 12px; }
   .rc-card-pause {
     display: flex; gap: 16px; margin-top: 10px; font-size: 13px; color: var(--muted);
     padding-top: 10px; border-top: 1px solid var(--border);
@@ -433,6 +427,11 @@
   #toast.show { display: block; }
   #toast.error { background: var(--brand); }
   #toast.success { background: var(--success); }
+
+  /* ===== 手機版：設備參數展開表（含新「送料」欄 4 欄）縮緊以塞得下 ===== */
+  @media (max-width: 600px) {
+    .rc-detail table th, .rc-detail table td { padding: 4px 5px !important; font-size: 11px !important; }
+  }
 </style>
 </head>
 <body>
@@ -450,7 +449,8 @@
     <a href="index.html">生產實態紀錄</a>
     <a href="records.html" class="nav-active">歷史實態紀錄</a>
     <a href="realtime.html">即時生產資訊</a>
-    <a href="plan-stats.html">計畫達成統計</a>
+    <a href="plan-stats.html">生產進度統計</a>
+    <a href="goal-stats.html">目標達成統計</a>
     <a href="upload.html" id="uploadLink" style="display:none;">📤 上傳</a>
     <a href="admin.html" id="adminLink" style="display:none;">⚙ 管理</a>
     <div class="menu-sep"></div>
@@ -519,6 +519,16 @@
 <script>
 const me = getMe();
 let allOrders = [];
+// @N（過濾網多機台）工單的客戶掛在「@ 之前的基礎單號」；客戶空白時自動從基礎單號帶
+function resolveCustomerName(o) {
+  if (o.customerName) return o.customerName;
+  const at = (o.orderNo || '').indexOf('@');
+  if (at > 0) {
+    const base = allOrders.find(x => x.orderNo === o.orderNo.slice(0, at));
+    if (base && base.customerName) return base.customerName;
+  }
+  return '';
+}
 
 if (!me) {
   location.href = 'index.html';
@@ -648,16 +658,8 @@ function getFirstActivityTime(o) {
 }
 
 function sortByProductionOrder(list) {
-  // 依實際生產順位：第一次有動作的時間，由早到晚
-  // 尚未開始的排到最後（依 updatedAt 由新到舊）
-  return list.slice().sort((a, b) => {
-    const aFirst = getFirstActivityTime(a);
-    const bFirst = getFirstActivityTime(b);
-    if (aFirst === null && bFirst === null) return new Date(b.updatedAt) - new Date(a.updatedAt);
-    if (aFirst === null) return 1;
-    if (bFirst === null) return -1;
-    return aFirst - bFirst;
-  });
+  // 依生管上傳順序：計畫日期 → 計畫序號(planSeq) → 工單號（共用 utils.js 的 scheduleCmp）
+  return list.slice().sort(scheduleCmp);
 }
 
 function render() {
@@ -713,18 +715,17 @@ function render() {
         if (s.key === 'step11At' && o.step11Note) {
           label += '（' + escapeHtml(o.step11Note) + '）';
         }
-        if (s.key === 'step11At' && o.step11QcActualQty != null) {
-          label += ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${o.step11QcActualQty}</span>`;
-        }
-        allItems.push({ time: new Date(o[s.key]), label, style: 'done' });
+        // 完成的 QC 數量 → 顯示在本事件「下方」（qcBelow）
+        const qcBelow = (s.key === 'step11At' && o.step11QcActualQty != null) ? o.step11QcActualQty : null;
+        allItems.push({ time: new Date(o[s.key]), label, style: 'done', qcBelow });
       }
     });
     // 新日誌 stepEntries
     (o.stepEntries || []).forEach(e => {
       if (e.stepNo === '30') {
         const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
-        const qcTag = (e.qcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span>` : '';
-        allItems.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 更換規格：' + escapeHtml(e.note || '') + qcTag + manual, style: 'spec-change' });
+        // 更換規格的數量屬於剛結束那段 → 顯示在本事件「上方」（qcAbove）
+        allItems.push({ time: new Date(e.recordedAt), label: icon('clipboard', 13) + ' 生產規格完成：' + escapeHtml(e.note || '') + manual, style: 'spec-change', qcAbove: (e.qcActualQty != null ? e.qcActualQty : null) });
         return;
       }
       const manual = e.isManual ? ' <span style="background:#f0ad4e;color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;">補登</span>' : '';
@@ -741,8 +742,8 @@ function render() {
     // 暫停事件
     ((o.pause12 && o.pause12.history) || []).forEach((e, i) => {
       const isLunch = (e.note || '').includes('中午') || (e.note || '').includes('午休') || (e.note || '').includes('午餐');
-      const qcTag = (e.qcActualQty != null) ? ` <span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">數量：${e.qcActualQty}</span>` : '';
-      allItems.push({ time: new Date(e.startAt), label: icon('pause', 13) + ' 暫停' + (e.note ? '（'+escapeHtml(e.note)+'）' : '') + qcTag, style: 'pause' });
+      // 下班／隔日生產的當日數量 → 顯示在暫停事件「下方」（隔日分隔線之前）
+      allItems.push({ time: new Date(e.startAt), label: icon('pause', 13) + ' 暫停' + (e.note ? '（'+escapeHtml(e.note)+'）' : ''), style: 'pause', qcBelow: (e.qcActualQty != null ? e.qcActualQty : null) });
       if (e.endAt) {
         const dur = e.duration ? fmtDur(e.duration) : '';
         const resumeLabel = isLunch ? icon('play', 13) + ' 午後恢復生產' : icon('play', 13) + ' 恢復生產' + (dur ? '（暫停 ' + dur + '）' : '');
@@ -802,11 +803,15 @@ function render() {
           if (it.style === 'resume') displayLabel = icon('play', 13) + ' 隔日恢復生產';
         }
 
-        return dayDivider + `<li class="${cls}">
+        // QC 數量：更換規格/下班 → 事件上方（跨日時在隔日分隔線之前）；完成 → 事件下方
+        const qcBadge = q => `<span style="background:#1f6feb;color:#fff;font-size:11px;padding:3px 12px;border-radius:8px;font-weight:700;">生產完成數量：${q}</span>`;
+        const qcAboveRow = (it.qcAbove != null) ? `<li class="qc-row qc-above">${qcBadge(it.qcAbove)}</li>` : '';
+        const qcBelowRow = (it.qcBelow != null) ? `<li class="qc-row qc-below">${qcBadge(it.qcBelow)}</li>` : '';
+        return qcAboveRow + dayDivider + `<li class="${cls}">
           <div class="tl-dot"></div>
           <div class="tl-time">${dateStr}<span style="font-size:10px;color:var(--muted);font-weight:500;">${diffStr}</span></div>
           <div class="tl-label">${displayLabel}</div>
-        </li>`;
+        </li>` + qcBelowRow;
       }).join('');
 
     // Detail (工單資訊 + 暫停明細) — 多規格卡片區域動態載入
@@ -846,13 +851,14 @@ function render() {
           </div>
           ${o.changeScope ? `<div class="rc-tags"><span class="rc-pill scope">${escapeHtml(scopeLabel(o.changeScope))}</span></div>` : ''}
         </div>
+        <div class="rc-customer">🏢 客戶：${escapeHtml(resolveCustomerName(o) || '（未填客戶名稱）')}</div>
         <div class="rc-meta" style="margin-top:10px;">
           <span>機台 <strong>${escapeHtml(o.machineNo || '—')}</strong>${o.plannedMachineNo && o.plannedMachineNo !== o.machineNo ? `<span style="color:#a98e44;font-size:11px;margin-left:4px;">（計畫 ${escapeHtml(o.plannedMachineNo)}）</span>` : ''}</span>
           <span>組長 <strong>${escapeHtml(o.leaderName || '—')}</strong></span>
           <span>日期 ${o.productionDate ? String(o.productionDate).slice(0,10) : '—'}${o.actualStartDate && o.plannedDate && String(o.actualStartDate).slice(0,10) !== String(o.plannedDate).slice(0,10) ? `<span style="color:#a98e44;font-size:11px;margin-left:4px;">（計畫 ${escapeHtml(String(o.plannedDate).slice(0,10))}）</span>` : ''}</span>
           ${o.specType ? `<span>規格 <strong style="display:inline-flex;align-items:center;gap:4px;">${icon(o.specType === 'new' ? 'sparkles' : 'box', 13)}${o.specType === 'new' ? escapeHtml(formatNewSpecLabel(o.newSpecAspects)) : '量產規格'}</strong></span>` : ''}
           ${o.materialType ? `<span>原料 <strong>${o.materialType === 'coil' ? '捲料' : '板料'}</strong></span>` : ''}
-          ${(o.auxEquipment || o.auxEquipmentCustom) ? `<span>輔助設備 <strong>${escapeHtml(auxEquipmentLabel(o.auxEquipment, o.auxEquipmentCustom))}</strong></span>` : ''}
+          ${(o.auxEquipment || o.auxEquipmentCustom) ? `<span>輔助設備 <strong>${escapeHtml(auxEquipmentLabel(o.auxEquipment, o.auxEquipmentCustom, o.auxEquipmentNos))}</strong></span>` : ''}
         </div>
         <div class="rc-expand" style="margin-top:10px;cursor:pointer;display:flex;align-items:center;gap:6px;width:fit-content;" onclick="toggleDetail(${idx})"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>展開工單明細</div>
         <div class="rc-detail" id="detail-${idx}">
@@ -871,27 +877,61 @@ function render() {
   });
 }
 
-// 設備參數欄位顯示對應
+// 設備參數欄位顯示對應（生產規格 / SPM / 刀數 改用多規格小表）
 const EP_FIELDS = [
-  ['productSpecAttr', '生產規格'],
   ['paramFileName', '設備參數檔名'],
   ['paramFileAttr', '參數檔案屬性'],
   ['moldSpec', '模具規格'],
-  ['machineSPM', '機器SPM'],
-  ['bladeCount', '生產刀數'],
-  ['feedSetting', '送料設定'],
   ['cutterStroke', '大刀座位置'],
   ['strokeUpdateFreq', '位置更新頻度'],
 ];
 
+// 解析多規格（原始參數）；舊資料 fallback：單值欄位組一列
+function rcParseSpecRows(ep) {
+  let arr = [];
+  if (ep && ep.specRows) { try { arr = JSON.parse(ep.specRows) || []; } catch (e) { arr = []; } }
+  if (!Array.isArray(arr)) arr = [];
+  if (arr.length === 0 && ep) {
+    const spec = ep.productSpecAttr, spm = ep.machineSPM, blades = ep.bladeCount;
+    if ((spec != null && spec !== '') || spm != null || blades != null) {
+      arr = [{ spec: spec || '', spm, blades }];
+    }
+  }
+  // 舊資料相容：送料設定原為單一欄位（如「20，25，16」），依序帶入各規格列
+  const feedRaw = ep && ep.feedSetting;
+  if (feedRaw && arr.length && arr.some(r => r.feed == null || r.feed === '')) {
+    const parts = String(feedRaw).split(/[,，、\s]+/).filter(s => s !== '');
+    arr.forEach((r, i) => { if ((r.feed == null || r.feed === '') && parts[i] != null) r.feed = parts[i]; });
+  }
+  return arr;
+}
+
 function renderEquipmentParam(ep) {
   if (!ep) return '<div style="padding:10px;color:var(--muted);font-size:13px;text-align:center;">尚未上傳設備參數</div>';
+  const specs = rcParseSpecRows(ep);
+  let specHtml = '';
+  if (specs.length) {
+    const dash = '<span style="color:var(--muted);">—</span>';
+    const srows = specs.map(s => `<tr>
+      <td style="padding:4px 8px;font-size:12px;font-weight:600;">${s.spec ? escapeHtml(String(s.spec)) : dash}</td>
+      <td style="padding:4px 8px;font-size:12px;text-align:center;">${s.spm == null || s.spm === '' ? dash : escapeHtml(String(s.spm))}</td>
+      <td style="padding:4px 8px;font-size:12px;text-align:center;">${s.blades == null || s.blades === '' ? dash : escapeHtml(String(s.blades))}</td>
+      <td style="padding:4px 8px;font-size:12px;text-align:center;">${s.feed == null || s.feed === '' ? dash : escapeHtml(String(s.feed))}</td>
+    </tr>`).join('');
+    specHtml = `<table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:8px;">
+      <tr style="color:var(--muted);font-size:11px;border-bottom:1px solid var(--border);">
+        <th style="text-align:left;padding:4px 8px;font-weight:600;">生產規格</th>
+        <th style="padding:4px 8px;font-weight:600;">機器SPM</th>
+        <th style="padding:4px 8px;font-weight:600;">生產刀數</th>
+        <th style="padding:4px 8px;font-weight:600;">送料</th>
+      </tr>${srows}</table>`;
+  }
   const rows = EP_FIELDS.map(([k, label]) => {
     const v = ep[k];
     const val = (v == null || v === '') ? '<span style="color:var(--muted);">—</span>' : escapeHtml(String(v));
     return `<tr><td style="padding:4px 8px;color:var(--muted);font-size:11px;width:35%;">${label}</td><td style="padding:4px 8px;font-size:13px;font-weight:600;">${val}</td></tr>`;
   }).join('');
-  return `<table style="width:100%;font-size:12px;border-collapse:collapse;">${rows}</table>`;
+  return specHtml + `<table style="width:100%;font-size:12px;border-collapse:collapse;">${rows}</table>`;
 }
 
 async function toggleEquipment(idx, orderNo) {
@@ -929,9 +969,13 @@ async function toggleDetail(idx) {
   const r = await api('/api/orders/' + encodeURIComponent(o.orderNo) + '/upload-rows');
   const rows = (r.ok && r.data.rows) ? r.data.rows : [];
 
+  // 同規格多台（過濾網等）→ 合併重複規格，只留不同規格
+  const specKey = rw => [rw.productSpec || '', rw.moldSpec || '', rw.material || ''].join('|');
+  const seenSpec = new Set();
+  const uniqRows = rows.filter(rw => { const k = specKey(rw); if (seenSpec.has(k)) return false; seenSpec.add(k); return true; });
   // 如果沒有上傳列，用 order 本身的資料顯示一張卡片
-  const specs = rows.length > 0 ? rows : [{
-    productSpec: o.productSpec, moldSpec: o.moldSpec, material: o.material,
+  const specs = uniqRows.length > 0 ? uniqRows : [{
+    productSpec: o.productSpec, manuSpec: o.manuSpec, moldSpec: o.moldSpec, material: o.material,
     dispatchQty: o.dispatchQty, bladeCount: o.bladeCount, machineSPM: o.machineSPM,
     unitWeight: o.unitWeight, totalWeight: o.totalWeight,
   }];
@@ -945,6 +989,7 @@ async function toggleDetail(idx) {
       <div class="spec-cards-wrap"><div class="spec-cards">
         ${dateCard}
         <div class="spec-card wide"><div class="sc-label">🔧 生產規格</div><div class="sc-value">${s.productSpec ? escapeHtml(s.productSpec) : '<span class="info-empty">—</span>'}</div></div>
+        <div class="spec-card wide"><div class="sc-label">📐 製造規格</div><div class="sc-value">${s.manuSpec ? escapeHtml(s.manuSpec) : '<span class="info-empty">—</span>'}</div></div>
         <div class="spec-card"><div class="sc-label">⚙ 模具</div><div class="sc-value">${s.moldSpec ? escapeHtml(s.moldSpec) : '<span class="info-empty">—</span>'}</div></div>
         <div class="spec-card"><div class="sc-label" style="display:inline-flex;align-items:center;gap:4px;">${icon('box', 12)}領料</div><div class="sc-value">${s.material ? escapeHtml(s.material) : '<span class="info-empty">—</span>'}</div></div>
       </div></div>
@@ -960,6 +1005,7 @@ async function toggleDetail(idx) {
     const buildCard = (s, i) => {
       const fields = [
         { label: '生產規格', value: s.productSpec, bold: true },
+        { label: '製造規格', value: s.manuSpec, bold: true },
         { label: '模具', value: s.moldSpec },
         { label: '領料', value: s.material },
         { label: '派工數', value: s.dispatchQty, unit: '片' },
@@ -1082,7 +1128,7 @@ $('exportBtn').onclick = () => {
   const filtered = applyFilters(allOrders);
   if (filtered.length === 0) { toast('沒有資料可匯出', 'error'); return; }
   const headers = [
-    '工單號','生產日期','機台','生產規格','模具','領料','數量','SPM','單重','總重量','刀數',
+    '工單號','生產日期','機台','生產規格','製造規格','客戶名稱','模具','領料','數量','SPM','單重','總重量','刀數',
     '規格類型','原料類型',
     '小組長',
     '21.設備啓動','22.準備完成','23.無工令',
@@ -1106,7 +1152,7 @@ $('exportBtn').onclick = () => {
   }
   const rows = filtered.map(o => [
     o.orderNo, o.productionDate ? String(o.productionDate).slice(0,10) : '',
-    o.machineNo, o.productSpec || '', o.moldSpec || '', o.material || '',
+    o.machineNo, o.productSpec || '', o.manuSpec || '', o.customerName || '', o.moldSpec || '', o.material || '',
     o.dispatchQty || '', o.machineSPM || '', o.unitWeight || '', o.totalWeight || '', o.bladeCount || '',
     (o.specType === 'new'
       ? formatNewSpecLabel(o.newSpecAspects)
@@ -1166,8 +1212,8 @@ function buildSummaryGroups(from, to) {
     });
     Object.keys(byMachine).sort().forEach(m => {
       const t = MACHINE_TARGETS[m] || { workMinutes: 0, prepMinutes: 0 };
-      const orderRows = byMachine[m].map(o => ({ orderNo: o.orderNo, isCrossDay: isCrossDayOrder(o, ymd), ...computeOrderPhasesForDay(o, ymd) }));
-      // 隔日生產的工單排到最前面，其他維持原順序
+      const orderRows = byMachine[m].slice().sort(scheduleCmp).map(o => ({ orderNo: o.orderNo, isCrossDay: isCrossDayOrder(o, ymd), ...computeOrderPhasesForDay(o, ymd) }));
+      // 先照生管上傳順序，再把隔日生產的排到最前面（穩定排序：同組維持上傳順序）
       orderRows.sort((a, b) => (a.isCrossDay === b.isCrossDay) ? 0 : (a.isCrossDay ? -1 : 1));
       const sumPrep = orderRows.reduce((s, r) => s + r.prepSec, 0);
       const sumProd = orderRows.reduce((s, r) => s + r.prodSec, 0);

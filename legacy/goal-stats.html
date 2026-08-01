@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<title>上鎧鋼鐵 - 目標達成統計</title>
+<link rel="icon" href="logo.jpg">
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* 設計 token 已統一至 styles.css（CIS 3.0），請勿在此重複定義 */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; font-family: var(--font-sans);
+    background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased;
+  }
+  header {
+    background: #fff; border-bottom: 1px solid var(--border); padding: 12px 16px;
+    display: flex; justify-content: space-between; align-items: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,.04); position: relative; z-index: 10;
+  }
+  header .brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
+  header .brand img { height: 30px; width: auto; flex-shrink: 0; }
+  header .brand-text { border-left: 2px solid var(--border); padding-left: 10px; line-height: 1.2; min-width: 0; flex: 1; }
+  header .brand-text .title { font-size: 13px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header .brand-text .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .menu-toggle {
+    background: none; border: none; font-size: 22px; color: var(--ink);
+    cursor: pointer; padding: 6px 10px; border-radius: 8px; min-height: 36px;
+    display: flex; align-items: center; flex-shrink: 0;
+  }
+  .dropdown-menu {
+    display: none; position: fixed; top: 56px; right: 8px;
+    background: #fff; border-radius: 12px; min-width: 170px; z-index: 999; padding: 6px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.12), 0 0 0 1px rgba(0,0,0,.04);
+  }
+  .dropdown-menu.show { display: block; }
+  .dropdown-menu a {
+    display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+    font-size: 15px; font-weight: 600; color: var(--text); text-decoration: none; border-radius: 8px;
+  }
+  .dropdown-menu a:hover { background: var(--bg); }
+  .dropdown-menu a.nav-active { color: var(--brand); background: var(--brand-soft); }
+  .dropdown-menu .menu-sep { height: 1px; background: var(--border); margin: 4px 8px; }
+  .dropdown-menu a.menu-logout { color: var(--muted); }
+
+  .container { padding: 16px; max-width: 100%; margin: 0 auto; }
+  .card {
+    background: var(--card); border-radius: 14px; padding: 16px; margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.02);
+  }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+  .toolbar .field { display: flex; flex-direction: column; }
+  .toolbar label { font-size: 11px; color: var(--muted); margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+  .toolbar input, .toolbar select { padding: 8px 10px; font-size: 14px; border: 1.5px solid var(--border); border-radius: 8px; background: #fff; color: var(--ink); }
+  button { appearance: none; border: none; border-radius: 8px; font-size: 14px; padding: 9px 14px; cursor: pointer; font-weight: 600; font-family: inherit; transition: transform .08s, background .15s; }
+  button:active { transform: scale(.98); }
+  .btn-secondary { background: var(--bg); color: var(--ink); border: 1.5px solid var(--border); }
+  .btn-secondary:hover { background: #e8e8eb; }
+
+  .gs-title { font-size: 20px; font-weight: 800; color: var(--ink); margin: 0 0 4px; }
+  .gs-note { font-size: 12px; color: var(--muted); margin-bottom: 14px; line-height: 1.6; }
+
+  /* 統計表 */
+  .gs-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table.gs { border-collapse: collapse; font-size: 13px; white-space: nowrap; }
+  table.gs th, table.gs td { border: 1px solid var(--border); padding: 7px 10px; text-align: center; }
+  table.gs thead th { background: #fafafc; font-weight: 700; color: var(--ink); position: sticky; top: 0; }
+  table.gs .rowlbl { background: #fafafc; font-weight: 700; text-align: left; position: sticky; left: 0; z-index: 2; }
+  table.gs thead th.rowlbl { z-index: 3; }
+  table.gs .machine-cell { color: var(--brand); font-weight: 800; }
+  table.gs .target-cell { background: #fffdf3; color: var(--muted); font-weight: 600; }
+  table.gs .avg-col { background: #fffdf3; font-weight: 700; }
+  table.gs .r-abn td.v { color: #b8860b; }
+  table.gs .r-loss td.v { color: var(--brand); }
+  table.gs .r-eff td.v { font-weight: 700; }
+  table.gs td.eff-good { color: var(--success); }
+  table.gs td.eff-bad { color: var(--brand); }
+
+  /* 圖表 */
+  .chart-grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
+  .chart-title { font-size: 14px; font-weight: 700; text-align: center; margin-bottom: 12px; color: var(--ink); }
+  .chart-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .chart-area { display: flex; align-items: flex-end; gap: 6px; height: 240px; padding: 18px 4px 0; min-width: max-content; }
+  .chart-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; min-width: 32px; height: 100%; }
+  .chart-bar-label { font-size: 9px; font-weight: 700; margin-bottom: 2px; color: var(--ink); }
+  .chart-xlabel { font-size: 9px; color: var(--muted); margin-top: 4px; }
+  .bar-eff { width: 22px; background: var(--prod); border-radius: 3px 3px 0 0; }
+  /* 平均達成度橫線（疊在效率圖上）*/
+  #effChart { position: relative; }
+  .eff-avg-line { position: absolute; left: 0; right: 0; border-top: 2px dashed #e53935; pointer-events: none; z-index: 2; }
+  .eff-avg-tag { position: absolute; right: 2px; top: -9px; background: #e53935; color: #fff; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
+  .stack { width: 30px; display: flex; flex-direction: column-reverse; border-radius: 3px 3px 0 0; overflow: hidden; }
+  .stack > div { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 9px; font-weight: 700; line-height: 1; overflow: hidden; }
+  .stack .seg-prep { background: var(--prep); }
+  .stack .seg-prod { background: var(--prod); }
+  .stack .seg-std  { background: var(--std); }
+  .legend { display: flex; gap: 16px; justify-content: center; margin-top: 10px; font-size: 12px; flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .empty { color: var(--muted); text-align: center; padding: 28px; }
+
+  #toast {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    background: rgba(28,28,30,.95); color: #fff; padding: 14px 22px; border-radius: 12px;
+    font-size: 14px; font-weight: 600; display: none; max-width: 90%; text-align: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,.2); z-index: 200;
+  }
+  #toast.show { display: block; }
+  #toast.error { background: var(--brand); }
+  #toast.success { background: var(--success); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <img src="logo.jpg" alt="上鎧鋼鐵">
+    <div class="brand-text">
+      <div class="title">目標達成統計</div>
+      <div class="sub" id="meShow"></div>
+    </div>
+  </div>
+  <button class="menu-toggle" id="menuBtn" onclick="document.getElementById('dropMenu').classList.toggle('show')"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="18" x2="20" y2="18"/></svg></button>
+  <div class="dropdown-menu" id="dropMenu">
+    <a href="index.html">生產實態紀錄</a>
+    <a href="records.html">歷史實態紀錄</a>
+    <a href="realtime.html">即時生產資訊</a>
+    <a href="plan-stats.html">生產進度統計</a>
+    <a href="goal-stats.html" class="nav-active">目標達成統計</a>
+    <a href="upload.html" id="uploadLink" style="display:none;">📤 上傳</a>
+    <a href="admin.html" id="adminLink" style="display:none;">⚙ 管理</a>
+    <div class="menu-sep"></div>
+    <a href="#" id="logoutLink" class="menu-logout">登出</a>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="card">
+    <div class="toolbar">
+      <div class="field">
+        <label>月份</label>
+        <input type="month" id="filterMonth">
+      </div>
+      <div class="field">
+        <label>機台</label>
+        <select id="filterMachine"></select>
+      </div>
+      <button class="btn-secondary" id="refreshBtn">🔄 重新整理</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="gs-title" id="gsTitle">—</h2>
+    <div class="gs-note">
+      以「生產效率工時損失」分析未達標原因：分開計算 <b>生產準備</b>、<b>生產實績</b>、<b>異常停線</b> 三段時間（分鐘）。<br>
+      生產損失 = 生產實績 − 標準工時（理論時間）；效率達成度 = 生產實績 ÷ 生產目標。
+    </div>
+    <div class="gs-table-wrap">
+      <div id="tableArea"><div class="empty">載入中...</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="chart-grid">
+      <div>
+        <div class="chart-title" id="effChartTitle">生產效率達成度統計</div>
+        <div class="chart-scroll"><div class="chart-area" id="effChart"></div></div>
+      </div>
+      <div>
+        <div class="chart-title" id="stackChartTitle">生產準備與實績統計</div>
+        <div class="chart-scroll"><div class="chart-area" id="stackChart"></div></div>
+        <div class="legend">
+          <span><i style="background:var(--prep)"></i>生產準備</span>
+          <span><i style="background:var(--prod)"></i>生產實績</span>
+          <span><i style="background:var(--std)"></i>標準工時</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script src="config.js"></script>
+<script src="utils.js?v=20260522a"></script>
+<script>
+const me = getMe();
+if (!me) location.href = 'index.html';
+if (me && !hasPermission(me, 'view_goal_stats')) {
+  alert('沒有「目標達成統計」權限');
+  location.href = 'index.html';
+}
+
+$('meShow').textContent = me ? (me.displayName + '（' + rolesDisplay(me) + '）') : '';
+if (me && isAdminUser(me)) $('adminLink').style.display = 'flex';
+if (me && canUpload(me)) $('uploadLink').style.display = 'flex';
+initDropdownMenu();
+$('logoutLink').onclick = e => {
+  e.preventDefault();
+  if (!confirm('登出？')) return;
+  localStorage.clear();
+  location.href = 'index.html';
+};
+
+const MACHINES = [
+  { id: 'No1-350', num: 'No1', spec: '350' },
+  { id: 'No2-250', num: 'No2', spec: '250' },
+  { id: 'No3-60',  num: 'No3', spec: '60' },
+  { id: 'No4-90',  num: 'No4', spec: '90' },
+  { id: 'No5-40',  num: 'No5', spec: '40' },
+  { id: 'No6-40',  num: 'No6', spec: '40' },
+  { id: 'No12', num: 'No12', spec: '過濾網' },
+  { id: 'No13', num: 'No13', spec: '過濾網' },
+  { id: 'No16', num: 'No16', spec: '過濾網' },
+  { id: 'No17', num: 'No17', spec: '過濾網' },
+  { id: 'No18', num: 'No18', spec: '過濾網' },
+  { id: 'No19', num: 'No19', spec: '有筋' },
+  { id: 'No20', num: 'No20', spec: '免拆模' },
+];
+
+const machineSel = $('filterMachine');
+MACHINES.forEach(m => {
+  const opt = document.createElement('option');
+  opt.value = m.id; opt.textContent = m.id;
+  machineSel.appendChild(opt);
+});
+
+(function setDefaults() {
+  const now = new Date();
+  $('filterMonth').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  machineSel.value = MACHINES[0].id;
+})();
+
+let allOrders = [];
+
+async function loadOrders() {
+  $('tableArea').innerHTML = '<div class="empty">載入中...</div>';
+  const r = await api('/api/orders?limit=500');
+  if (!r.ok) { $('tableArea').innerHTML = '<div class="empty">' + (r.error || '載入失敗') + '</div>'; return; }
+  allOrders = r.data.orders || [];
+  render();
+}
+
+function ymd(d) {
+  if (!d) return null;
+  const dt = (d instanceof Date) ? d : new Date(d);
+  if (isNaN(dt)) return null;
+  return dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+}
+function getCompletionYmd(o) { return ymd(o.step11At); }
+function orderMatchesMachine(o, m) { return o.machineNo === m || o.plannedMachineNo === m; }
+
+// 一張工單的實際生產數量（QC 回報）— 與即時頁 / 計畫頁同邏輯
+function actualQtyOf(o) {
+  const step30Sum = (o.stepEntries || [])
+    .filter(e => e.stepNo === '30' && e.qcActualQty != null)
+    .reduce((s, e) => s + (Number(e.qcActualQty) || 0), 0);
+  if (o.step11At && o.step11QcActualQty != null) return step30Sum + (Number(o.step11QcActualQty) || 0);
+  const offWork = ((o.pause12 && o.pause12.history) || []).filter(e => e.qcActualQty != null);
+  if (offWork.length > 0) return step30Sum + (Number(offWork[offWork.length - 1].qcActualQty) || 0);
+  return step30Sum;
+}
+
+// 一張工單橫跨的所有日期（YYYY-MM-DD）：第一筆活動 → 最後一筆活動
+function orderActiveDates(o) {
+  const t = [];
+  if (o.actualStartDate) t.push(new Date(o.actualStartDate).getTime());
+  (o.stepEntries || []).forEach(e => { if (e.recordedAt) t.push(new Date(e.recordedAt).getTime()); });
+  ((o.pause12 && o.pause12.history) || []).forEach(p => { if (p.startAt) t.push(new Date(p.startAt).getTime()); if (p.endAt) t.push(new Date(p.endAt).getTime()); });
+  ((o.pause13 && o.pause13.history) || []).forEach(p => { if (p.startAt) t.push(new Date(p.startAt).getTime()); if (p.endAt) t.push(new Date(p.endAt).getTime()); });
+  if (o.step11At) t.push(new Date(o.step11At).getTime());
+  if (t.length === 0) return [];
+  const start = new Date(Math.min(...t)); start.setHours(0, 0, 0, 0);
+  const end = new Date(Math.max(...t)); end.setHours(0, 0, 0, 0);
+  const out = [];
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    out.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'));
+  }
+  return out;
+}
+
+// 把每張工單的理論時間（標準工時，分鐘）按「各天實際生產時間比例」攤到每一天
+// 回傳 { 'YYYY-MM-DD': 標準工時分鐘 }
+// 跨日單：依每天 prodSec 佔該單總 prodSec 的比例分攤，與生產實績分佈一致
+// 完全沒有生產時間紀錄的單：整筆理論時間歸到完成日
+function buildStdByDay(machine) {
+  const map = {};
+  allOrders.filter(o => orderMatchesMachine(o, machine)).forEach(o => {
+    const blades = Number(o.bladeCount) || 0, spm = Number(o.machineSPM) || 0, qty = actualQtyOf(o);
+    const tStdMin = (blades > 0 && spm > 0 && qty > 0) ? (blades / spm * qty) : 0;
+    if (tStdMin <= 0) return;
+    const prodByDate = {};
+    let totalProd = 0;
+    orderActiveDates(o).forEach(ds => {
+      const ps = computeOrderPhasesForDay(o, ds).prodSec;
+      if (ps > 0) { prodByDate[ds] = ps; totalProd += ps; }
+    });
+    if (totalProd > 0) {
+      Object.keys(prodByDate).forEach(ds => {
+        map[ds] = (map[ds] || 0) + tStdMin * (prodByDate[ds] / totalProd);
+      });
+    } else {
+      const cd = getCompletionYmd(o);
+      if (cd) map[cd] = (map[cd] || 0) + tStdMin;
+    }
+  });
+  return map;
+}
+
+function render() {
+  const monthStr = $('filterMonth').value;
+  const machine = machineSel.value;
+  if (!monthStr || !machine) return;
+
+  const [yy, mm] = monthStr.split('-').map(n => parseInt(n, 10));
+  const daysInMonth = new Date(yy, mm, 0).getDate();
+  const todayYmd = ymd(new Date());
+  const todayInThisMonth = todayYmd.startsWith(monthStr);
+  const lastDay = todayInThisMonth ? parseInt(todayYmd.split('-')[2], 10) : daysInMonth;
+  const target = MACHINE_TARGETS[machine] || { workMinutes: 0, prepMinutes: 0 };
+
+  $('gsTitle').textContent = yy + '年' + mm + '月份生產效率達成度統計（' + machine + '）';
+  $('effChartTitle').textContent = machine + ' 生產效率達成度統計';
+  $('stackChartTitle').textContent = machine + ' 生產準備與實績統計';
+
+  // 標準工時按「各天實際生產時間比例」攤到每一天（跨日單也正確分攤）
+  const stdByDay = buildStdByDay(machine);
+
+  // 逐日計算
+  const days = [];
+  // 一次顯示整月 30(28~31) 天；日期未到（本月今天之後）留空白
+  for (let d = 1; d <= daysInMonth; d++) {
+    const isFuture = todayInThisMonth && d > lastDay;
+    const ds = monthStr + '-' + String(d).padStart(2, '0');
+    const dayOrders = isFuture ? [] : allOrders.filter(o => orderMatchesMachine(o, machine) && orderIsOnDate(o, ds));
+    let prepSec = 0, prodSec = 0, abnSec = 0;
+    dayOrders.forEach(o => {
+      const ph = computeOrderPhasesForDay(o, ds);
+      prepSec += ph.prepSec; prodSec += ph.prodSec; abnSec += ph.abnSec;
+    });
+    const prepMin = Math.round(prepSec / 60);
+    const prodMin = Math.round(prodSec / 60);
+    const abnMin = Math.round(abnSec / 60);
+    const stdMin = isFuture ? 0 : Math.round(stdByDay[ds] || 0);
+    const loss = prodMin - stdMin;
+    // 未到日期：達成度留空白（null → 圖上不畫柱、不顯示 %）
+    const eff = isFuture ? null : (target.workMinutes > 0 ? (prodMin / target.workMinutes * 100) : null);
+    const hasActivity = !isFuture && (dayOrders.length > 0 || stdMin > 0);
+    days.push({ d, ds, prepMin, prodMin, abnMin, stdMin, loss, eff, hasActivity, isFuture });
+  }
+
+  // 月平均（以「有生產活動的天數」為分母）
+  const active = days.filter(x => x.hasActivity);
+  const n = active.length;
+  const avgInt = arr => n > 0 ? Math.round(arr.reduce((s, x) => s + x, 0) / n) : 0;
+  const avg = {
+    abn: avgInt(active.map(x => x.abnMin)),
+    prep: avgInt(active.map(x => x.prepMin)),
+    prod: avgInt(active.map(x => x.prodMin)),
+    std: avgInt(active.map(x => x.stdMin)),
+    loss: avgInt(active.map(x => x.loss)),
+    eff: n > 0 ? (active.reduce((s, x) => s + (x.eff || 0), 0) / n).toFixed(1) : null,
+  };
+
+  // ── 表格 ──
+  const dayHeaders = days.map(x => `<th>${mm}/${x.d}</th>`).join('');
+  const cells = (key, fmt) => days.map(x => `<td class="v">${fmt(x[key], x)}</td>`).join('');
+  const minFmt = (v, x) => (x && x.isFuture) ? '' : ((v || v === 0) ? v : '');
+  const effFmt = (v) => v == null ? '—' : v.toFixed(0) + '%';
+
+  const effCellClass = (x) => x.eff == null ? '' : (x.eff >= 100 ? 'eff-good' : (x.eff < 80 ? 'eff-bad' : ''));
+  const effCells = days.map(x => `<td class="v ${effCellClass(x)}">${x.isFuture ? '' : (x.eff == null ? '—' : x.eff.toFixed(0) + '%')}</td>`).join('');
+
+  $('tableArea').innerHTML = `
+    <table class="gs">
+      <thead>
+        <tr>
+          <th class="rowlbl machine-cell">${machine}</th>
+          <th>生產目標</th>
+          ${dayHeaders}
+          <th class="avg-col">月平均</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="r-abn">
+          <td class="rowlbl">異常停線</td><td class="target-cell">0 分鐘</td>
+          ${cells('abnMin', minFmt)}<td class="avg-col">${avg.abn}</td>
+        </tr>
+        <tr class="r-prep">
+          <td class="rowlbl">生產準備</td><td class="target-cell">${target.prepMinutes || 0} 分鐘</td>
+          ${cells('prepMin', minFmt)}<td class="avg-col">${avg.prep}</td>
+        </tr>
+        <tr class="r-prod">
+          <td class="rowlbl">生產實績</td><td class="target-cell">${target.workMinutes || 0} 分鐘</td>
+          ${cells('prodMin', minFmt)}<td class="avg-col">${avg.prod}</td>
+        </tr>
+        <tr class="r-std">
+          <td class="rowlbl">標準工時</td><td class="target-cell">依照計畫</td>
+          ${cells('stdMin', minFmt)}<td class="avg-col">${avg.std}</td>
+        </tr>
+        <tr class="r-loss">
+          <td class="rowlbl">生產損失</td><td class="target-cell">0 分鐘</td>
+          ${cells('loss', minFmt)}<td class="avg-col">${avg.loss}</td>
+        </tr>
+        <tr class="r-eff">
+          <td class="rowlbl">效率達成度</td><td class="target-cell">100 %</td>
+          ${effCells}<td class="avg-col">${avg.eff == null ? '—' : avg.eff + '%'}</td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+
+  // ── 圖表（只畫有活動的天，跟附圖一致）──
+  const chartDays = days;   // 一次顯示整月所有天（未到的留空白）
+
+  // 效率達成度長條圖（最高刻度取 max(120, 實際最大)）
+  const effMaxVal = Math.max(120, ...chartDays.map(x => x.eff || 0));
+  const effCols = chartDays.map(x => {
+    const pct = x.eff == null ? 0 : (x.eff / effMaxVal * 100);
+    return `<div class="chart-col">
+      <div class="chart-bar-label">${x.eff == null ? '' : x.eff.toFixed(0) + '%'}</div>
+      <div class="bar-eff" style="height:${pct.toFixed(1)}%;"></div>
+      <div class="chart-xlabel">${mm}/${x.d}</div>
+    </div>`;
+  }).join('');
+  // 平均達成度橫線（與表格「平均」欄同一個值 avg.eff；18px 為 .chart-area 的上 padding）
+  const avgEffNum = avg.eff == null ? null : parseFloat(avg.eff);
+  const avgLine = (avgEffNum != null && effCols)
+    ? `<div class="eff-avg-line" style="bottom:calc((100% - 18px) * ${(avgEffNum / effMaxVal).toFixed(4)});"><span class="eff-avg-tag">平均 ${avgEffNum.toFixed(0)}%</span></div>`
+    : '';
+  $('effChart').innerHTML = effCols ? (effCols + avgLine) : '<div class="empty">本月此機台無資料</div>';
+
+  // 堆疊圖（生產準備 + 生產實績 + 標準工時）
+  const stackMax = Math.max(1, ...chartDays.map(x => x.prepMin + x.prodMin + x.stdMin));
+  const h = v => (v / stackMax * 100).toFixed(1);
+  $('stackChart').innerHTML = chartDays.map(x => {
+    const total = x.prepMin + x.prodMin + x.stdMin;
+    // 段內數值：段的實際高度（約 220px 圖高 × 佔比）夠放一行字才顯示，避免擠爆
+    const CHART_PX = 220;
+    const seg = (cls, v) => {
+      const pct = total ? (v / total * 100) : 0;
+      const px = (total / stackMax) * CHART_PX * (pct / 100);
+      const label = (v > 0 && px >= 12) ? v : '';
+      return `<div class="${cls}" style="height:${pct.toFixed(1)}%;">${label}</div>`;
+    };
+    return `<div class="chart-col">
+      <div class="stack" style="height:${h(total)}%;">
+        ${seg('seg-prep', x.prepMin)}
+        ${seg('seg-prod', x.prodMin)}
+        ${seg('seg-std',  x.stdMin)}
+      </div>
+      <div class="chart-xlabel">${mm}/${x.d}</div>
+    </div>`;
+  }).join('') || '<div class="empty">本月此機台無資料</div>';
+}
+
+machineSel.onchange = render;
+$('filterMonth').onchange = render;
+$('refreshBtn').onclick = loadOrders;
+
+loadOrders();
+</script>
+</body>
+</html>

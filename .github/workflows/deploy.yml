@@ -1,0 +1,60 @@
+name: Deploy to GitHub Pages
+
+# 同時部署「現有 8 個 HTML 頁（站台根目錄）」與「新的 React App（/app/ 子路徑）」。
+# 兩者組成同一份 Pages 產物，確保切換到 Actions 部署後現有頁面照常運作。
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build React app
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Assemble site (legacy 頁面鋪回根 + React App)
+        run: |
+          mkdir -p _site
+          # legacy/ 內的舊版頁面與資源鋪到站台根目錄（網址維持 /qrcode-factory/index.html…）
+          cp -r legacy/. _site/
+          # React App 掛到 /app/（對應 vite base: /qrcode-factory/app/）
+          mkdir -p _site/app
+          cp -r web/dist/. _site/app/
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

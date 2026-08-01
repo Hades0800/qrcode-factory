@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<title>上鎧鋼鐵 - 生產進度統計</title>
+<link rel="icon" href="logo.jpg">
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* 設計 token 已統一至 styles.css（CIS 3.0），請勿在此重複定義 */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background: var(--bg);
+    zoom: 1.15;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,.04);
+    position: relative;
+    z-index: 10;
+  }
+  header .brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
+  header .brand img { height: 30px; width: auto; flex-shrink: 0; }
+  header .brand-text { border-left: 2px solid var(--border); padding-left: 10px; line-height: 1.2; min-width: 0; flex: 1; }
+  header .brand-text .title { font-size: 13px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header .brand-text .sub { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .menu-toggle {
+    background: none; border: none; font-size: 22px; color: var(--ink);
+    cursor: pointer; padding: 6px 10px; border-radius: 8px; min-height: 36px;
+    display: flex; align-items: center; flex-shrink: 0;
+  }
+  .dropdown-menu {
+    display: none; position: fixed; top: 56px; right: 8px;
+    background: #fff; border-radius: 12px; min-width: 170px; z-index: 999; padding: 6px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.12), 0 0 0 1px rgba(0,0,0,.04);
+  }
+  .dropdown-menu.show { display: block; }
+  .dropdown-menu a {
+    display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+    font-size: 15px; font-weight: 600; color: var(--text);
+    text-decoration: none; border-radius: 8px;
+  }
+  .dropdown-menu a:hover { background: var(--bg); }
+  .dropdown-menu a.nav-active { color: var(--brand); background: var(--brand-soft); }
+  .dropdown-menu .menu-sep { height: 1px; background: var(--border); margin: 4px 8px; }
+  .dropdown-menu a.menu-logout { color: var(--muted); }
+
+  .container { padding: 16px; max-width: 100%; margin: 0 auto; }
+  .card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 0 0 1px rgba(0,0,0,.02);
+  }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+  .toolbar .field { display: flex; flex-direction: column; }
+  .toolbar label {
+    font-size: 11px; color: var(--muted); margin-bottom: 4px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: .5px;
+  }
+  .toolbar input, .toolbar select {
+    padding: 8px 10px; font-size: 14px;
+    border: 1.5px solid var(--border); border-radius: 8px; background: #fff; color: var(--ink);
+  }
+  button {
+    appearance: none; border: none; border-radius: 8px;
+    font-size: 14px; padding: 9px 14px; cursor: pointer; font-weight: 600;
+    font-family: inherit; transition: transform .08s, background .15s;
+  }
+  button:active { transform: scale(.98); }
+  .btn-primary { background: var(--brand-text); color: #fff; box-shadow: 0 2px 6px rgba(240,29,15,.2); }
+  .btn-primary:hover { background: var(--brand-dark); }
+  .btn-secondary { background: var(--bg); color: var(--ink); border: 1.5px solid var(--border); }
+  .btn-secondary:hover { background: #e8e8eb; }
+
+  /* 統計卡片 */
+  .ps-title {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 0 0 14px;
+  }
+  .ps-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 24px;
+    margin-bottom: 8px;
+  }
+  .ps-line { font-size: 14px; color: var(--ink); }
+  .ps-line .lbl { color: var(--muted); margin-right: 6px; }
+  .ps-line .val { font-weight: 700; color: var(--ink); }
+  .ps-line .val.brand { color: var(--brand); }
+  .ps-line .val.success { color: var(--success); }
+
+  .ps-legend {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+    font-size: 13px;
+  }
+  .ps-legend .lg { display: inline-flex; align-items: center; gap: 6px; }
+  .ps-dot {
+    display: inline-block;
+    width: 14px; height: 14px; border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.06);
+  }
+  .ps-dot.red    { background: var(--brand); }
+  .ps-dot.yellow { background: #f5c518; }
+  .ps-dot.green  { background: #2ea043; }
+
+  /* 計畫達成度表 */
+  .ps-grid-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  table.ps-grid {
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 100%;
+  }
+  table.ps-grid th, table.ps-grid td {
+    border-bottom: 1px solid var(--border);
+    text-align: center;
+    padding: 8px 6px;
+    white-space: nowrap;
+  }
+  table.ps-grid th {
+    background: #fafafc;
+    color: var(--muted);
+    font-weight: 700;
+    font-size: 12px;
+    position: sticky; top: 0;
+    border-bottom: 2px solid var(--border);
+  }
+  table.ps-grid th.ps-order-col,
+  table.ps-grid td.ps-order-col {
+    text-align: left;
+    padding-left: 12px;
+    padding-right: 14px;
+    font-weight: 700;
+    color: var(--ink);
+    position: sticky; left: 0;
+    background: #fff;
+    box-shadow: 1px 0 0 var(--border);
+    min-width: 130px;
+  }
+  table.ps-grid th.ps-order-col { background: #fafafc; }
+  table.ps-grid tr:hover td { background: #fafafc; }
+  table.ps-grid tr:hover td.ps-order-col { background: #fafafc; }
+
+  table.ps-grid td.ps-cell { min-width: 30px; padding: 6px 5px; }
+  .ps-cell .ps-dot { width: 12px; height: 12px; }
+  .ps-cell .ps-cellwrap { display: inline-flex; align-items: center; justify-content: center; gap: 3px; }
+  .ps-cell .ps-qty { font-size: 11px; font-weight: 700; color: #333; }
+  .ps-cell.today { background: #fff8e8; }
+  table.ps-grid th.today { background: #fff3c4; color: var(--brand); }
+
+  /* 工號可點：點一下顯示生產規格 */
+  td.ps-order-col.ps-order-click { cursor: pointer; }
+  td.ps-order-col.ps-order-click:hover { color: var(--brand); text-decoration: underline; }
+  #psSpecPop {
+    position: fixed; z-index: 1000; display: none; max-width: 280px;
+    background: var(--ink); color: #fff; padding: 10px 12px; border-radius: 10px;
+    font-size: 13px; line-height: 1.5; box-shadow: 0 6px 24px rgba(0,0,0,.28);
+  }
+  #psSpecPop .pop-order { font-size: 11px; color: #bbb; margin-bottom: 3px; }
+  #psSpecPop .pop-spec { font-weight: 700; font-size: 15px; word-break: break-word; }
+  #psSpecPop .pop-qty { font-size: 13px; color: #cfe3ff; margin-top: 4px; }
+  #psSpecPop .pop-weight { font-size: 13px; color: #cfe3ff; margin-top: 4px; }
+  #psSpecPop .pop-customer { font-size: 13px; color: #ffd47f; margin-top: 4px; word-break: break-word; }
+
+  .empty {
+    text-align: center;
+    color: var(--muted);
+    padding: 40px 20px;
+    font-size: 14px;
+  }
+
+  #toast {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    background: rgba(28,28,30,.95); color: #fff;
+    padding: 14px 22px; border-radius: 12px;
+    font-size: 14px; font-weight: 600; display: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,.2);
+  }
+  #toast.show { display: block; }
+  #toast.error { background: var(--brand); }
+  #toast.success { background: var(--success); }
+
+  /* ===== 手機版 ===== */
+  @media (max-width: 600px) {
+    .container { padding: 12px; }
+    /* 篩選列：月份 / 機台各半行，重新整理整行、好按 */
+    .toolbar { gap: 8px; }
+    .toolbar .field { flex: 1 1 calc(50% - 4px); min-width: 0; }
+    .toolbar input, .toolbar select { width: 100%; min-height: 40px; }
+    .toolbar #refreshBtn { flex: 1 1 100%; min-height: 42px; }
+    /* 格狀圖：工號欄縮窄，露出更多日期格 */
+    table.ps-grid th.ps-order-col,
+    table.ps-grid td.ps-order-col { min-width: 90px; padding-left: 8px; padding-right: 8px; font-size: 12px; }
+    table.ps-grid th, table.ps-grid td { padding: 8px 4px; }
+    table.ps-grid td.ps-cell { min-width: 30px; }
+    .ps-cell .ps-qty { font-size: 11px; }
+    .ps-cell .ps-dot { width: 12px; height: 12px; }
+    /* 點工號彈出的生產規格框：不超出螢幕 */
+    #psSpecPop { max-width: 90vw; }
+    #psSpecPop .pop-spec { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <img src="logo.jpg" alt="上鎧鋼鐵">
+    <div class="brand-text">
+      <div class="title">生產進度統計</div>
+      <div class="sub" id="meShow"></div>
+    </div>
+  </div>
+  <button class="menu-toggle" id="menuBtn" onclick="document.getElementById('dropMenu').classList.toggle('show')"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="18" x2="20" y2="18"/></svg></button>
+  <div class="dropdown-menu" id="dropMenu">
+    <a href="index.html">生產實態紀錄</a>
+    <a href="records.html">歷史實態紀錄</a>
+    <a href="realtime.html">即時生產資訊</a>
+    <a href="plan-stats.html" class="nav-active">生產進度統計</a>
+    <a href="goal-stats.html">目標達成統計</a>
+    <a href="upload.html" id="uploadLink" style="display:none;">📤 上傳</a>
+    <a href="admin.html" id="adminLink" style="display:none;">⚙ 管理</a>
+    <div class="menu-sep"></div>
+    <a href="#" id="logoutLink" class="menu-logout">登出</a>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="card">
+    <div class="toolbar">
+      <div class="field">
+        <label>月份</label>
+        <input type="month" id="filterMonth">
+      </div>
+      <div class="field">
+        <label>機台</label>
+        <select id="filterMachine"></select>
+      </div>
+      <div class="field">
+        <label>客戶查詢（跨機台）</label>
+        <input type="text" id="filterCustomer" list="customerList" placeholder="輸入客戶名稱…" autocomplete="off">
+        <datalist id="customerList"></datalist>
+      </div>
+      <div class="field">
+        <label>工單號查詢（跨機台）</label>
+        <input type="text" id="filterOrder" placeholder="輸入工單號，自動帶出 @1/@2/@3…" autocapitalize="characters" autocomplete="off">
+      </div>
+      <button class="btn-secondary" id="refreshBtn">🔄 重新整理</button>
+      <button class="btn-secondary" id="exportBtn">📥 匯出進度</button>
+    </div>
+  </div>
+
+  <div class="card" id="summaryCard">
+    <h2 class="ps-title" id="psTitle">—</h2>
+    <div class="ps-summary" id="psSummary"></div>
+    <div class="ps-legend">
+      <span class="lg"><span class="ps-dot red"></span>未進行/未完成</span>
+      <span class="lg"><span class="ps-dot yellow"></span>進行中</span>
+      <span class="lg"><span class="ps-dot green"></span>已完成</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="gridArea" class="ps-grid-wrap">
+      <div class="empty">載入中...</div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script src="config.js"></script>
+<script src="utils.js?v=20260522a"></script>
+<script>
+const me = getMe();
+if (!me) location.href = 'index.html';
+if (me && !hasPermission(me, 'view_plan_stats')) {
+  alert('沒有「計畫達成統計」權限');
+  location.href = 'index.html';
+}
+
+$('meShow').textContent = me ? (me.displayName + '（' + rolesDisplay(me) + '）') : '';
+if (me && isAdminUser(me)) $('adminLink').style.display = 'flex';
+if (me && canUpload(me)) $('uploadLink').style.display = 'flex';
+initDropdownMenu();
+$('logoutLink').onclick = e => {
+  e.preventDefault();
+  if (!confirm('登出？')) return;
+  localStorage.clear();
+  location.href = 'index.html';
+};
+
+const MACHINES = [
+  { id: 'No1-350', num: 'No1', spec: '350' },
+  { id: 'No2-250', num: 'No2', spec: '250' },
+  { id: 'No3-60',  num: 'No3', spec: '60' },
+  { id: 'No4-90',  num: 'No4', spec: '90' },
+  { id: 'No5-40',  num: 'No5', spec: '40' },
+  { id: 'No6-40',  num: 'No6', spec: '40' },
+  { id: 'No12', num: 'No12', spec: '過濾網' },
+  { id: 'No13', num: 'No13', spec: '過濾網' },
+  { id: 'No16', num: 'No16', spec: '過濾網' },
+  { id: 'No17', num: 'No17', spec: '過濾網' },
+  { id: 'No18', num: 'No18', spec: '過濾網' },
+  { id: 'No19', num: 'No19', spec: '有筋' },
+  { id: 'No20', num: 'No20', spec: '免拆模' },
+];
+
+// 機台下拉
+const machineSel = $('filterMachine');
+MACHINES.forEach(m => {
+  const opt = document.createElement('option');
+  opt.value = m.id;
+  opt.textContent = m.id;
+  machineSel.appendChild(opt);
+});
+
+// 預設：本月 + 第一台機
+(function setDefaults() {
+  const now = new Date();
+  const ym = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  $('filterMonth').value = ym;
+  machineSel.value = MACHINES[0].id;
+})();
+
+let allOrders = [];
+// @N（過濾網多機台）工單客戶空白時，從「@ 之前的原始工單」帶客戶
+function resolveCustomerName(o) {
+  if (o.customerName) return o.customerName;
+  const at = (o.orderNo || '').indexOf('@');
+  if (at > 0) {
+    const base = allOrders.find(x => x.orderNo === o.orderNo.slice(0, at));
+    if (base && base.customerName) return base.customerName;
+  }
+  return '';
+}
+// 目前檢視的篩選結果（供匯出用）
+let currentView = { rows: [], custQ: '', machine: '', monthStr: '' };
+
+async function loadOrders() {
+  $('gridArea').innerHTML = '<div class="empty">載入中...</div>';
+  const r = await api('/api/orders?limit=500');
+  if (!r.ok) {
+    $('gridArea').innerHTML = '<div class="empty">' + (r.error || '載入失敗') + '</div>';
+    return;
+  }
+  allOrders = r.data.orders || [];
+  // 客戶自動建議清單（去重、排序；輸入時瀏覽器只顯示符合的）
+  const names = [...new Set(allOrders.map(o => (o.customerName || '').trim()).filter(Boolean))].sort();
+  $('customerList').innerHTML = names.map(n => `<option value="${escapeHtml(n)}">`).join('');
+  render();
+}
+
+// 取台灣本地日期 yyyy-mm-dd（從 ISO 字串或 Date）
+function ymd(d) {
+  if (!d) return null;
+  const dt = (d instanceof Date) ? d : new Date(d);
+  if (isNaN(dt)) return null;
+  return dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+}
+
+// 工單的計畫日期（優先 plannedDate，fallback productionDate）
+function getPlannedYmd(o) {
+  return ymd(o.plannedDate) || ymd(o.productionDate);
+}
+// 排產排序 scheduleCmp() 已移到共用的 utils.js（三頁共用同一份規則）
+// 工單的完成日期
+function getCompletionYmd(o) {
+  return ymd(o.step11At);
+}
+// 工單的實際開始日期（用 actualStartDate；若無，掃所有活動取最早）
+function getActualStartYmd(o) {
+  if (o.actualStartDate) return ymd(o.actualStartDate);
+  let min = null;
+  const consider = t => {
+    if (!t) return;
+    const v = new Date(t).getTime();
+    if (isNaN(v)) return;
+    if (min === null || v < min) min = v;
+  };
+  ['step1At','step2At','step3At','step4At','step5At','step6At','step7At','step11At','step21At','step22At','step23At']
+    .forEach(k => consider(o[k]));
+  (o.stepEntries || []).forEach(e => consider(e.recordedAt));
+  ((o.pause12 && o.pause12.history) || []).forEach(e => { consider(e.startAt); consider(e.endAt); });
+  ((o.pause13 && o.pause13.history) || []).forEach(e => { consider(e.startAt); consider(e.endAt); });
+  return min === null ? null : ymd(new Date(min));
+}
+
+// 該工單是否屬於指定機台（machineNo 為現場記錄；plannedMachineNo 為原計畫）
+function orderMatchesMachine(o, machine) {
+  return o.machineNo === machine || o.plannedMachineNo === machine;
+}
+
+// 一張工單的「實際生產數量」（QC 回報）
+//   已完成(step11)：Σ 各段更換規格 QC + 完成 QC
+//   未完成但有下班回報（隔日生產）：Σ 各段更換規格 QC + 最後一次下班 QC
+//   兩者都沒有：只算已結束規格段（step30）的量
+function actualQtyOf(o) {
+  const step30Sum = (o.stepEntries || [])
+    .filter(e => e.stepNo === '30' && e.qcActualQty != null)
+    .reduce((s, e) => s + (Number(e.qcActualQty) || 0), 0);
+  if (o.step11At && o.step11QcActualQty != null) {
+    return step30Sum + (Number(o.step11QcActualQty) || 0);
+  }
+  const offWork = ((o.pause12 && o.pause12.history) || []).filter(e => e.qcActualQty != null);
+  if (offWork.length > 0) {
+    return step30Sum + (Number(offWork[offWork.length - 1].qcActualQty) || 0);
+  }
+  return step30Sum;
+}
+// 計畫數量 = 派工數
+function plannedQtyOf(o) {
+  return Number(o.dispatchQty) || 0;
+}
+
+// 每日實際生產數量（QC 回報）→ { 'yyyy-mm-dd': 數量 }
+//   依各 QC 回報的時間點歸於當天：更換規格(30)、下班回報(pause12)、完成(11)
+function qtyByDayOf(o) {
+  const map = {};
+  const add = (t, q) => {
+    const k = ymd(t);
+    const n = Number(q);
+    if (!k || !Number.isFinite(n) || n === 0) return;
+    map[k] = (map[k] || 0) + n;
+  };
+  (o.stepEntries || []).forEach(e => {
+    if (e.stepNo === '30' && e.qcActualQty != null) add(e.recordedAt, e.qcActualQty);
+  });
+  if (o.step11At && o.step11QcActualQty != null) add(o.step11At, o.step11QcActualQty);
+  ((o.pause12 && o.pause12.history) || []).forEach(e => {
+    if (e.qcActualQty != null) add(e.startAt || e.endAt, e.qcActualQty);
+  });
+  return map;
+}
+
+// 多規格工單拆段：每筆「生產規格完成(30)」＝一段規格
+//   回傳 [{ymd, qty, closed}]；單規格（≤1 段）回傳 null（以單列顯示）
+//   相容新舊：
+//     新流程「生產完成終止(11)」無數量 → 不算一段（規格段就是各筆生產規格完成）
+//     舊資料「完成(11)」帶數量 → 它本身是最後一個規格，補一段
+function specSegmentsOf(o) {
+  const step30s = (o.stepEntries || [])
+    .filter(e => e.stepNo === '30')
+    .sort((a, b) => new Date(a.recordedAt) - new Date(b.recordedAt));
+  const segs = step30s.map(e => ({
+    ymd: ymd(e.recordedAt),
+    qty: e.qcActualQty != null ? Number(e.qcActualQty) : null,
+    closed: true,
+  }));
+  if (o.step11At) {
+    // step11 有數量＝舊資料的「最後規格」，補一段；無數量＝純終止，不補段
+    if (o.step11QcActualQty != null) {
+      segs.push({ ymd: ymd(o.step11At), qty: Number(o.step11QcActualQty), closed: true });
+    }
+  } else {
+    // 進行中：補一段「目前生產中」（最近一次下班回報量，沒有就掛今天）
+    const off = ((o.pause12 && o.pause12.history) || []).filter(e => e.qcActualQty != null);
+    const last = off[off.length - 1];
+    segs.push({ ymd: last ? ymd(last.startAt || last.endAt) : null, qty: last ? Number(last.qcActualQty) : null, closed: false });
+  }
+  // 單規格（0 或 1 段）→ 單列顯示
+  if (segs.length <= 1) return null;
+  return segs;
+}
+
+function render() {
+  const monthStr = $('filterMonth').value; // yyyy-mm
+  const machine = machineSel.value;
+  if (!monthStr || !machine) return;
+
+  const [yy, mm] = monthStr.split('-').map(n => parseInt(n, 10));
+  const daysInMonth = new Date(yy, mm, 0).getDate(); // mm 是 1-12，Date(yy,mm,0) = 該月最後一天
+  const todayYmd = ymd(new Date());
+  const todayInThisMonth = todayYmd.startsWith(monthStr);
+
+  // 客戶查詢：有輸入時改為「跨所有機台」依客戶名稱（部分符合）篩選
+  const custQ = ($('filterCustomer').value || '').trim();
+  const orderQ = ($('filterOrder').value || '').trim().toUpperCase();
+  const crossMachine = !!(orderQ || custQ);   // 跨機台檢視（每列標機台）
+
+  // 過濾網多機台：凡是有 @N 變體的基礎單號，實際生產在 @1/@2/@3，
+  // 其「裸單號」不列入統計（只顯示各機台 @N）。裸單號通常是現場漏打 @ 後綴而生。
+  const baseNosWithAt = new Set();
+  allOrders.forEach(o => {
+    const at = (o.orderNo || '').indexOf('@');
+    if (at > 0) baseNosWithAt.add(o.orderNo.slice(0, at));
+  });
+
+  // 篩選：計畫日期落在此月份 +（工單號 / 客戶 / 機台，優先序：工單號 > 客戶 > 機台）
+  const rows = allOrders.filter(o => {
+    // 裸單號但已有 @N 變體 → 隱藏（實際生產在 @1/@2/@3）
+    if ((o.orderNo || '').indexOf('@') === -1 && baseNosWithAt.has(o.orderNo)) return false;
+    if (orderQ) {
+      // 工單號查詢：帶出該單與其各機台 @N 紀錄（F1150622001 → 含 @1/@2/@3）
+      if (!(o.orderNo === orderQ || o.orderNo.startsWith(orderQ + '@'))) return false;
+    } else if (custQ) {
+      if (!(o.customerName || '').includes(custQ)) return false;
+    } else {
+      if (!orderMatchesMachine(o, machine)) return false;
+    }
+    const p = getPlannedYmd(o);
+    if (!p) return false;
+    return p.startsWith(monthStr);
+  });
+
+  // 記住目前檢視，供「匯出進度」使用
+  currentView = { rows, custQ, orderQ, machine, monthStr };
+
+  // 件數統計（保留作為參考資訊）
+  const monthPlanned = rows.length;
+  const monthDone = rows.filter(o => !!o.step11At).length;
+
+  // 當日（若今天屬於本月，用今天；否則用該月最後一天）
+  const refYmd = todayInThisMonth ? todayYmd : (monthStr + '-' + String(daysInMonth).padStart(2,'0'));
+  const refDay = parseInt(refYmd.split('-')[2], 10);
+
+  // 當日完成件數 / 延誤件數（件數，參考用）
+  const todayDone = rows.filter(o => getCompletionYmd(o) === refYmd).length;
+  const todayDelayed = rows.filter(o => {
+    const c = getCompletionYmd(o);
+    const p = getPlannedYmd(o);
+    return c === refYmd && p && p < refYmd;
+  }).length;
+
+  // === 數量基準達成率（以實際生產數量計算）===
+  // 計畫數量：依「計畫日期」歸到該日（Σ 派工數）
+  // 完成數量：依「完成日期」歸到該日（Σ 實際生產數量 QC）
+  const machineOrders = allOrders.filter(o => orderMatchesMachine(o, machine));
+  const plannedByDay = {};
+  const completedByDay = {};
+  machineOrders.forEach(o => {
+    const p = getPlannedYmd(o);
+    if (p && p.startsWith(monthStr)) plannedByDay[p] = (plannedByDay[p] || 0) + plannedQtyOf(o);
+    const c = getCompletionYmd(o);
+    if (c && c.startsWith(monthStr)) completedByDay[c] = (completedByDay[c] || 0) + actualQtyOf(o);
+  });
+
+  // 日達成率 = 當日完成數量 / 當日計畫數量
+  const dayPlannedQty = plannedByDay[refYmd] || 0;
+  const dayCompletedQty = completedByDay[refYmd] || 0;
+  const dayRate = dayPlannedQty > 0 ? (dayCompletedQty / dayPlannedQty * 100).toFixed(1) : null;
+
+  // 月達成率 = Σ(每日達成率) / 當月日曆天數（本月只算到今天）
+  const lastDay = todayInThisMonth ? refDay : daysInMonth;
+  let rateSum = 0;
+  for (let d = 1; d <= lastDay; d++) {
+    const key = monthStr + '-' + String(d).padStart(2, '0');
+    const pq = plannedByDay[key] || 0;
+    const cq = completedByDay[key] || 0;
+    rateSum += pq > 0 ? (cq / pq) : 0;
+  }
+  const monthRate = lastDay > 0 ? (rateSum / lastDay * 100).toFixed(1) : null;
+
+  // 標題
+  $('psTitle').textContent = yy + '年' + mm + '月份生產進度統計' + (orderQ ? '（工單查詢）' : custQ ? '（客戶查詢）' : '');
+
+  // 上方統計列：工單／客戶查詢顯示對應資訊（跨機台），否則顯示機台
+  $('psSummary').innerHTML = orderQ
+    ? `<div class="ps-line"><span class="lbl">工單：</span><span class="val brand">${escapeHtml(orderQ)}</span><span class="lbl" style="margin-left:10px;">（含各機台 @N，跨所有機台，共 ${rows.length} 筆）</span></div>`
+    : custQ
+      ? `<div class="ps-line"><span class="lbl">客戶：</span><span class="val brand">${escapeHtml(custQ)}</span><span class="lbl" style="margin-left:10px;">（跨所有機台，共 ${rows.length} 張工單）</span></div>`
+      : `<div class="ps-line"><span class="lbl">機台編號：</span><span class="val">${machine}</span></div>`;
+
+  // 沒資料
+  if (rows.length === 0) {
+    $('gridArea').innerHTML = '<div class="empty">' +
+      (orderQ ? '本月份找不到工單「' + escapeHtml(orderQ) + '」（或其 @N 機台紀錄）'
+        : custQ ? '本月份找不到客戶「' + escapeHtml(custQ) + '」的工單'
+        : '此機台本月份沒有計畫工單') + '</div>';
+    return;
+  }
+
+  // 依計畫日期 → 計畫序號(Excel 列順序) → 工單號 排序
+  rows.sort(scheduleCmp);
+
+  // 表格
+  let html = '<table class="ps-grid"><thead><tr>';
+  html += '<th class="ps-order-col">工號</th>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dYmd = monthStr + '-' + String(d).padStart(2,'0');
+    const isToday = dYmd === todayYmd;
+    html += `<th class="${isToday ? 'today' : ''}">${mm}/${d}</th>`;
+  }
+  html += '</tr></thead><tbody>';
+
+  for (const o of rows) {
+    const plan = getPlannedYmd(o);
+    const start = getActualStartYmd(o);
+    const done = getCompletionYmd(o);
+    const qtyMap = qtyByDayOf(o);
+    // 工單／客戶查詢（跨機台）時，每列標出機台
+    const machineTag = crossMachine
+      ? ` <span style="font-weight:600;font-size:10px;color:var(--muted);">${escapeHtml(o.machineNo || o.plannedMachineNo || '')}</span>`
+      : '';
+
+    // 多規格工單：每個規格段一列（工號-1、-2…）
+    //   軌跡：上一段收掉那天（第一段=工單實際開始日）→ 本段收掉那天
+    //   中途天=黃點（有下班回報附數量）；收掉那天=綠點+段數量；未收掉的最後一段畫黃到今天
+    const segs = specSegmentsOf(o);
+    if (segs && segs.length > 1) {
+      // 下班回報的每日數量（標在中途天的黃點旁）
+      const offQtyByDay = {};
+      ((o.pause12 && o.pause12.history) || []).forEach(e => {
+        if (e.qcActualQty != null) {
+          const k = ymd(e.startAt || e.endAt);
+          if (k) offQtyByDay[k] = (offQtyByDay[k] || 0) + Number(e.qcActualQty);
+        }
+      });
+      const orderStart = getActualStartYmd(o);
+      segs.forEach((seg, i) => {
+        const segStart = i === 0 ? (orderStart || seg.ymd) : segs[i - 1].ymd;
+        const segEnd = seg.closed ? seg.ymd : todayYmd;
+        html += `<tr><td class="ps-order-col ps-order-click" data-orderno="${escapeHtml(o.orderNo)}" data-segidx="${i + 1}" title="點一下看生產規格">${escapeHtml(o.orderNo)}-${i + 1}${machineTag}</td>`;
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dYmd = monthStr + '-' + String(d).padStart(2,'0');
+          const isToday = dYmd === todayYmd;
+          let inner = '';
+          if (segStart && segEnd && dYmd >= segStart && dYmd <= segEnd) {
+            if (seg.closed && dYmd === seg.ymd) {
+              const qtyHtml = (seg.qty != null) ? `<span class="ps-qty">${seg.qty}</span>` : '';
+              inner = `<span class="ps-cellwrap"><span class="ps-dot green" title="已完成"></span>${qtyHtml}</span>`;
+            } else {
+              const q = offQtyByDay[dYmd];
+              const qtyHtml = (q != null) ? `<span class="ps-qty">${q}</span>` : '';
+              inner = `<span class="ps-cellwrap"><span class="ps-dot yellow" title="生產中"></span>${qtyHtml}</span>`;
+            }
+          }
+          html += `<td class="ps-cell ${isToday ? 'today' : ''}">${inner}</td>`;
+        }
+        html += '</tr>';
+      });
+      continue;
+    }
+
+    html += `<tr><td class="ps-order-col ps-order-click" data-orderno="${escapeHtml(o.orderNo)}" title="點一下看生產規格">${escapeHtml(o.orderNo)}${machineTag}</td>`;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dYmd = monthStr + '-' + String(d).padStart(2,'0');
+      const isToday = dYmd === todayYmd;
+
+      // 顯示範圍：plan 到 (done 或 今天)
+      const upperBound = done || todayYmd;
+      let dot = '';
+      if (plan && dYmd >= plan && dYmd <= upperBound) {
+        if (done && dYmd === done) {
+          dot = '<span class="ps-dot green" title="已完成"></span>';
+        } else if (start && dYmd >= start) {
+          dot = '<span class="ps-dot yellow" title="進行中"></span>';
+        } else {
+          dot = '<span class="ps-dot red" title="未進行/未完成"></span>';
+        }
+      }
+      const dayQty = qtyMap[dYmd];
+      // 有產量的那天一定要有點：完成日綠、其他黃（涵蓋現場比計畫日早生產的情況）
+      if (!dot && dayQty != null) {
+        dot = (done && dYmd === done)
+          ? '<span class="ps-dot green" title="已完成"></span>'
+          : '<span class="ps-dot yellow" title="生產中"></span>';
+      }
+      const qtyHtml = (dayQty != null) ? `<span class="ps-qty">${dayQty}</span>` : '';
+      const cellInner = (dot || qtyHtml) ? `<span class="ps-cellwrap">${dot}${qtyHtml}</span>` : '';
+      html += `<td class="ps-cell ${isToday ? 'today' : ''}">${cellInner}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  $('gridArea').innerHTML = html;
+}
+
+['filterMonth','filterMachine'].forEach(id => {
+  $(id).addEventListener('change', render);
+});
+$('filterCustomer').addEventListener('input', render);   // 邊打邊篩，清空即回到機台檢視
+$('filterOrder').addEventListener('input', render);      // 工單號查詢（含 @N），優先於客戶／機台
+$('refreshBtn').onclick = loadOrders;
+
+// 工單完成進度狀態：完成 / 進行中 / 未進行
+function orderProgressStatus(o) {
+  if (o.step11At) return '完成';
+  if (getActualStartYmd(o) || actualQtyOf(o) > 0) return '進行中';
+  return '未進行';
+}
+
+// 匯出目前檢視（客戶查詢或機台）的工單完成進度 CSV
+$('exportBtn').onclick = () => {
+  const { rows, custQ, orderQ, machine, monthStr } = currentView;
+  if (!rows || rows.length === 0) { alert('目前沒有可匯出的工單'); return; }
+  const headers = ['工單號','機台','客戶','生產規格','派工數','實際生產數量','完成進度','計畫日期','實際開始日','完成日期'];
+  const data = rows.slice().sort(scheduleCmp).map(o => [
+    o.orderNo,
+    o.machineNo || o.plannedMachineNo || '',
+    resolveCustomerName(o) || '',
+    o.productSpec || '',
+    plannedQtyOf(o) || '',
+    actualQtyOf(o) || 0,
+    orderProgressStatus(o),
+    getPlannedYmd(o) || '',
+    getActualStartYmd(o) || '',
+    getCompletionYmd(o) || '',
+  ]);
+  // 完成度摘要列
+  const done = rows.filter(o => o.step11At).length;
+  const summary = ['完成 ' + done + ' / 共 ' + rows.length + ' 張', '', '', '', '', '', '', '', '', ''];
+
+  const esc = v => { const s = (v == null ? '' : String(v)); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const csv = '﻿' + [headers, ...data, [], summary].map(r => r.map(esc).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const tag = orderQ ? ('工單_' + orderQ) : custQ ? ('客戶_' + custQ) : ('機台_' + machine);
+  a.href = url;
+  a.download = tag + '_' + monthStr + '_生產進度.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+};
+
+// 點工號 → 顯示該工單生產規格（手機點一下也行）
+const specPop = document.createElement('div');
+specPop.id = 'psSpecPop';
+specPop.innerHTML = '<div class="pop-order"></div><div class="pop-spec"></div><div class="pop-qty"></div><div class="pop-weight"></div><div class="pop-customer"></div>';
+document.body.appendChild(specPop);
+
+// 各工單的「生管上傳多規格資料」快取（每段的真實生產規格來源）
+const psUploadRowsCache = {};
+async function psGetUploadRows(orderNo) {
+  if (orderNo in psUploadRowsCache) return psUploadRowsCache[orderNo];
+  let rows = [];
+  try {
+    const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/upload-rows');
+    rows = (r.ok && r.data.rows) ? r.data.rows : [];
+  } catch (e) { rows = []; }
+  psUploadRowsCache[orderNo] = rows;
+  return rows;
+}
+
+document.addEventListener('click', async (e) => {
+  const cell = e.target.closest('.ps-order-click');
+  if (cell) {
+    e.stopPropagation();
+    const orderNo = cell.dataset.orderno;
+    const segIdx = cell.dataset.segidx ? parseInt(cell.dataset.segidx, 10) : null;
+    const o = allOrders.find(x => x.orderNo === orderNo);
+    const customer = (o && resolveCustomerName(o)) ? resolveCustomerName(o) : '（未填客戶名稱）';
+
+    const rows = await psGetUploadRows(orderNo);
+
+    // 該段「實際完成的規格」＝對應 step30 的 note（現場在選單選的規格）。
+    // 用它去比對上傳列，而非用位置 → 現場跳順位生產也能對到正確的規格／派工數。
+    let segNote = null;
+    if (segIdx) {
+      const step30s = ((o && o.stepEntries) || [])
+        .filter(en => en.stepNo === '30')
+        .sort((a, b) => new Date(a.recordedAt) - new Date(b.recordedAt));
+      if (step30s[segIdx - 1]) segNote = (step30s[segIdx - 1].note || '').trim();
+    }
+    // 是否「真多規格」：生管實際上傳多筆規格（每段各一筆）。
+    //   真多規格 → 每段取自己的上傳列（先用 note 配對／跳順位也對，否則用位置；配不到留空）
+    //   單規格、或「單一上傳被現場用更換規格拆段」→ 跟單規格一樣顯示工單/上傳的規格、派工數、重量
+    const isMultiUpload = rows.length > 1;
+    let segRow = null;
+    if (segIdx && isMultiUpload) {
+      segRow = (segNote ? rows.find(r => (r.productSpec || '').trim() === segNote) : null) || rows[segIdx - 1] || null;
+    }
+    const baseRow = rows[0] || null;
+    const pick = key => {
+      const v = (segIdx && isMultiUpload)
+        ? (segRow ? segRow[key] : null)               // 真多規格：只看該段（配不到就 null）
+        : (baseRow && baseRow[key] != null && baseRow[key] !== '' ? baseRow[key] : (o ? o[key] : null));
+      return (v != null && v !== '') ? v : null;
+    };
+
+    // 生產規格
+    let spec = pick('productSpec');
+    if (spec == null) {
+      if (segIdx && isMultiUpload && segNote) spec = segNote;   // 真多規格但配不到 → 退而顯示記錄的規格
+      else spec = '（未填生產規格）';
+    }
+    const qty = pick('dispatchQty');           // 派工數
+    const weight = pick('totalWeight');        // 全部總重量
+
+    specPop.querySelector('.pop-order').textContent = '工單 ' + orderNo + (segIdx ? '-' + segIdx + '（規格' + segIdx + '）' : '');
+    specPop.querySelector('.pop-spec').textContent = spec;
+    specPop.querySelector('.pop-qty').textContent = '派工數：' + (qty != null && qty !== '' ? qty + ' 片' : '—');
+    specPop.querySelector('.pop-weight').textContent = '全部總重量：' + (weight != null && weight !== '' ? weight + ' kg' : '—');
+    specPop.querySelector('.pop-customer').textContent = '客戶：' + customer;
+    specPop.style.display = 'block';
+    // 定位需把 body 的 zoom 算進去，否則下半部工單的彈窗會超出螢幕被切掉
+    const Z = parseFloat(getComputedStyle(document.body).zoom) || 1;
+    const rect = cell.getBoundingClientRect();          // 視覺座標（已含 zoom）
+    const pw = specPop.offsetWidth * Z;                 // 彈窗視覺寬高
+    const ph = specPop.offsetHeight * Z;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    let left = rect.left;
+    if (left + pw > vw - 8) left = vw - pw - 8;
+    if (left < 8) left = 8;
+    // 預設顯示在該列下方；放不下就翻到上方；再不行就貼齊螢幕底
+    let top = rect.bottom + 6;
+    if (top + ph > vh - 8) top = rect.top - ph - 6;
+    if (top < 8) top = Math.max(8, vh - ph - 8);
+    specPop.style.left = (left / Z) + 'px';             // fixed 座標也會被 zoom 放大，要除回去
+    specPop.style.top = (top / Z) + 'px';
+    e.stopPropagation();
+    return;
+  }
+  specPop.style.display = 'none';   // 點其他地方關閉
+});
+
+loadOrders();
+</script>
+</body>
+</html>

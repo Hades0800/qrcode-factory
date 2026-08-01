@@ -1,0 +1,61 @@
+/* ══════════════════════════════
+   上鎧鋼鐵 — 設計 token（唯一來源）
+   視覺依據：上鎧鋼鐵 CIS 3.0 (2026-07)
+   ------------------------------------------------------
+   這裡只放「變數與字體」，不放任何元件樣式，
+   讓列印頁（machines / qrcodes）也能只取用色彩與字體，
+   不會被 header / card / table 等介面樣式干擾。
+   ══════════════════════════════ */
+
+/* CIS 指定中文字體 Noto Sans TC。
+   display=swap：先用系統字（PingFang TC / 微軟正黑）顯示，載完再替換，
+   避免現場網路慢時出現空白文字。 */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap');
+
+/* ── 設計 token（唯一來源）──────────────────────────────
+   依據「上鎧鋼鐵 企業視覺識別系統指引 3.0」(2026-07)
+   ※ 各頁請勿再自行定義 :root，改這裡就會全站生效
+   ------------------------------------------------------
+   CIS 原色：
+     主要色 暖紅 #f01d0f ｜ 強調色 軍藍 #131936
+     中性色 影黑 #1e1e1e ／ 灰白 #fafafa ｜ 次要色 深灰 #414346（CIS 指定內文色）
+   衍生色說明（CIS 未定義 UI 狀態色，為可讀性必須衍生，僅同色相加深）：
+     暖紅在淺底為 4.12:1，未達 AA 內文 4.5，故小字與白字按鈕改用 --brand-text
+   ------------------------------------------------------ */
+:root {
+  /* CIS 原色 */
+  --brand: #f01d0f;        /* 主要色 暖紅：標頭、圖形、大字、狀態強調 */
+  --accent: #131936;       /* 強調色 軍藍 */
+  --ink: #1e1e1e;          /* 中性色 影黑：標題 */
+  --text: #414346;         /* 次要色 深灰：CIS 指定內文色 (9.51:1) */
+  --bg: #fafafa;           /* 中性色 灰白：頁面底 */
+  --card: #ffffff;
+
+  /* 由暖紅衍生（機能／狀態用，非商標色） */
+  --brand-text: #d81a0d;   /* 紅色小字、白字按鈕底 (AA 4.94 / 5.16) */
+  --brand-dark: #c8180c;   /* hover / pressed */
+  --brand-soft: #fef3f2;   /* 淡紅底 */
+
+  /* 介面中性 */
+  --muted: #6e7175;
+  --border: #e4e5e7;
+
+  /* 機能色（CIS 未定義，沿用既有語意） */
+  --success: #2ea043;
+  --success-soft: #e6f7ea;
+  --warn: #f5c518;
+  --prep: #e87000;
+  --prod: #1d5fd6;
+  --std: #5f6670;
+
+  /* 字體（CIS：中文 Noto Sans TC；英數 Avenir，網頁以系統近似字替代） */
+  --font-sans: "Noto Sans TC", "Avenir Next", Avenir, -apple-system,
+               "PingFang TC", "Microsoft JhengHei", sans-serif;
+  /* CIS 字距：標題 tracking 100 → .1em；內文 tracking 5 → .005em */
+  --track-title: .1em;
+  --track-sub: .25em;
+  --track-body: .005em;
+
+  --safe-top: env(safe-area-inset-top, 0);
+  --safe-bottom: env(safe-area-inset-bottom, 0);
+}

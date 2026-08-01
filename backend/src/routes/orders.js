@@ -1,166 +1,30 @@
-// ── 共用常數與 helper ──
-const ORDER_NO_RE = /^[A-Z]\d{10}$/;
-const ALLOWED_MACHINES = new Set(['No1-350','No2-250','No3-60','No4-90','No5-40','No6-40']);
+// ── 共用常數與 helper（已抽出至 lib/ 與 domain/orders/）──
+import { validOrderNo, clipStr } from '../lib/validation.js';
+import { validMachine } from '../lib/machines.js';
+import { toTaiwanDate, taiwanDateAt8 } from '../lib/date.js';
+import { audit } from '../lib/audit.js';
+import {
+  STEP_COLS,
+  ORDER_INCLUDE,
+  serializeOrder,
+  serializeWithPrev,
+} from '../domain/orders/serialize.js';
+import {
+  stripCustomerCode,
+  hasActivity,
+  setActualStartDate,
+  getPrevMachineEndAt,
+  hasManufacturingParams,
+  hasEquipmentParamFile,
+} from '../domain/orders/helpers.js';
 
-function validOrderNo(s) { return typeof s === 'string' && ORDER_NO_RE.test(s); }
-function validMachine(s) { return !s || ALLOWED_MACHINES.has(String(s)); }
-function clipStr(s, max) { return s == null ? null : String(s).slice(0, max); }
-function hasActivity(o) {
-  return !!(o.step1At || o.step2At || o.step3At || o.step4At ||
-    o.step5At || o.step6At || o.step7At || o.step11At ||
-    o.step21At || o.step22At || o.step23At);
-}
+// 生產規格完成／生產完成終止前，設備「製造參數」必須已填（防呆）
+// 僅限傳統機台 No1–No6；過濾網／筋網機 No12–No20 不套用此防呆
+const NEED_MFG_PARAMS_MSG = '請先填寫設備的「製造參數」才能記錄生產規格完成／生產完成終止';
+const MFG_PARAM_REQUIRED_MACHINES = new Set(['No1-350','No2-250','No3-60','No4-90','No5-40','No6-40']);
 
-// 把任意時間轉成「台灣日期」（UTC 午夜，當作純日期標記）
-function toTaiwanDate(t) {
-  const d = t instanceof Date ? t : new Date(t || Date.now());
-  const tw = new Date(d.getTime() + 8 * 60 * 60 * 1000);
-  return new Date(Date.UTC(tw.getUTCFullYear(), tw.getUTCMonth(), tw.getUTCDate()));
-}
-
-// 取得時刻所在「台灣當日 08:00」對應的 UTC 時間
-// （Taiwan 08:00 = UTC 00:00 of the same Taiwan date）
-function taiwanDateAt8(t) {
-  const d = t instanceof Date ? t : new Date(t || Date.now());
-  const tw = new Date(d.getTime() + 8 * 60 * 60 * 1000);
-  return new Date(Date.UTC(tw.getUTCFullYear(), tw.getUTCMonth(), tw.getUTCDate(), 0, 0, 0));
-}
-
-// 設定 actualStartDate 為實際開始日期（台灣時間）
-// 規則：actualStartDate 一旦有值就永遠不再覆寫；reset-production 才會清空
-// 第一次有活動時（含補登），把那筆活動時間的台灣日期寫入
-async function setActualStartDate(fastify, order, eventTime) {
-  if (order.actualStartDate) return; // 已有值，鎖死不再變
-  await fastify.prisma.order.update({
-    where: { orderNo: order.orderNo },
-    data: { actualStartDate: toTaiwanDate(eventTime) },
-  });
-}
-
-// 找出同機台上一張已完成工單的結束時間（step11At）
-// 用途：強制下一張工單的第一筆生產時態接續在上一張結束的下一分鐘
-async function getPrevMachineEndAt(prisma, order) {
-  if (!order || !order.machineNo) return null;
-  const prev = await prisma.order.findFirst({
-    where: {
-      machineNo: order.machineNo,
-      step11At: { not: null },
-      id: { not: order.id },
-    },
-    orderBy: { step11At: 'desc' },
-    select: { step11At: true },
-  });
-  return prev?.step11At || null;
-}
-
-// 序列化工單並附上「上一張同機台完成時間」— 避免每個 endpoint 都要寫兩行
-async function serializeWithPrev(prisma, order) {
-  if (!order) return null;
-  order.prevMachineEndAt = await getPrevMachineEndAt(prisma, order);
-  return serializeOrder(order);
-}
-
-async function audit(prisma, request, action, target, detail) {
-  try {
-    await prisma.auditLog.create({
-      data: {
-        actorId: request.user?.id || null,
-        actorName: request.user?.displayName || null,
-        action,
-        target: target ? String(target).slice(0, 200) : null,
-        detail: detail ? String(detail).slice(0, 500) : null,
-        ip: request.ip || null,
-      },
-    });
-  } catch (e) { /* ignore audit errors */ }
-}
-
-const STEP_COLS = {
-  '21': { time: 'step21At', note: null },
-  '22': { time: 'step22At', note: null },
-  '23': { time: 'step23At', note: null },
-  '1':  { time: 'step1At',  note: null },
-  '2':  { time: 'step2At',  note: null },
-  '3':  { time: 'step3At',  note: null },
-  '4':  { time: 'step4At',  note: null },
-  '5':  { time: 'step5At',  note: null },
-  '6':  { time: 'step6At',  note: null },
-  '7':  { time: 'step7At',  note: null },
-  '11': { time: 'step11At', note: 'step11Note' },
-  '12': { time: 'step12At', note: 'step12Note' },
-  '13': { time: 'step13At', note: 'step13Note' },
-};
-
-function serializeOrder(o) {
-  if (!o) return null;
-  const events = o.pauseEvents || [];
-  const summarize = (type) => {
-    const items = events.filter(e => e.type === type);
-    const closed = items.filter(e => e.endAt);
-    const active = items.find(e => !e.endAt) || null;
-    return {
-      count: closed.length,
-      totalSec: closed.reduce((s, e) => s + (e.duration || 0), 0),
-      active: active ? { id: active.id, startAt: active.startAt, note: active.note, activeStep: active.activeStep } : null,
-      history: items.map(e => ({
-        id: e.id, activeStep: e.activeStep, startAt: e.startAt, endAt: e.endAt,
-        duration: e.duration, note: e.note, qcActualQty: e.qcActualQty ?? null,
-      })),
-    };
-  };
-  return {
-    orderNo: o.orderNo,
-    machineNo: o.machineNo || '',
-    plannedMachineNo: o.plannedMachineNo || '',
-    leaderId: o.leaderId,
-    leaderName: o.leader?.displayName || '',
-    step21At: o.step21At, step22At: o.step22At, step23At: o.step23At,
-    step1At: o.step1At, step2At: o.step2At, step3At: o.step3At,
-    step4At: o.step4At, step5At: o.step5At, step6At: o.step6At,
-    step7At: o.step7At, step11At: o.step11At, step11Note: o.step11Note || null,
-    step11QcActualQty: o.step11QcActualQty ?? null,
-    // 三個日期：
-    //   plannedDate     = 上傳的計畫日（生管說「這張要 X 做」）
-    //   actualStartDate = 第一筆活動的台灣日期（現場第一次掃 QR 那天）
-    //   productionDate  = 兼容舊邏輯，等同於 actualStartDate || plannedDate
-    plannedDate: o.plannedDate || o.productionDate || null,
-    actualStartDate: o.actualStartDate || null,
-    productionDate: o.actualStartDate || o.plannedDate || o.productionDate || null,
-    specType: o.specType || null,           // 'new' | 'mass' | null
-    difficultyFactor: o.difficultyFactor || null,  // 新製規格才有
-    // 新製規格的差異項目陣列：['raw','mold','dim'] 之子集合（由逗號字串解析）
-    newSpecAspects: o.newSpecAspects ? String(o.newSpecAspects).split(',').filter(Boolean) : [],
-    changeScope: o.changeScope || null,      // '@' | '#' | '@#' | null
-    materialType: o.materialType || null,    // 'coil'(1.0) | 'plate'(1.2) | null
-    auxEquipment: o.auxEquipment || null,           // 逗號字串（flat/leveler/...，可多選）
-    auxEquipmentCustom: o.auxEquipmentCustom || null,// 自訂輔助設備名稱
-    operatorName: o.operatorName || null,           // 設備操作人員姓名（第五步）
-    totalWorkers: (o.totalWorkers ?? null),         // 全部作業人數（第五步）
-    productSpec: o.productSpec || '',
-    moldSpec: o.moldSpec || '', material: o.material || '',
-    dispatchQty: o.dispatchQty, bladeCount: o.bladeCount,
-    machineSPM: o.machineSPM, unitWeight: o.unitWeight, totalWeight: o.totalWeight,
-    pause12: summarize('12'),
-    pause13: summarize('13'),
-    stepEntries: (o.stepEntries || []).map(e => ({
-      id: e.id, stepNo: e.stepNo, seq: e.seq,
-      recordedAt: e.recordedAt, isManual: e.isManual || false,
-      note: e.note || null,
-      qcActualQty: e.qcActualQty ?? null,
-      leaderName: e.leaderName,
-    })),
-    // 同機台上一張已完成工單的結束時間（強制接續用；由 caller 預先附上）
-    prevMachineEndAt: o.prevMachineEndAt || null,
-    createdAt: o.createdAt,
-    updatedAt: o.updatedAt,
-  };
-}
-
-const ORDER_INCLUDE = {
-  leader: true,
-  pauseEvents: { where: { deletedAt: null } },
-  stepEntries: { where: { deletedAt: null }, orderBy: { recordedAt: 'asc' } },
-};
+// 生產完成終止前，設備「參數檔名」必須已上傳（防呆）—— 所有機台皆套用
+const NEED_EP_FILE_MSG = '請先上傳設備參數（設備參數檔名）才能記錄生產完成終止';
 
 export default async function orderRoutes(fastify) {
   fastify.addHook('onRequest', fastify.authenticate);
@@ -201,7 +65,7 @@ export default async function orderRoutes(fastify) {
         await fastify.prisma.order.update({
           where: { orderNo },
           data: {
-            productSpec: null, moldSpec: null,
+            productSpec: null, customerName: null, moldSpec: null,
             material: null, dispatchQty: null, bladeCount: null,
             machineSPM: null, unitWeight: null, totalWeight: null,
           },
@@ -346,11 +210,15 @@ export default async function orderRoutes(fastify) {
     }
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) return reply.code(404).send({ error: '找不到工單' });
+    // 防呆：生產規格完成（更換規格）前，設備「製造參數」必須已填（僅 No1–No6）
+    if (stepNo === '30' && MFG_PARAM_REQUIRED_MACHINES.has(order.machineNo) && !(await hasManufacturingParams(fastify.prisma, order.id))) {
+      return reply.code(400).send({ error: NEED_MFG_PARAMS_MSG });
+    }
     // 規則：step 41（生產開始）之後不能再按 step 40（生產準備），
     // 除非下列任一介入：
     //   - step 30（切換規格）
     //   - pause 13（異常中斷）開始時間
-    //   - pause 12 中的「中午休息／下班時間」已結束（取 endAt）
+    //   - pause 12 中的「中午休息／下班時間／原料更換／模裂更換」已結束（取 endAt）
     if (stepNo === '40') {
       const lastStep41 = await fastify.prisma.stepEntry.findFirst({
         where: { orderId: order.id, stepNo: '41' },
@@ -376,6 +244,8 @@ export default async function orderRoutes(fastify) {
               { note: { contains: '午休' } },
               { note: { contains: '午餐' } },
               { note: { contains: '下班' } },
+              { note: { contains: '原料更換' } },
+              { note: { contains: '模裂更換' } },
             ],
           },
           orderBy: { endAt: 'desc' },
@@ -635,11 +505,33 @@ export default async function orderRoutes(fastify) {
         }
       }
 
+      // 標準化 auxEquipmentNos：物件 { code: '編號' }，只留合法 code、編號最長 20 字、英數
+      // 存成 JSON 字串；空物件視為 null
+      let auxEquipmentNos = body.auxEquipmentNos;
+      if (auxEquipmentNos !== undefined) {
+        if (auxEquipmentNos === null) {
+          auxEquipmentNos = null;
+        } else if (typeof auxEquipmentNos === 'object' && !Array.isArray(auxEquipmentNos)) {
+          const clean = {};
+          for (const [code, no] of Object.entries(auxEquipmentNos)) {
+            if (!ALLOWED.includes(code)) continue;
+            const v = String(no == null ? '' : no).trim().slice(0, 20);
+            if (v) clean[code] = v;
+          }
+          auxEquipmentNos = Object.keys(clean).length ? JSON.stringify(clean) : null;
+        } else {
+          return reply.code(400).send({ error: 'auxEquipmentNos 格式錯誤' });
+        }
+      }
+
       await fastify.prisma.$executeRawUnsafe(
         'ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "auxEquipment" TEXT'
       );
       await fastify.prisma.$executeRawUnsafe(
         'ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "auxEquipmentCustom" TEXT'
+      );
+      await fastify.prisma.$executeRawUnsafe(
+        'ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "auxEquipmentNos" TEXT'
       );
 
       const sets = [];
@@ -652,12 +544,16 @@ export default async function orderRoutes(fastify) {
         params.push(auxEquipmentCustom);
         sets.push(`"auxEquipmentCustom" = $${params.length}`);
       }
+      if (auxEquipmentNos !== undefined) {
+        params.push(auxEquipmentNos);
+        sets.push(`"auxEquipmentNos" = $${params.length}`);
+      }
       if (sets.length === 0) return { ok: true };
       params.push(orderNo);
       const sql = `UPDATE "Order" SET ${sets.join(', ')} WHERE "orderNo" = $${params.length}`;
       const result = await fastify.prisma.$executeRawUnsafe(sql, ...params);
       if (result === 0) return reply.code(404).send({ error: '找不到工單' });
-      return { ok: true, auxEquipment, auxEquipmentCustom };
+      return { ok: true, auxEquipment, auxEquipmentCustom, auxEquipmentNos };
     } catch (e) {
       request.log.error(e, 'aux-equipment failed');
       return reply.code(500).send({
@@ -738,12 +634,12 @@ export default async function orderRoutes(fastify) {
     if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
     const cols = STEP_COLS[step];
     if (!cols) return reply.code(400).send({ error: '無效步驟' });
-    // step 11（生產完成）必須帶 QC 實際生產數量
+    // step 11（生產完成終止）：數量改由「生產規格完成」記錄，這裡數量為選填（相容舊流程）
     let qcActualQty = null;
-    if (step === '11') {
+    if (step === '11' && rawQc !== undefined && rawQc !== null && rawQc !== '') {
       const n = Number(rawQc);
       if (!Number.isInteger(n) || n < 0) {
-        return reply.code(400).send({ error: '請填入此工單／最後規格的實際生產數量（非負整數）' });
+        return reply.code(400).send({ error: 'QC 數量必須是非負整數' });
       }
       qcActualQty = n;
     }
@@ -753,6 +649,16 @@ export default async function orderRoutes(fastify) {
       order = await fastify.prisma.order.create({
         data: { orderNo, leaderId: request.user.id },
       });
+    }
+
+    // 防呆：生產完成終止前，設備「製造參數」必須已填（僅 No1–No6）
+    if (step === '11' && MFG_PARAM_REQUIRED_MACHINES.has(order.machineNo) && !(await hasManufacturingParams(fastify.prisma, order.id))) {
+      return reply.code(400).send({ error: NEED_MFG_PARAMS_MSG });
+    }
+
+    // 防呆：生產完成終止前，設備「參數檔名」必須已上傳（所有機台）
+    if (step === '11' && !(await hasEquipmentParamFile(fastify.prisma, order.id))) {
+      return reply.code(400).send({ error: NEED_EP_FILE_MSG });
     }
 
     if (order[cols.time]) {
@@ -784,7 +690,7 @@ export default async function orderRoutes(fastify) {
       leaderId: request.user.id,
     };
     if (cols.note && note) updateData[cols.note] = clipStr(note, 500);
-    if (step === '11') updateData.step11QcActualQty = qcActualQty;
+    if (step === '11' && qcActualQty != null) updateData.step11QcActualQty = qcActualQty;
 
     const updated = await fastify.prisma.order.update({
       where: { orderNo },
@@ -820,7 +726,7 @@ export default async function orderRoutes(fastify) {
   // 開始暫停 / 異常
   fastify.post('/:orderNo/pause', async (request, reply) => {
     const orderNo = String(request.params.orderNo || '').toUpperCase();
-    const { type, note, activeStep, qcActualQty: rawQc } = request.body || {};
+    const { type, note, activeStep, qcActualQty: rawQc, startAt: rawStart } = request.body || {};
     if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
     if (!['12', '13'].includes(type)) return reply.code(400).send({ error: '無效類型' });
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
@@ -829,20 +735,32 @@ export default async function orderRoutes(fastify) {
       where: { orderId: order.id, type, endAt: null },
     });
     if (active) return reply.code(409).send({ error: '已在暫停中，請先恢復' });
-    // 下班時間／隔日生產（type=12 且 note 含「下班」）必須帶 QC 實際生產數量
+    // 生產完成數量：任何中斷原因都可記錄（下班時間／隔日生產為必填）
     let qcActualQty = null;
-    const isOffWork = type === '12' && typeof note === 'string' && note.includes('下班');
-    if (isOffWork) {
+    if (rawQc !== undefined && rawQc !== null && rawQc !== '') {
       const n = Number(rawQc);
       if (!Number.isInteger(n) || n < 0) {
-        return reply.code(400).send({ error: '請填入此規格實際生產數量（非負整數）' });
+        return reply.code(400).send({ error: '生產完成數量必須是非負整數' });
       }
       qcActualQty = n;
     }
-    const pauseStart = new Date();
+    const isOffWork = type === '12' && typeof note === 'string' && note.includes('下班');
+    if (isOffWork && qcActualQty === null) {
+      return reply.code(400).send({ error: '請填入此規格實際生產數量（非負整數）' });
+    }
+    // 可指定暫停（生產紀錄）時間；不帶則用現在
+    let pauseStart = new Date();
+    if (rawStart) {
+      const parsed = new Date(rawStart);
+      if (isNaN(parsed) || parsed.getFullYear() < 2000 || parsed.getFullYear() > 2100) {
+        return reply.code(400).send({ error: '時間格式錯誤' });
+      }
+      if (parsed > new Date()) return reply.code(400).send({ error: '時間不能超過現在' });
+      pauseStart = parsed;
+    }
     await setActualStartDate(fastify, order, pauseStart);
     await fastify.prisma.pauseEvent.create({
-      data: { orderId: order.id, type, note: clipStr(note, 500), activeStep: clipStr(activeStep, 100), qcActualQty },
+      data: { orderId: order.id, type, note: clipStr(note, 500), activeStep: clipStr(activeStep, 100), qcActualQty, startAt: pauseStart },
     });
     const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
     return { order: await serializeWithPrev(fastify.prisma, updated) };
@@ -879,15 +797,24 @@ export default async function orderRoutes(fastify) {
     const { type, note, startAt: startStr, endAt: endStr, qcActualQty: rawQc } = request.body || {};
     if (!validOrderNo(orderNo)) return reply.code(400).send({ error: '工單號格式錯誤' });
     if (!['12', '13'].includes(type)) return reply.code(400).send({ error: '無效類型' });
-    if (!startStr || !endStr) return reply.code(400).send({ error: '請填寫開始和結束時間' });
+    if (!startStr) return reply.code(400).send({ error: '請填寫開始時間' });
     const startAt = new Date(startStr);
-    const endAt = new Date(endStr);
-    if (isNaN(startAt) || isNaN(endAt)) return reply.code(400).send({ error: '時間格式錯誤' });
-    if (endAt <= startAt) return reply.code(400).send({ error: '結束時間必須晚於開始時間' });
-    if (endAt > new Date()) return reply.code(400).send({ error: '補登時間不能超過現在' });
+    if (isNaN(startAt)) return reply.code(400).send({ error: '時間格式錯誤' });
+    if (startAt > new Date()) return reply.code(400).send({ error: '開始時間不能超過現在' });
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) return reply.code(404).send({ error: '找不到工單' });
-    const duration = Math.round((endAt - startAt) / 1000);
+    // 結束時間選填：有填→已結束暫停（算時長）；不填→進行中暫停（如下班尚未恢復生產）
+    let endAt = null, duration = null;
+    if (endStr) {
+      endAt = new Date(endStr);
+      if (isNaN(endAt)) return reply.code(400).send({ error: '時間格式錯誤' });
+      if (endAt <= startAt) return reply.code(400).send({ error: '結束時間必須晚於開始時間' });
+      if (endAt > new Date()) return reply.code(400).send({ error: '補登時間不能超過現在' });
+      duration = Math.round((endAt - startAt) / 1000);
+    } else {
+      const activeSame = await fastify.prisma.pauseEvent.findFirst({ where: { orderId: order.id, type, endAt: null } });
+      if (activeSame) return reply.code(409).send({ error: '已有進行中的暫停，請先恢復或填結束時間' });
+    }
     const backfillNote = '【補登】' + (note || '');
     // 補登暫停的 QC 實際生產數量：選填（事後補登可能已不知道）
     let qcActualQty = null;
@@ -942,12 +869,14 @@ export default async function orderRoutes(fastify) {
     const processedOrderNos = [];
     const rawRows = []; // 收集原始資料
 
-    for (const row of rows) {
+    for (const [rowIndex, row] of rows.entries()) {
       const orderNo = String(row.orderNo || '').toUpperCase();
       const rawRow = {
         batchId: batch.id,
         orderNo: orderNo || String(row.orderNo || ''),
         productSpec: clipStr(row.productSpec, 200),
+        manuSpec: clipStr(row.manuSpec, 200),
+        customerName: clipStr(stripCustomerCode(row.customerName), 100),
         moldSpec: clipStr(row.moldSpec, 100),
         material: clipStr(row.material, 200),
         machineNo: row.machineNo ? clipStr(row.machineNo, 60) : null,
@@ -976,7 +905,10 @@ export default async function orderRoutes(fastify) {
 
         const data = {
           plannedDate: batchProductionDate, // 計畫日期：可被新上傳覆寫
+          planSeq: rowIndex,                // 計畫序號：Excel 列順序，每次上傳覆寫
           productSpec: rawRow.productSpec,
+          manuSpec: rawRow.manuSpec,        // 製造規格（生管 Excel）
+          customerName: rawRow.customerName,
           moldSpec: rawRow.moldSpec,
           material: rawRow.material,
           dispatchQty: rawRow.dispatchQty,
@@ -1002,6 +934,13 @@ export default async function orderRoutes(fastify) {
             rawRow.status = 'updated';
             updated++;
           } else {
+            // 規格不同跳過，但客戶名稱跟著工單號走：工單還沒填客戶時照樣配對補上
+            if (data.customerName && !existing.customerName) {
+              await fastify.prisma.order.update({
+                where: { orderNo },
+                data: { customerName: data.customerName },
+              });
+            }
             rawRow.status = 'skipped';
             rawRow.errorMsg = '規格不同，跳過';
             skipped++;
@@ -1033,6 +972,85 @@ export default async function orderRoutes(fastify) {
     return { ok: true, created, updated, skipped, errors, total: rows.length, batchId: batch.id };
   });
 
+  // 客戶名稱補登（管理員）：簡表（工單號＋客戶名稱）一次補齊
+  // 只更新 customerName，依工單號配對；計畫日期、規格、生產紀錄一律不碰
+  fastify.post('/bulk-fill-customer', async (request, reply) => {
+    if (!fastify.hasPermission(request.user, 'admin_tools')) {
+      return reply.code(403).send({ error: '需要管理員權限' });
+    }
+    const { rows } = request.body || {};
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return reply.code(400).send({ error: '沒有資料' });
+    }
+    if (rows.length > 1000) {
+      return reply.code(400).send({ error: '單次上限 1000 筆' });
+    }
+    let filled = 0, overwritten = 0, unchanged = 0;
+    const notFound = [], errors = [];
+    for (const row of rows) {
+      try {
+        const orderNo = String(row.orderNo || '').trim().toUpperCase();
+        const customerName = clipStr(stripCustomerCode(row.customerName) || '', 100);
+        if (!validOrderNo(orderNo)) { errors.push((row.orderNo || '(空)') + '：工單號格式錯誤'); continue; }
+        if (!customerName) { errors.push(orderNo + '：客戶名稱空白'); continue; }
+        const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
+        if (!order) { notFound.push(orderNo); continue; }
+        if (order.customerName === customerName) { unchanged++; continue; }
+        await fastify.prisma.order.update({ where: { orderNo }, data: { customerName } });
+        if (order.customerName) overwritten++; else filled++;
+      } catch (e) {
+        errors.push((row.orderNo || '?') + ': ' + e.message);
+      }
+    }
+    await audit(fastify.prisma, request, 'bulk_fill_customer', null,
+      `filled=${filled} overwritten=${overwritten} unchanged=${unchanged} notFound=${notFound.length} errors=${errors.length}`);
+    return { ok: true, filled, overwritten, unchanged, notFound, errors, total: rows.length };
+  });
+
+  // 更正工單號（管理員）：把 from 改成 to，所有生產紀錄保留
+  // 工單號散落於 Order / EquipmentParam / UploadRow / UploadBatch.orderNos，需一併更新
+  // （StepEntry / PauseEvent 以 orderId 關聯，會自動跟著）
+  fastify.post('/rename', async (request, reply) => {
+    if (!fastify.hasPermission(request.user, 'admin_tools')) {
+      return reply.code(403).send({ error: '需要管理員權限' });
+    }
+    const from = String((request.body || {}).fromOrderNo || '').trim().toUpperCase();
+    const to = String((request.body || {}).toOrderNo || '').trim().toUpperCase();
+    if (!validOrderNo(from) || !validOrderNo(to)) {
+      return reply.code(400).send({ error: '工單號格式錯誤（需 1 個英文字母 + 10 個數字）' });
+    }
+    if (from === to) return reply.code(400).send({ error: '新舊工單號相同' });
+
+    const src = await fastify.prisma.order.findUnique({ where: { orderNo: from } });
+    if (!src) return reply.code(404).send({ error: '找不到原工單 ' + from });
+
+    // 目標工單號不可已存在（含回收桶內的軟刪除工單；deletedAt 鍵繞過軟刪除過濾）
+    const dup = await fastify.prisma.order.findFirst({ where: { orderNo: to, deletedAt: undefined } });
+    if (dup) {
+      return reply.code(409).send({
+        error: '目標工單號 ' + to + ' 已存在' + (dup.deletedAt ? '（在回收桶，請先清除）' : '') + '，無法更正',
+      });
+    }
+
+    // 同步更新冗餘 orderNo 欄位（StepEntry / PauseEvent 走 orderId 不需動）
+    await fastify.prisma.$transaction([
+      fastify.prisma.order.update({ where: { orderNo: from }, data: { orderNo: to } }),
+      fastify.prisma.equipmentParam.updateMany({ where: { orderNo: from }, data: { orderNo: to } }),
+      fastify.prisma.uploadRow.updateMany({ where: { orderNo: from }, data: { orderNo: to } }),
+    ]);
+    // UploadBatch.orderNos 是字串陣列，逐批把 from 換成 to
+    const batches = await fastify.prisma.uploadBatch.findMany({ where: { orderNos: { has: from } } });
+    for (const b of batches) {
+      await fastify.prisma.uploadBatch.update({
+        where: { id: b.id },
+        data: { orderNos: (b.orderNos || []).map(n => (n === from ? to : n)) },
+      });
+    }
+
+    await audit(fastify.prisma, request, 'rename_order', from, 'to=' + to);
+    return { ok: true, from, to, batchesUpdated: batches.length };
+  });
+
   // 批次取消上傳：只動上傳資料，工單本身不刪
   // - 不論工單是否有生產紀錄，一律只清上傳欄位（productSpec、moldSpec、material 等）
   // - 工單本身（productionDate、機台、生產紀錄）一律保留
@@ -1059,7 +1077,7 @@ export default async function orderRoutes(fastify) {
         await fastify.prisma.order.update({
           where: { orderNo },
           data: {
-            productSpec: null, moldSpec: null,
+            productSpec: null, customerName: null, moldSpec: null,
             material: null, dispatchQty: null, bladeCount: null,
             machineSPM: null, unitWeight: null, totalWeight: null,
           },
@@ -1293,24 +1311,29 @@ export default async function orderRoutes(fastify) {
   });
 
   // 取得工單的上傳原始列（多規格）
+  // 過濾網多機台（@N）：規格配對用「@ 之前的基礎單號」，@1/@2 不參與配對 → 各機台共用同一份規格
   fastify.get('/:orderNo/upload-rows', async (request) => {
     const orderNo = String(request.params.orderNo || '').trim().toUpperCase();
     if (!validOrderNo(orderNo)) return { rows: [] };
-    // 找該工單最新且未取消的 batch
-    const latestRow = await fastify.prisma.uploadRow.findFirst({
+    const baseNo = orderNo.split('@')[0];
+    // 跨批次「合併」規格：一張工單的規格可能分散在多次上傳
+    //   （一單多規格、跨天改版都會這樣；同號不同規格的列會被上傳邏輯標成 skipped，但仍是有效規格）。
+    //   只排除 error 與已取消批次；依 productSpec 去重，較新批次的值覆蓋較舊的。
+    //   → QC 看得到這張工單「所有」規格，避免像 1890 那筆選不到而漏做／改用備註硬記。
+    const allRows = await fastify.prisma.uploadRow.findMany({
       where: {
-        orderNo,
-        status: { in: ['created', 'updated'] },
+        orderNo: baseNo,
+        status: { not: 'error' },
         batch: { cancelledAt: null },
       },
-      orderBy: { batchId: 'desc' },
-      select: { batchId: true },
+      orderBy: [{ batchId: 'asc' }, { id: 'asc' }], // 舊→新，讓較新批次覆蓋
     });
-    if (!latestRow) return { rows: [] };
-    const rows = await fastify.prisma.uploadRow.findMany({
-      where: { orderNo, batchId: latestRow.batchId },
-      orderBy: { id: 'asc' },
-    });
+    // 依 productSpec 去重：Map.set 會更新值但保留首次出現的排列位置 → 舊規格在前、新規格接續在後
+    const bySpec = new Map();
+    for (const r of allRows) {
+      bySpec.set((r.productSpec || '').trim(), r);
+    }
+    const rows = [...bySpec.values()];
     return { rows };
   });
 

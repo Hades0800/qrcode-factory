@@ -12,15 +12,10 @@
 <link rel="dns-prefetch" href="https://shangkai-manu-record.zeabur.app">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
-  :root {
-    --brand: #d23535; --brand-dark: #a82828; --brand-soft: #fdf2f2;
-    --ink: #1c1c1e; --text: #2c2c2e; --muted: #6e6e73;
-    --border: #e5e5ea; --bg: #f2f2f5; --card: #fff;
-    --success: #2ea043; --success-soft: #e6f7ea;
-  }
-  * { box-sizing: border-box; }
+  /* 設計 token 已統一至 styles.css（CIS 3.0），請勿在此重複定義 */
+* { box-sizing: border-box; }
   body {
-    margin: 0; font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    margin: 0; font-family: var(--font-sans);
     background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased;
   }
   header {
@@ -80,7 +75,7 @@
     transition: all .15s;
   }
   .page-tab:hover { color: var(--brand); }
-  .page-tab.active { color: #fff; background: var(--brand); box-shadow: 0 2px 6px rgba(210,53,53,.25); }
+  .page-tab.active { color: #fff; background: var(--brand); box-shadow: 0 2px 6px rgba(240,29,15,.25); }
   .card {
     background: var(--card); border-radius: 14px; padding: 20px; margin-bottom: 14px;
     box-shadow: 0 1px 3px rgba(0,0,0,.04);
@@ -96,7 +91,7 @@
   }
   button:active { transform: scale(.98); }
   button:disabled { opacity: .5; }
-  .btn-primary { background: var(--brand); color: #fff; box-shadow: 0 2px 6px rgba(210,53,53,.25); }
+  .btn-primary { background: var(--brand-text); color: #fff; box-shadow: 0 2px 6px rgba(240,29,15,.25); }
   .btn-success { background: var(--success); color: #fff; box-shadow: 0 2px 6px rgba(46,160,67,.25); }
   .btn-block { width: 100%; }
 
@@ -174,7 +169,8 @@
     <a href="index.html">生產實態紀錄</a>
     <a href="records.html">歷史實態紀錄</a>
     <a href="realtime.html">即時生產資訊</a>
-    <a href="plan-stats.html">計畫達成統計</a>
+    <a href="plan-stats.html">生產進度統計</a>
+    <a href="goal-stats.html">目標達成統計</a>
     <a href="upload.html" class="nav-active">&#128228; 上傳</a>
     <a href="admin.html" id="adminLink" style="display:none;">&#9881; 管理</a>
     <div class="menu-sep"></div>
@@ -249,6 +245,7 @@
             <th>製造單號</th>
             <th>生產日期</th>
             <th>生產規格</th>
+            <th>製造規格</th>
             <th>模具規格</th>
             <th>領用材料</th>
             <th>機台</th>
@@ -322,6 +319,13 @@ const MACHINE_MAP = {
   '4': 'No4-90',  'No4': 'No4-90',  'No4-90':  'No4-90',
   '5': 'No5-40',  'No5': 'No5-40',  'No5-40':  'No5-40',
   '6': 'No6-40',  'No6': 'No6-40',  'No6-40':  'No6-40',
+  '12': 'No12', 'No12': 'No12',
+  '13': 'No13', 'No13': 'No13',
+  '16': 'No16', 'No16': 'No16',
+  '17': 'No17', 'No17': 'No17',
+  '18': 'No18', 'No18': 'No18',
+  '19': 'No19', 'No19': 'No19',
+  '20': 'No20', 'No20': 'No20',
 };
 function normalizeMachine(v) {
   if (!v) return '';
@@ -329,12 +333,21 @@ function normalizeMachine(v) {
   return MACHINE_MAP[s] || s;
 }
 
+// 過濾網機台：一張工單可在多台生產，工單號可加「@機台號」尾碼（例 F1150617007@1，機台 No12）
+const FILTER_MESH_UP = new Set(['No12','No13','No16','No17','No18']);
+
 // 欄位對應（Excel 欄位名 → 系統欄位）— 同義字都對應到同一欄位
 const FIELD_MAP = {
   // 製造單號
   '製造單號': 'orderNo', '工單號': 'orderNo', '工單編號': 'orderNo',
   // 生產規格 / 品名
   '品名規格': 'productSpec', '生產規格': 'productSpec', '品名': 'productSpec',
+  // 製造規格（與 SPM/刀數同層，生管另填）
+  '製造規格': 'manuSpec',
+  // 客戶名稱（公司編號欄＝編號+名稱，後端會自動去掉編號）
+  '客戶名稱': 'customerName', '客戶': 'customerName', '客戶名': 'customerName',
+  '公司編號': 'customerName',
+  '客戶簡稱': 'customerName', '客戶全名': 'customerName',
   // 模具
   '模具': 'moldSpec', '模具規格': 'moldSpec',
   // 領料
@@ -440,11 +453,13 @@ function parseRows(json) {
     });
     // 沒有生產日期就用上傳當日
     if (!obj.productionDate) obj.productionDate = todayStr;
-    obj.orderNo = String(obj.orderNo || '').trim();
-    obj._valid = /^[A-Z]\d{10}$/.test(obj.orderNo.toUpperCase());
-    if (obj._valid) obj.orderNo = obj.orderNo.toUpperCase();
-    // 機台號自動配對
+    obj.orderNo = String(obj.orderNo || '').trim().toUpperCase();
+    // 機台號自動配對（先正規化，@機台號 驗證會用到）
     if (obj.machineNo) obj.machineNo = normalizeMachine(obj.machineNo);
+    // 驗證：標準「1英文+10數字」；或「@機台號」尾碼（限過濾網機台，多機台生產用）
+    const isStd = /^[A-Z]\d{10}$/.test(obj.orderNo);
+    const isMulti = /^[A-Z]\d{10}@\d{1,2}$/.test(obj.orderNo) && FILTER_MESH_UP.has(obj.machineNo);
+    obj._valid = isStd || isMulti;
     // 數值欄位：0 視為空值（拿掉）
     ['dispatchQty','bladeCount','machineSPM','unitWeight','totalWeight'].forEach(k => {
       if (obj[k] !== undefined && obj[k] !== null && obj[k] !== '') {
@@ -490,6 +505,7 @@ function renderPreview() {
       <td>${orderCell}</td>
       <td>${escapeHtml(r.productionDate || '')}</td>
       <td>${escapeHtml(r.productSpec || '')}</td>
+      <td>${escapeHtml(r.manuSpec || '')}</td>
       <td>${escapeHtml(r.moldSpec || '')}</td>
       <td>${escapeHtml(r.material || '')}</td>
       <td>${escapeHtml(r.machineNo || '')}</td>
@@ -555,9 +571,19 @@ $('uploadBtn').onclick = async () => {
 async function loadTodayOrders() {
   const r = await api('/api/orders?limit=200');
   if (!r.ok) return;
+  const all = r.data.orders || [];
+  // @N（過濾網多機台）工單的規格／數量／重量掛在「@ 之前的基礎單號」；自己空白時從基礎單號帶
+  const byNo = {};
+  all.forEach(o => { byNo[o.orderNo] = o; });
+  const fld = (o, key) => {
+    if (o[key] != null && o[key] !== '') return o[key];
+    const at = (o.orderNo || '').indexOf('@');
+    if (at > 0) { const b = byNo[o.orderNo.slice(0, at)]; if (b && b[key] != null && b[key] !== '') return b[key]; }
+    return '';
+  };
   const today = new Date();
   const todayYmd = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
-  const rows = (r.data.orders || []).filter(o => {
+  const rows = all.filter(o => {
     const d = o.productionDate ? new Date(o.productionDate) : null;
     if (!d) return false;
     return d.getFullYear() === today.getFullYear() &&
@@ -584,10 +610,10 @@ async function loadTodayOrders() {
         <td>${i + 1}</td>
         <td><strong>${escapeHtml(o.orderNo)}</strong></td>
         <td>${escapeHtml(o.productionDate ? String(o.productionDate).slice(0,10) : '')}</td>
-        <td style="white-space:normal;max-width:240px;">${escapeHtml(o.productSpec || '')}</td>
-        <td>${escapeHtml(o.moldSpec || '')}</td>
-        <td>${o.dispatchQty || ''}</td>
-        <td>${o.totalWeight || ''}</td>
+        <td style="white-space:normal;max-width:240px;">${escapeHtml(fld(o, 'productSpec'))}</td>
+        <td>${escapeHtml(fld(o, 'moldSpec'))}</td>
+        <td>${fld(o, 'dispatchQty') || ''}</td>
+        <td>${fld(o, 'totalWeight') || ''}</td>
         <td>${started ? '<span style="color:var(--success);">已生產</span>' : '<span style="color:var(--muted);">未開始</span>'}</td>
         <td>${actionBtn}</td>
       </tr>
@@ -740,7 +766,7 @@ async function loadBatches() {
     const prodDate = b.productionDate ? String(b.productionDate).slice(0, 10) : '';
     const orderList = (b.orderNos || []);
     return `
-      <div style="margin-bottom:12px;padding:16px 20px;background:${isCancelled ? '#f9f9f9' : 'var(--card)'};border:1px solid ${isCancelled ? '#e5e5ea' : 'var(--border)'};border-radius:12px;transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.06)'" onmouseout="this.style.boxShadow='none'">
+      <div style="margin-bottom:12px;padding:16px 20px;background:${isCancelled ? '#f9f9f9' : 'var(--card)'};border:1px solid ${isCancelled ? 'var(--border)' : 'var(--border)'};border-radius:12px;transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.06)'" onmouseout="this.style.boxShadow='none'">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
           <div>
             <div style="display:flex;align-items:center;gap:8px;text-align:left;">
