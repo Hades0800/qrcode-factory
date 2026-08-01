@@ -49,15 +49,18 @@ await fastify.register(v2Routes, { prefix: '/v2' });
 const port = Number(process.env.PORT || 8080);
 const host = '0.0.0.0';
 
-// 啟動時自動同步資料表
-runDbPush();
-
-// 舊資料遷移：isAdmin/isPlanner → Leader.roles（冪等；須在 ensureAdmin 之前跑）
+// ⚠️ 順序很重要：先遷移 roles，再跑 db push。
+//    runDbPush 帶 --accept-data-loss，會直接把 isAdmin/isPlanner 兩欄刪掉；
+//    若先跑它，遷移程式就讀不到舊權限，所有人會被降成預設的 'qc'。
+// 舊資料遷移：isAdmin/isPlanner → Leader.roles（冪等；新資料庫時表還沒建，失敗略過即可）
 try {
   await ensureRolesColumn();
 } catch (err) {
   console.error('⚠️ roles 遷移失敗（不影響啟動）：', err.message);
 }
+
+// 啟動時自動同步資料表
+runDbPush();
 
 // 建立權限目錄與角色，並載入記憶體快取（冪等；不覆蓋後台已調整過的設定）
 try {
