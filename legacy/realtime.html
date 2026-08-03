@@ -566,6 +566,7 @@ function resolveCustomerName(o) {
 }
 let activeMachine = '';
 let idleMachinesToday = new Set();
+let idleEventIdByMachine = {};   // 機台號 → 無工令事件 id（取消時要用）
 // 即時頁專用：只顯示 HH:MM
 function fmtHM(iso) {
   if (!iso) return '';
@@ -613,6 +614,7 @@ async function loadOrders() {
     if (cached && cached.orders) {
       allOrders = cached.orders;
       idleMachinesToday = new Set(cached.idleMachines || []);
+      idleEventIdByMachine = cached.idleEventIds || {};
       renderMachineTabs();
       if (MACHINES.length > 0 && !activeMachine) activeMachine = MACHINES[0].id;
       renderMachineTabs();
@@ -627,18 +629,23 @@ async function loadOrders() {
   if (ordersRes.ok) allOrders = ordersRes.data.orders || [];
   if (idleRes.ok) {
     const now = new Date();
-    idleMachinesToday = new Set((idleRes.data.events || []).filter(e => {
+    const todayEvents = (idleRes.data.events || []).filter(e => {
       const d = new Date(e.createdAt);
       return d.getFullYear() === now.getFullYear() &&
              d.getMonth() === now.getMonth() &&
              d.getDate() === now.getDate();
-    }).map(e => e.machineNo));
+    });
+    idleMachinesToday = new Set(todayEvents.map(e => e.machineNo));
+    // 機台號 → 事件 id（取消無工令要用 id 呼叫 API）
+    idleEventIdByMachine = {};
+    todayEvents.forEach(e => { idleEventIdByMachine[e.machineNo] = e.id; });
   }
   // 寫入快取
   try {
     localStorage.setItem(CACHE_RT, JSON.stringify({
       orders: allOrders,
       idleMachines: Array.from(idleMachinesToday),
+      idleEventIds: idleEventIdByMachine,
       savedAt: Date.now(),
     }));
   } catch (e) {}
@@ -796,7 +803,10 @@ function renderContent() {
         </div>
         <div class="stat ${idleMachinesToday.has(activeMachine) ? '' : 'highlight'}">
           <div class="s-label">機台編號</div>
-          <div class="s-value" style="font-size:18px;">${escapeHtml(m.num)}-${escapeHtml(m.spec)}${idleMachinesToday.has(activeMachine) ? ' <span style="font-size:12px;color:var(--muted);background:var(--border);padding:2px 8px;border-radius:10px;">今日無工令</span>' : ''}</div>
+          <div class="s-value" style="font-size:18px;">${escapeHtml(m.num)}-${escapeHtml(m.spec)}${idleMachinesToday.has(activeMachine)
+            ? ' <span style="font-size:12px;color:var(--muted);background:var(--border);padding:2px 8px;border-radius:10px;">今日無工令</span>'
+              + ' <button type="button" id="cancelIdleBtn" style="font-size:11px;margin-left:4px;padding:3px 9px;border:1px solid var(--border);border-radius:10px;background:#fff;color:var(--brand);font-weight:600;cursor:pointer;vertical-align:middle;">取消</button>'
+            : ''}</div>
         </div>
         <div class="stat">
           <div class="s-label">今日工單數</div>
@@ -898,6 +908,9 @@ function renderContent() {
   content.querySelectorAll('[data-move-planned]').forEach(b => {
     b.onclick = () => moveToPlannedMachine(b.getAttribute('data-move-planned'), b.getAttribute('data-target'));
   });
+  // 取消「今日無工令」
+  const cancelIdleBtn = document.getElementById('cancelIdleBtn');
+  if (cancelIdleBtn) cancelIdleBtn.onclick = () => cancelIdle(activeMachine);
 
   // 載入多規格卡片
   machineOrders.forEach(o => loadSpecCards(o));
@@ -995,6 +1008,29 @@ async function deleteEntry(entryId, orderNo) {
   }
   renderContent();
   toast('已刪除', 'success');
+}
+
+// 取消「今日無工令」——現場後來接到工單、或當初標錯時用
+async function cancelIdle(machineNo) {
+  const id = idleEventIdByMachine[machineNo];
+  if (!id) { toast('找不到該機台今日的無工令紀錄，請重新整理', 'error'); return; }
+  if (!confirm('確定取消「' + machineNo + '」今日的無工令狀態？\n\n取消後這台機台今天就不算閒置，會回到正常統計。')) return;
+  const r = await api('/api/idle-events/' + id, { method: 'DELETE' });
+  if (!r.ok) { toast(r.error || '取消失敗', 'error'); return; }
+  // 本地狀態同步，畫面立即更新（不必等下一次輪詢）
+  idleMachinesToday.delete(machineNo);
+  delete idleEventIdByMachine[machineNo];
+  try {
+    const cached = JSON.parse(localStorage.getItem(CACHE_RT) || 'null');
+    if (cached) {
+      cached.idleMachines = Array.from(idleMachinesToday);
+      cached.idleEventIds = idleEventIdByMachine;
+      localStorage.setItem(CACHE_RT, JSON.stringify(cached));
+    }
+  } catch (e) {}
+  renderMachineTabs();
+  renderContent();
+  toast('已取消今日無工令', 'success');
 }
 
 // 全機台本日匯總（給「全機台」分頁用）— 直接列每台機台的當日卡片，不再放頂部目標總表
