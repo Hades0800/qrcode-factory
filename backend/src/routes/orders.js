@@ -15,12 +15,13 @@ import {
   setActualStartDate,
   getPrevMachineEndAt,
   hasManufacturingParams,
+  getMissingManufacturingParams,
   hasEquipmentParamFile,
 } from '../domain/orders/helpers.js';
 
 // 生產規格完成／生產完成終止前，設備「製造參數」必須已填（防呆）
 // 僅限傳統機台 No1–No6；過濾網／筋網機 No12–No20 不套用此防呆
-const NEED_MFG_PARAMS_MSG = '請先填寫設備的「製造參數」才能記錄生產規格完成／生產完成終止';
+const NEED_MFG_PARAMS_MSG = '設備「製造參數」未填完整，無法記錄生產規格完成／生產完成終止。缺少'
 const MFG_PARAM_REQUIRED_MACHINES = new Set(['No1-350','No2-250','No3-60','No4-90','No5-40','No6-40']);
 
 // 生產完成終止前，設備「參數檔名」必須已上傳（防呆）—— 所有機台皆套用
@@ -205,8 +206,9 @@ export default async function orderRoutes(fastify) {
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) return reply.code(404).send({ error: '找不到工單' });
     // 防呆：生產規格完成（更換規格）前，設備「製造參數」必須已填（僅 No1–No6）
-    if (stepNo === '30' && MFG_PARAM_REQUIRED_MACHINES.has(order.machineNo) && !(await hasManufacturingParams(fastify.prisma, order.id))) {
-      return reply.code(400).send({ error: NEED_MFG_PARAMS_MSG });
+    if (stepNo === '30' && MFG_PARAM_REQUIRED_MACHINES.has(order.machineNo)) {
+      const missing = await getMissingManufacturingParams(fastify.prisma, order.id);
+      if (missing.length) return reply.code(400).send({ error: NEED_MFG_PARAMS_MSG + '：' + missing.join('；') });
     }
     // 規則：step 41（生產開始）之後不能再按 step 40（生產準備），
     // 除非下列任一介入：
@@ -643,8 +645,9 @@ export default async function orderRoutes(fastify) {
     }
 
     // 防呆：生產完成終止前，設備「製造參數」必須已填（僅 No1–No6）
-    if (step === '11' && MFG_PARAM_REQUIRED_MACHINES.has(order.machineNo) && !(await hasManufacturingParams(fastify.prisma, order.id))) {
-      return reply.code(400).send({ error: NEED_MFG_PARAMS_MSG });
+    if (step === '11' && MFG_PARAM_REQUIRED_MACHINES.has(order.machineNo)) {
+      const missing = await getMissingManufacturingParams(fastify.prisma, order.id);
+      if (missing.length) return reply.code(400).send({ error: NEED_MFG_PARAMS_MSG + '：' + missing.join('；') });
     }
 
     // 防呆：生產完成終止前，設備「參數檔名」必須已上傳（所有機台）

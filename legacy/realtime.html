@@ -1341,7 +1341,7 @@ function renderRtEquipmentColumn(ep, prefix) {
   const specTable = `
     <div data-spec-col="${col}" style="margin-bottom:8px;">
       <div style="display:flex;gap:5px;font-size:10px;color:var(--muted);font-weight:700;padding:0 2px 3px;">
-        <span style="flex:1;">生產規格</span><span style="width:48px;text-align:center;">SPM</span><span style="width:48px;text-align:center;">刀數</span><span style="width:48px;text-align:center;">送料</span><span style="width:24px;"></span>
+        <span style="flex:1;">${prefix ? '製造規格' : '生產規格'}</span><span style="width:48px;text-align:center;">SPM</span><span style="width:48px;text-align:center;">刀數</span><span style="width:48px;text-align:center;">送料</span><span style="width:24px;"></span>
       </div>
       <div class="spec-rows">${rows.map(r => rtSpecRowHtml(r.spec, r.spm, r.blades, r.feed)).join('')}</div>
       <button type="button" onclick="addSpecRow(this)" style="margin-top:2px;width:100%;padding:5px;border:1px dashed var(--border);border-radius:6px;background:#fafafa;font-size:11px;color:var(--brand);cursor:pointer;font-weight:600;">＋ 新增規格</button>

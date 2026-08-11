@@ -24,25 +24,76 @@ export async function setActualStartDate(fastify, order, eventTime) {
   });
 }
 
-// 設備「製造參數」（base 欄）是否已填寫 —— 生產規格完成／生產完成終止的防呆條件
-// 製造參數 = base 單值欄位任一有值，或 baseSpecRows（多規格 SPM/刀數/送料）有內容
+// 設備「製造參數」是否填寫完整 —— 生產規格完成／生產完成終止的防呆條件
+//
+// 規則（2026-08 收嚴）必填四項：
+//   ① 設備參數檔名（製造參數區的那一欄）
+//   ② 至少要有一列規格，且【每一列】的 製造規格 / SPM / 刀數 都要有值
+//   送料、參數檔案屬性、模具規格、大刀座位置、位置更新頻度 不強制。
+//
+// 為什麼要收嚴：原本是「九個 base 欄任一有值就放行」，
+//   現場只要填了「設備參數檔名」一欄就能結單，SPM／刀數／送料全空照樣過關
+//   （實例：F1150810002 只填檔名 46*101.6 就完成了）。等於擋不住真正要擋的事。
+//
+// 舊資料相容：早期沒有規格表，SPM/刀數存在單值欄位（baseMachineSPM/baseBladeCount）。
+//   規格表為空時，比照前端 rtParseSpecRows() 的做法，用單值欄位組成一列來判斷。
+export function parseBaseSpecRows(ep) {
+  let arr = [];
+  if (ep?.baseSpecRows) {
+    try { arr = JSON.parse(ep.baseSpecRows) || []; } catch (e) { arr = []; }
+  }
+  if (!Array.isArray(arr)) arr = [];
+  // 舊資料 fallback：規格表空的話，用單值欄位組成一列
+  if (arr.length === 0 && ep) {
+    const spec = ep.baseProductSpecAttr, spm = ep.baseMachineSPM, blades = ep.baseBladeCount;
+    if ((spec != null && String(spec).trim() !== '') || spm != null || blades != null) {
+      arr = [{ spec: spec || '', spm, blades }];
+    }
+  }
+  return arr;
+}
+
+// 單列是否完整：製造規格、SPM、刀數 三項都要有
+export function isSpecRowComplete(r) {
+  if (!r) return false;
+  const hasSpec = r.spec != null && String(r.spec).trim() !== '';
+  const hasSpm = r.spm != null && String(r.spm).trim() !== '';
+  const hasBlades = r.blades != null && String(r.blades).trim() !== '';
+  return hasSpec && hasSpm && hasBlades;
+}
+
+// 回傳缺少的項目（陣列）；全部齊全時回空陣列。供錯誤訊息指出到底缺什麼。
+export function missingManufacturingParams(ep) {
+  const missing = [];
+  if (!ep) return ['設備參數（尚未建立）'];
+  const fileName = ep.baseParamFileName;
+  if (fileName == null || String(fileName).trim() === '') missing.push('設備參數檔名');
+  const rows = parseBaseSpecRows(ep);
+  if (rows.length === 0) {
+    missing.push('製造規格、SPM、刀數（尚未新增任何規格列）');
+  } else {
+    const bad = [];
+    rows.forEach((r, i) => {
+      const lack = [];
+      if (!(r.spec != null && String(r.spec).trim() !== '')) lack.push('製造規格');
+      if (!(r.spm != null && String(r.spm).trim() !== '')) lack.push('SPM');
+      if (!(r.blades != null && String(r.blades).trim() !== '')) lack.push('刀數');
+      if (lack.length) bad.push(`第${i + 1}列缺 ${lack.join('、')}`);
+    });
+    if (bad.length) missing.push(bad.join('；'));
+  }
+  return missing;
+}
+
 export async function hasManufacturingParams(prisma, orderId) {
   const ep = await prisma.equipmentParam.findUnique({ where: { orderId } });
-  if (!ep) return false;
-  const baseFields = [
-    ep.baseProductSpecAttr, ep.baseParamFileName, ep.baseParamFileAttr, ep.baseMoldSpec,
-    ep.baseMachineSPM, ep.baseBladeCount, ep.baseFeedSetting, ep.baseCutterStroke, ep.baseStrokeUpdateFreq,
-  ];
-  if (baseFields.some(v => v != null && String(v).trim() !== '')) return true;
-  if (ep.baseSpecRows) {
-    try {
-      const arr = JSON.parse(ep.baseSpecRows);
-      if (Array.isArray(arr) && arr.some(r => r && (
-        (r.spec && String(r.spec).trim()) || r.spm != null || r.blades != null || (r.feed && String(r.feed).trim())
-      ))) return true;
-    } catch (e) { /* ignore */ }
-  }
-  return false;
+  return missingManufacturingParams(ep).length === 0;
+}
+
+// 同上，但回傳缺項清單（給 API 產生具體錯誤訊息用）
+export async function getMissingManufacturingParams(prisma, orderId) {
+  const ep = await prisma.equipmentParam.findUnique({ where: { orderId } });
+  return missingManufacturingParams(ep);
 }
 
 // 設備參數「檔名」是否已填 —— 生產完成終止的防呆條件（所有機台）
