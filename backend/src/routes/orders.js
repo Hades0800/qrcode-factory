@@ -207,7 +207,7 @@ export default async function orderRoutes(fastify) {
     if (!order) return reply.code(404).send({ error: '找不到工單' });
     // 防呆：生產規格完成（更換規格）前，設備「製造參數」必須已填（僅 No1–No6）
     if (stepNo === '30' && MFG_PARAM_REQUIRED_MACHINES.has(order.machineNo)) {
-      const missing = await getMissingManufacturingParams(fastify.prisma, order.id);
+      const missing = await getMissingManufacturingParams(fastify.prisma, order);
       if (missing.length) return reply.code(400).send({ error: NEED_MFG_PARAMS_MSG + '：' + missing.join('；') });
     }
     // 規則：step 41（生產開始）之後不能再按 step 40（生產準備），
@@ -646,7 +646,7 @@ export default async function orderRoutes(fastify) {
 
     // 防呆：生產完成終止前，設備「製造參數」必須已填（僅 No1–No6）
     if (step === '11' && MFG_PARAM_REQUIRED_MACHINES.has(order.machineNo)) {
-      const missing = await getMissingManufacturingParams(fastify.prisma, order.id);
+      const missing = await getMissingManufacturingParams(fastify.prisma, order);
       if (missing.length) return reply.code(400).send({ error: NEED_MFG_PARAMS_MSG + '：' + missing.join('；') });
     }
 

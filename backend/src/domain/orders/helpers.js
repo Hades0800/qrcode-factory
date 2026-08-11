@@ -26,7 +26,7 @@ export async function setActualStartDate(fastify, order, eventTime) {
 
 // 設備「製造參數」是否填寫完整 —— 生產規格完成／生產完成終止的防呆條件
 //
-// 規則（2026-08 收嚴）必填四項：
+// ── 嚴格規則（2026-08 收嚴）必填四項 ──
 //   ① 設備參數檔名（製造參數區的那一欄）
 //   ② 至少要有一列規格，且【每一列】的 製造規格 / SPM / 刀數 都要有值
 //   送料、參數檔案屬性、模具規格、大刀座位置、位置更新頻度 不強制。
@@ -35,8 +35,38 @@ export async function setActualStartDate(fastify, order, eventTime) {
 //   現場只要填了「設備參數檔名」一欄就能結單，SPM／刀數／送料全空照樣過關
 //   （實例：F1150810002 只填檔名 46*101.6 就完成了）。等於擋不住真正要擋的事。
 //
+// ── 不溯及既往 ──
+//   生效日之前就開始生產的工單，維持舊的寬鬆規則（任一欄有值即可），
+//   免得現有在製工單因為新規則突然結不了單。
+//   生效日可用環境變數 MFG_PARAMS_STRICT_FROM 設定（ISO 格式），未設定時用下面的預設值。
+//
 // 舊資料相容：早期沒有規格表，SPM/刀數存在單值欄位（baseMachineSPM/baseBladeCount）。
 //   規格表為空時，比照前端 rtParseSpecRows() 的做法，用單值欄位組成一列來判斷。
+const MFG_STRICT_FROM = new Date(
+  process.env.MFG_PARAMS_STRICT_FROM || '2026-08-07T00:00:00+08:00'
+);
+
+// 這張工單是否適用「嚴格規則」：以實際開始生產日判斷，
+// 還沒開工的（actualStartDate 為空）用建立時間；兩者皆無視為新單 → 嚴格。
+export function usesStrictMfgParams(order) {
+  if (!order) return true;
+  const started = order.actualStartDate || order.createdAt;
+  if (!started) return true;
+  return new Date(started).getTime() >= MFG_STRICT_FROM.getTime();
+}
+
+// 舊規則（生效日之前的工單）：九個 base 欄任一有值即可
+function hasAnyBaseValue(ep) {
+  if (!ep) return false;
+  const baseFields = [
+    ep.baseProductSpecAttr, ep.baseParamFileName, ep.baseParamFileAttr, ep.baseMoldSpec,
+    ep.baseMachineSPM, ep.baseBladeCount, ep.baseFeedSetting, ep.baseCutterStroke, ep.baseStrokeUpdateFreq,
+  ];
+  if (baseFields.some(v => v != null && String(v).trim() !== '')) return true;
+  return parseBaseSpecRows(ep).some(r => r && (
+    (r.spec && String(r.spec).trim()) || r.spm != null || r.blades != null || (r.feed && String(r.feed).trim())
+  ));
+}
 export function parseBaseSpecRows(ep) {
   let arr = [];
   if (ep?.baseSpecRows) {
@@ -63,7 +93,9 @@ export function isSpecRowComplete(r) {
 }
 
 // 回傳缺少的項目（陣列）；全部齊全時回空陣列。供錯誤訊息指出到底缺什麼。
-export function missingManufacturingParams(ep) {
+// strict=false 時走舊的寬鬆規則（生效日之前的工單）
+export function missingManufacturingParams(ep, strict = true) {
+  if (!strict) return hasAnyBaseValue(ep) ? [] : ['設備參數（製造參數完全空白）'];
   const missing = [];
   if (!ep) return ['設備參數（尚未建立）'];
   const fileName = ep.baseParamFileName;
@@ -85,15 +117,15 @@ export function missingManufacturingParams(ep) {
   return missing;
 }
 
-export async function hasManufacturingParams(prisma, orderId) {
-  const ep = await prisma.equipmentParam.findUnique({ where: { orderId } });
-  return missingManufacturingParams(ep).length === 0;
+// 回傳缺項清單（給 API 產生具體錯誤訊息用）
+// 傳整個 order 進來，才能依「開始生產日」判斷要套嚴格還是舊規則（不溯及既往）
+export async function getMissingManufacturingParams(prisma, order) {
+  const ep = await prisma.equipmentParam.findUnique({ where: { orderId: order.id } });
+  return missingManufacturingParams(ep, usesStrictMfgParams(order));
 }
 
-// 同上，但回傳缺項清單（給 API 產生具體錯誤訊息用）
-export async function getMissingManufacturingParams(prisma, orderId) {
-  const ep = await prisma.equipmentParam.findUnique({ where: { orderId } });
-  return missingManufacturingParams(ep);
+export async function hasManufacturingParams(prisma, order) {
+  return (await getMissingManufacturingParams(prisma, order)).length === 0;
 }
 
 // 設備參數「檔名」是否已填 —— 生產完成終止的防呆條件（所有機台）
