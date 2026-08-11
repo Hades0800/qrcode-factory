@@ -43,7 +43,7 @@ export async function setActualStartDate(fastify, order, eventTime) {
 // 舊資料相容：早期沒有規格表，SPM/刀數存在單值欄位（baseMachineSPM/baseBladeCount）。
 //   規格表為空時，比照前端 rtParseSpecRows() 的做法，用單值欄位組成一列來判斷。
 const MFG_STRICT_FROM = new Date(
-  process.env.MFG_PARAMS_STRICT_FROM || '2026-08-07T00:00:00+08:00'
+  process.env.MFG_PARAMS_STRICT_FROM || '2026-08-12T00:00:00+08:00'
 );
 
 // 這張工單是否適用「嚴格規則」：以實際開始生產日判斷，
