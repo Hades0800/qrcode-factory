@@ -17,7 +17,12 @@ import {
   hasManufacturingParams,
   getMissingManufacturingParams,
   hasEquipmentParamFile,
+  autoInterleave,
 } from '../domain/orders/helpers.js';
+
+// 會觸發自動插單的工序（記錄這些工序 = 這張單正在被生產）
+// 排除：11(完成)、23(無工令)、12/13(暫停與異常走 pause API)
+const INTERLEAVE_TRIGGER_STEPS = new Set(['1', '2', '3', '4', '5', '6', '7', '8', '21', '22', '30', '40', '41']);
 
 // 生產規格完成／生產完成終止前，設備「製造參數」必須已填（防呆）
 // 僅限傳統機台 No1–No6；過濾網／筋網機 No12–No20 不套用此防呆
@@ -314,8 +319,12 @@ export default async function orderRoutes(fastify) {
         leaderName: request.user.displayName || null,
       },
     });
+    let interleave = null;
+    if (INTERLEAVE_TRIGGER_STEPS.has(stepNo)) {
+      interleave = await autoInterleave(fastify.prisma, order, time);
+    }
     const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
-    return { entry, order: await serializeWithPrev(fastify.prisma, updated), forcedFromPrev, forcedPrevEnd, forcedReason };
+    return { entry, order: await serializeWithPrev(fastify.prisma, updated), forcedFromPrev, forcedPrevEnd, forcedReason, interleave };
   });
 
   // 取消工序紀錄（5 分鐘內）
@@ -686,12 +695,16 @@ export default async function orderRoutes(fastify) {
     if (cols.note && note) updateData[cols.note] = clipStr(note, 500);
     if (step === '11' && qcActualQty != null) updateData.step11QcActualQty = qcActualQty;
 
+    let interleave = null;
+    if (INTERLEAVE_TRIGGER_STEPS.has(step)) {
+      interleave = await autoInterleave(fastify.prisma, order, stepTime);
+    }
     const updated = await fastify.prisma.order.update({
       where: { orderNo },
       data: updateData,
       include: ORDER_INCLUDE,
     });
-    return { order: await serializeWithPrev(fastify.prisma, updated) };
+    return { order: await serializeWithPrev(fastify.prisma, updated), interleave };
   });
 
   // 取消某步驟
@@ -779,8 +792,10 @@ export default async function orderRoutes(fastify) {
       where: { id: active.id },
       data: { endAt: now, duration },
     });
+    // 手動恢復 = 這張單重新開始生產 → 同機台其他運轉中的工單自動插單暫停
+    const interleave = await autoInterleave(fastify.prisma, order, now);
     const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
-    return { order: await serializeWithPrev(fastify.prisma, updated), resumed: { type, duration } };
+    return { order: await serializeWithPrev(fastify.prisma, updated), resumed: { type, duration }, interleave };
   });
 
   // 補登暫停（已結束的暫停事件）

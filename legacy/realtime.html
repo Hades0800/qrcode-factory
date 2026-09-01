@@ -213,6 +213,14 @@
     flex-shrink: 0;
   }
   .order-card.active .oc-badge { background: var(--brand); color: #fff; }
+  .order-card .oc-badge.paused { background: #fff3cd; color: #b8860b; }
+  .order-card .oc-badge.abnormal { background: #fde8e8; color: #c0392b; }
+  .order-card .oc-interleave {
+    font-size: 11px;
+    font-weight: 700;
+    color: #b8860b;
+    white-space: nowrap;
+  }
   .order-card .oc-tags {
     display: flex;
     flex-wrap: wrap;
@@ -783,8 +791,13 @@ function renderContent() {
   const fmtNum = n => n > 0 ? n.toLocaleString('zh-TW', { maximumFractionDigits: 1 }) : '—';
   const fmtKg = kg => kg > 0 ? kg.toLocaleString('zh-TW', { maximumFractionDigits: 1 }) : '—';
 
-  // Find active order (has any activity but no step11)
-  const activeOrder = machineOrders.find(o => !o.step11At && hasAnyActivity(o));
+  // Find active order：未完成、有活動、且「沒有進行中的暫停」的工單中，
+  // 取最後一次活動時間最新的那張（支援插單：回頭做 A 時高亮跟著跳回 A）
+  const runningOrders = machineOrders.filter(o =>
+    !o.step11At && hasAnyActivity(o) &&
+    !(o.pause12 && o.pause12.active) && !(o.pause13 && o.pause13.active));
+  const activeOrder = runningOrders.length === 0 ? null : runningOrders.reduce((a, b) =>
+    (getLastActivityTime(b) || 0) > (getLastActivityTime(a) || 0) ? b : a);
 
   let html = '';
 
@@ -854,12 +867,25 @@ function renderContent() {
       const carryOverTag = isCarryOver ? '<span class="oc-pill carryover">隔日生產</span>' : '';
       const scopeTag = o.changeScope ? `<span class="oc-pill scope">${escapeHtml(scopeLabel(o.changeScope))}</span>` : '';
       const hasTags = !!(carryOverTag || scopeTag);
+      // 狀態四態：已完成 → 異常停止 → 暫停中 → 生產中 → 等待中
+      const p12 = o.pause12 && o.pause12.active;
+      const p13 = o.pause13 && o.pause13.active;
+      let badgeText, badgeCls = '';
+      if (o.step11At) { badgeText = '已完成'; }
+      else if (p13) { badgeText = '異常停止'; badgeCls = ' abnormal'; }
+      else if (p12) { badgeText = '暫停中'; badgeCls = ' paused'; }
+      else if (started) { badgeText = '生產中'; }
+      else { badgeText = '等待中'; }
+      // 插單暫停：顯示被哪張工單插單
+      const interleaveTag = (p12 && p12.interruptedByOrderNo)
+        ? `<span class="oc-interleave">→ 改做 ${escapeHtml(p12.interruptedByOrderNo)}</span>` : '';
       html += `
         <div class="order-card${isActive ? ' active' : ''}">
           <div class="oc-header">
             <div class="oc-title">
               <span class="oc-no">${escapeHtml(o.orderNo)}</span>
-              <div class="oc-badge">${o.step11At ? '已完成' : (started ? '生產中' : '等待中')}</div>
+              <div class="oc-badge${badgeCls}">${badgeText}</div>
+              ${interleaveTag}
             </div>
             ${hasTags ? `<div class="oc-tags">${scopeTag}${carryOverTag}</div>` : ''}
           </div>
@@ -1159,6 +1185,22 @@ function getFirstActivityTime(o) {
   ((o.pause13 && o.pause13.history) || []).forEach(e => { consider(e.startAt); consider(e.endAt); });
   return min;
 }
+function getLastActivityTime(o) {
+  // 回傳工單最後一次有動作的時間（毫秒），尚未開始則為 null（用於插單後判斷目前生產單）
+  let max = null;
+  const consider = t => {
+    if (!t) return;
+    const v = new Date(t).getTime();
+    if (isNaN(v)) return;
+    if (max === null || v > max) max = v;
+  };
+  ['step1At','step2At','step3At','step4At','step5At','step6At','step7At','step11At','step21At','step22At','step23At']
+    .forEach(k => consider(o[k]));
+  (o.stepEntries || []).forEach(e => consider(e.recordedAt));
+  ((o.pause12 && o.pause12.history) || []).forEach(e => { consider(e.startAt); consider(e.endAt); });
+  ((o.pause13 && o.pause13.history) || []).forEach(e => { consider(e.startAt); consider(e.endAt); });
+  return max;
+}
 
 function buildTimeline(o, isAdmin) {
   const items = [];
@@ -1205,7 +1247,12 @@ function buildTimeline(o, isAdmin) {
     ...((o.pause13 && o.pause13.history) || []).map(e => Object.assign({}, e, { pauseType: '13', pauseLabel: '異常停止' })),
   ];
   pauseEvents.forEach(e => {
-    const note = e.note ? '（' + escapeHtml(e.note) + '）' : '';
+    // 插單暫停：顯示被哪張工單插單，取代原本的 note 括號
+    const isInterleave = e.note === '插單暫停';
+    const note = isInterleave
+      ? (e.interruptedByOrderNo ? '（改做 ' + escapeHtml(e.interruptedByOrderNo) + '）' : '')
+      : (e.note ? '（' + escapeHtml(e.note) + '）' : '');
+    if (isInterleave) e = Object.assign({}, e, { pauseLabel: '插單暫停' });
     const ico = e.pauseType === '13' ? icon('alert', 13) : icon('pause', 13);
     items.push({
       time: new Date(e.startAt),
