@@ -2237,6 +2237,7 @@ function showInterruptModal() {
         <button class="btn-secondary int-opt" data-opt="mold" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('gear', 18)}<span>模裂更換</span></button>
         <button class="btn-secondary int-opt" data-opt="lunch" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('coffee', 18)}<span>中午休息</span></button>
         <button class="btn-secondary int-opt" data-opt="offwork" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('coffee', 18)}<span>下班時間／隔日生產</span></button>
+        <button class="btn-secondary int-opt" data-opt="interleave" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('layers', 18)}<span>插單（改做其他工單）</span></button>
       </div>
       <div id="intNoteWrap" style="display:none;margin-top:10px;">
         <input type="number" id="intQcInput" min="0" step="1" placeholder="生產完成數量（必填，整數）" style="width:100%;padding:12px;border:1.5px solid #f0ad4e;border-radius:10px;font-size:15px;box-sizing:border-box;margin-bottom:8px;">
@@ -2262,6 +2263,8 @@ function showInterruptModal() {
     mold:     { type: '12', title: '模裂更換', note: 'optional', notePh: '補充說明（選填）' },
     lunch:    { type: '12', title: '中午休息', note: 'none' },
     offwork:  { type: '12', title: '下班時間／隔日生產', note: 'none', time: true },
+    // 插單：note 必須恰為「插單暫停」（後端自動恢復依此判斷），不可加說明
+    interleave: { type: '12', title: '插單暫停', note: 'none' },
   };
   modal.querySelectorAll('.int-opt').forEach(btn => {
     btn.onclick = () => {
@@ -2301,7 +2304,7 @@ function showInterruptModal() {
           startAt = dt.toISOString();
         }
         modal.remove();
-        executePause({ type: cfg.type, title: cfg.title }, fullNote, qc, startAt);
+        executePause({ type: cfg.type, title: cfg.title, opt: btn.dataset.opt }, fullNote, qc, startAt);
       };
       qcInput.focus();
     };
@@ -2443,9 +2446,30 @@ async function executePause(p, note, qcActualQty, startAt) {
   });
   if (!r.ok) { toast(r.error, 'error'); return; }
   order = r.data.order;
+  // 插單：暫停本單後直接回掃工單畫面（機台保留），準備掃下一張
+  if (p.opt === 'interleave') {
+    toast('已插單暫停，請掃下一張工單', 'success');
+    backToScanKeepMachine();
+    return;
+  }
   renderSteps();
   toast(p.title + ' — 開始計時', 'success');
   startLiveTimers();
+}
+
+// 清掉目前工單、回到掃工單畫面，但保留機台選擇（插單流程用）
+function backToScanKeepMachine() {
+  orderNo = ''; order = null;
+  saveState();
+  $('orderEmpty').style.display = 'block';
+  $('orderShow').style.display = 'none';
+  $('scopeCard').style.display = 'none';
+  $('materialCard').style.display = 'none';
+  $('stepsArea').style.display = 'none';
+  $('bottomBar').classList.remove('show');
+  $('orderInput').value = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  setTimeout(() => $('orderInput').focus(), 200);
 }
 
 async function resumePause(type) {
@@ -2643,7 +2667,29 @@ if (API_URL.startsWith('PASTE_')) {
   showLogin();
 } else {
   loadIdleMachines();
-  restoreSavedState();
+  const resumeNo = new URLSearchParams(location.search).get('resume');
+  if (resumeNo) {
+    history.replaceState(null, '', location.pathname); // 清掉參數，避免重新整理重複觸發
+    openOrderFromRealtime(resumeNo.toUpperCase());
+  } else {
+    restoreSavedState();
+  }
+}
+
+// 從即時生產頁「重新啟動」跳轉回來：依工單自動選機台並載入紀錄頁
+async function openOrderFromRealtime(no) {
+  const r = await api('/api/orders/' + encodeURIComponent(no));
+  const o = r.ok && r.data && (r.data.order || r.data);
+  if (!o || !o.machineNo) {
+    toast('找不到工單 ' + no + '，請手動掃描', 'error');
+    restoreSavedState();
+    return;
+  }
+  selectMachine(o.machineNo);
+  setTimeout(() => {
+    $('orderInput').value = no;
+    setOrder(no);
+  }, 100);
 }
 </script>
 </body>

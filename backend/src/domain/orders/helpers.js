@@ -194,7 +194,16 @@ export async function autoInterleave(prisma, target, eventTime) {
     const started = await prisma.stepEntry.count({ where: { orderId: o.id } });
     if (!started) continue; // 還沒開始的單維持「等待中」
     const activePause = await prisma.pauseEvent.findFirst({ where: { orderId: o.id, endAt: null } });
-    if (activePause) continue; // 已在暫停中（下班/異常/插單）不重複建
+    if (activePause) {
+      // 手動選「插單」時還不知道下一張是誰 → 這裡補記被誰插單
+      if (activePause.note === INTERLEAVE_NOTE && !activePause.interruptedByOrderNo) {
+        await prisma.pauseEvent.update({
+          where: { id: activePause.id },
+          data: { interruptedByOrderNo: target.orderNo },
+        });
+      }
+      continue; // 已在暫停中（下班/異常/插單）不重複建
+    }
     await prisma.pauseEvent.create({
       data: {
         orderId: o.id, type: '12', note: INTERLEAVE_NOTE,

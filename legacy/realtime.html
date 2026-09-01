@@ -221,6 +221,21 @@
     color: #b8860b;
     white-space: nowrap;
   }
+  .order-card .oc-restart {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--success);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
   .order-card .oc-tags {
     display: flex;
     flex-wrap: wrap;
@@ -876,9 +891,12 @@ function renderContent() {
       else if (p12) { badgeText = '暫停中'; badgeCls = ' paused'; }
       else if (started) { badgeText = '生產中'; }
       else { badgeText = '等待中'; }
-      // 插單暫停：顯示被哪張工單插單
+      // 插單暫停：顯示被哪張工單插單 + 重新啟動按鈕（恢復生產並跳回紀錄頁）
+      const isInterleavePause = p12 && p12.note === '插單暫停';
       const interleaveTag = (p12 && p12.interruptedByOrderNo)
         ? `<span class="oc-interleave">→ 改做 ${escapeHtml(p12.interruptedByOrderNo)}</span>` : '';
+      const restartBtn = isInterleavePause
+        ? `<button class="oc-restart" data-restart="${escapeHtml(o.orderNo)}">${icon('play', 12)} 重新啟動</button>` : '';
       html += `
         <div class="order-card${isActive ? ' active' : ''}">
           <div class="oc-header">
@@ -886,6 +904,7 @@ function renderContent() {
               <span class="oc-no">${escapeHtml(o.orderNo)}</span>
               <div class="oc-badge${badgeCls}">${badgeText}</div>
               ${interleaveTag}
+              ${restartBtn}
             </div>
             ${hasTags ? `<div class="oc-tags">${scopeTag}${carryOverTag}</div>` : ''}
           </div>
@@ -933,6 +952,10 @@ function renderContent() {
   // 移到原計劃機台
   content.querySelectorAll('[data-move-planned]').forEach(b => {
     b.onclick = () => moveToPlannedMachine(b.getAttribute('data-move-planned'), b.getAttribute('data-target'));
+  });
+  // 插單暫停的「重新啟動」：恢復生產並跳回紀錄頁
+  content.querySelectorAll('[data-restart]').forEach(b => {
+    b.onclick = () => restartInterleaved(b.getAttribute('data-restart'));
   });
   // 取消「今日無工令」
   const cancelIdleBtn = document.getElementById('cancelIdleBtn');
@@ -1022,6 +1045,17 @@ async function moveToPlannedMachine(orderNo, target) {
   if (!r.ok) { toast(r.error || '改機台失敗', 'error'); return; }
   toast('已將 ' + orderNo + ' 改到 ' + target, 'success');
   loadOrders();
+}
+
+// 插單暫停 → 重新啟動：恢復本單生產（後端會自動把目前生產中的單插單暫停），跳回掃碼紀錄頁
+async function restartInterleaved(orderNo) {
+  if (!confirm('恢復生產「' + orderNo + '」？\n\n目前生產中的工單會自動改為插單暫停。')) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/resume', {
+    method: 'POST',
+    body: { type: '12' },
+  });
+  if (!r.ok) { toast(r.error || '恢復失敗', 'error'); return; }
+  location.href = 'index.html?resume=' + encodeURIComponent(orderNo);
 }
 
 async function deleteEntry(entryId, orderNo) {

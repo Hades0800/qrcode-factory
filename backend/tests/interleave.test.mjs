@@ -221,5 +221,22 @@ await test('插單時 B 的第一筆生產開始用實際掃碼時間（不強�
   await fastify.close();
 });
 
+
+await test('手動選「插單」後掃 B → A 的插單暫停補上被誰插單', async () => {
+  const { fastify, prisma, state } = await buildApp();
+  const a = await seedOrder(prisma, 'F1150821009', 'No12');
+  // 模擬 index.html 中斷選單選「插單」：手動建立插單暫停（還不知道下一張是誰）
+  await prisma.pauseEvent.create({
+    data: { orderId: a.id, type: '12', note: INTERLEAVE_NOTE, startAt: new Date(), endAt: null, qcActualQty: 50 },
+  });
+  await seedOrder(prisma, 'F1150825006', 'No12');
+  await fastify.inject({ method: 'POST', url: '/api/orders/F1150825006/step-entries', payload: { stepNo: '41' } });
+  const pauses = activePausesOf(state, a.id);
+  assert.equal(pauses.length, 1, 'A 仍只有一筆暫停（不重複建）');
+  assert.equal(pauses[0].interruptedByOrderNo, 'F1150825006', '應補記被 B 插單');
+  assert.equal(pauses[0].qcActualQty, 50, '原本填的數量不應被動到');
+  await fastify.close();
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
