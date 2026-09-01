@@ -634,6 +634,17 @@
     font-weight: 500;
   }
   #loginScreen .login-btn { margin-top: 20px; }
+
+  /* 生產中斷選單的分組標題 */
+  .int-group-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 1px;
+    margin-top: 6px;
+    padding-left: 2px;
+  }
+  .int-group-label:first-child { margin-top: 0; }
 </style>
 </head>
 <body>
@@ -2230,14 +2241,18 @@ function showInterruptModal() {
   modal.innerHTML = `
     <div style="background:#fff;border-radius:16px;padding:24px;width:100%;max-width:340px;box-shadow:0 10px 40px rgba(0,0,0,.2);">
       <h3 style="margin:0 0 16px;font-size:17px;color:var(--ink);">生產中斷</h3>
-      <div style="display:flex;flex-direction:column;gap:10px;" id="intOptList">
+      <div style="display:flex;flex-direction:column;gap:8px;" id="intOptList">
+        <div class="int-group-label" style="color:#c0392b;">異常</div>
         <button class="btn-secondary int-opt" data-opt="abnormal" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('alert', 18)}<span>設備異常停機</span></button>
+        <div class="int-group-label">插單停機</div>
+        <button class="btn-secondary int-opt" data-opt="interleave" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('layers', 18)}<span>插單（改做其他工單）</span></button>
         <button class="btn-secondary int-opt" data-opt="long" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('clock', 18)}<span>超過1小時以上的停機</span></button>
+        <div class="int-group-label">更換停機</div>
         <button class="btn-secondary int-opt" data-opt="material" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('box', 18)}<span>原料更換</span></button>
         <button class="btn-secondary int-opt" data-opt="mold" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('gear', 18)}<span>模裂更換</span></button>
+        <div class="int-group-label">休息</div>
         <button class="btn-secondary int-opt" data-opt="lunch" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('coffee', 18)}<span>中午休息</span></button>
         <button class="btn-secondary int-opt" data-opt="offwork" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('coffee', 18)}<span>下班時間／隔日生產</span></button>
-        <button class="btn-secondary int-opt" data-opt="interleave" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('layers', 18)}<span>插單（改做其他工單）</span></button>
       </div>
       <div id="intNoteWrap" style="display:none;margin-top:10px;">
         <input type="number" id="intQcInput" min="0" step="1" placeholder="生產完成數量（必填，整數）" style="width:100%;padding:12px;border:1.5px solid #f0ad4e;border-radius:10px;font-size:15px;box-sizing:border-box;margin-bottom:8px;">
