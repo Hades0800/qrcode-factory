@@ -18,6 +18,7 @@ import {
   getMissingManufacturingParams,
   hasEquipmentParamFile,
   autoInterleave,
+  hasRunningSibling,
 } from '../domain/orders/helpers.js';
 
 // 會觸發自動插單的工序（記錄這些工序 = 這張單正在被生產）
@@ -297,12 +298,16 @@ export default async function orderRoutes(fastify) {
         if (prevEnd && toTaiwanDate(prevEnd).getTime() === targetDay.getTime()) {
           time = new Date(new Date(prevEnd).getTime() + 60000);
           forcedReason = 'prev_same_day';
+          forcedFromPrev = true;
+          forcedPrevEnd = prevEnd;
+        } else if (await hasRunningSibling(fastify.prisma, order)) {
+          // 插單：同機台還有做到一半的單，今天早已開工 → 用實際掃碼時間，不強制 08:00
         } else {
           time = taiwanDateAt8(time);
           forcedReason = 'day_start';
+          forcedFromPrev = true;
+          forcedPrevEnd = prevEnd;
         }
-        forcedFromPrev = true;
-        forcedPrevEnd = prevEnd;
       }
     }
     await setActualStartDate(fastify, order, time);

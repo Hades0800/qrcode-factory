@@ -205,3 +205,18 @@ export async function autoInterleave(prisma, target, eventTime) {
   }
   return result;
 }
+
+// 同機台是否有其他「已開工、未完成」的工單（插單情境判斷用）
+// 用途：第一筆 40/41 的強制接續規則 —— 插單時代表今天早已開工，不應強制成當日 08:00
+export async function hasRunningSibling(prisma, order) {
+  if (!order || !order.machineNo) return false;
+  const siblings = await prisma.order.findMany({
+    where: { machineNo: order.machineNo, step11At: null },
+  });
+  for (const o of siblings) {
+    if (o.id === order.id) continue;
+    const started = await prisma.stepEntry.count({ where: { orderId: o.id } });
+    if (started > 0) return true;
+  }
+  return false;
+}

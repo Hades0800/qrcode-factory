@@ -205,5 +205,21 @@ await test('舊制 /steps/:step（工序 1）也會觸發插單', async () => {
   await fastify.close();
 });
 
+
+await test('插單時 B 的第一筆生產開始用實際掃碼時間（不強制 08:00）', async () => {
+  const { fastify, prisma } = await buildApp();
+  await seedOrder(prisma, 'F1150821009', 'No12');
+  await seedOrder(prisma, 'F1150825006', 'No12', { started: false });
+  const res = await fastify.inject({
+    method: 'POST', url: '/api/orders/F1150825006/step-entries',
+    payload: { stepNo: '41' },
+  });
+  const body = JSON.parse(res.body);
+  assert.equal(res.statusCode, 200);
+  assert.equal(body.forcedFromPrev, false, '插單情境不應強制時間');
+  assert.equal(body.forcedReason, null);
+  await fastify.close();
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
