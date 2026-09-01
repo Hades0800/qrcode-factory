@@ -34,10 +34,14 @@ export function serializeOrder(o) {
     return {
       count: closed.length,
       totalSec: closed.reduce((s, e) => s + (e.duration || 0), 0),
-      active: active ? { id: active.id, startAt: active.startAt, note: active.note, activeStep: active.activeStep } : null,
+      active: active ? {
+        id: active.id, startAt: active.startAt, note: active.note, activeStep: active.activeStep,
+        interruptedByOrderNo: active.interruptedByOrderNo || null,
+      } : null,
       history: items.map(e => ({
         id: e.id, activeStep: e.activeStep, startAt: e.startAt, endAt: e.endAt,
         duration: e.duration, note: e.note, qcActualQty: e.qcActualQty ?? null,
+        interruptedByOrderNo: e.interruptedByOrderNo || null,
       })),
     };
   };

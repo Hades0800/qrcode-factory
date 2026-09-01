@@ -194,6 +194,7 @@ model PauseEvent {
   duration   Int?
   note       String?
   qcActualQty Int?     // QC 實際生產數量：type="12" 且 note 含「下班」（隔日生產）才會有
+  interruptedByOrderNo String?  // 插單暫停（note="插單暫停"）：被哪張工單插單
   deletedAt  DateTime?
 
   @@index([orderId])

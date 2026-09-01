@@ -94,7 +94,14 @@ function makeMockPrisma() {
   };
 
   const makeChildModel = (map, nextIdField) => ({
+    findFirst: async ({ where } = {}) => filterDeleted(Array.from(map.values()), injectSoftDelete(where))[0] || null,
     findMany: async ({ where } = {}) => filterDeleted(Array.from(map.values()), injectSoftDelete(where)),
+    update: async ({ where, data }) => {
+      const row = map.get(where.id);
+      if (!row) throw new Error('Not found');
+      Object.assign(row, data);
+      return row;
+    },
     count: async ({ where } = {}) => filterDeleted(Array.from(map.values()), injectSoftDelete(where)).length,
     create: async ({ data }) => {
       const id = state[nextIdField]++;

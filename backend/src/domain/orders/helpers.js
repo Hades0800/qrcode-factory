@@ -151,3 +151,81 @@ export async function getPrevMachineEndAt(prisma, order) {
   });
   return prev?.step11At || null;
 }
+
+// ────────────────────────────────────────────────────
+// 自動插單（interleave）
+// 現場常態：A 工單做一半暫停、先做 B 工單，B 告一段落再回頭做 A。
+// 現場人員往往不會先按 A 的暫停就直接掃 B，導致 A 的狀態與工時失真。
+// 規則（工單 target 記錄生產工序、時間 eventTime 時呼叫）：
+//   1) target 自己若有「進行中的插單暫停」→ 視同恢復生產，自動結束該暫停
+//   2) 同機台其他「未完成、已開始（有工序紀錄）、且無任何進行中暫停」的工單
+//      → 自動建立一筆插單暫停（type=12、note=插單暫停、記錄被誰插單）
+// 注意：只自動恢復「插單暫停」；下班／午休／異常停止仍須手動恢復（維持既有流程與防呆）。
+// ────────────────────────────────────────────────────
+export const INTERLEAVE_NOTE = '插單暫停';
+
+export async function autoInterleave(prisma, target, eventTime) {
+  const now = new Date();
+  const t = (eventTime instanceof Date && !isNaN(eventTime)) ? eventTime : now;
+  const result = { resumedInterleave: false, autoPaused: [] };
+
+  // 1) 自動恢復自己的插單暫停
+  const own = await prisma.pauseEvent.findFirst({
+    where: { orderId: target.id, type: '12', note: INTERLEAVE_NOTE, endAt: null },
+  });
+  if (own) {
+    const startMs = new Date(own.startAt).getTime();
+    const endAt = t.getTime() > startMs ? t : new Date(startMs); // 補登時間早於暫停開始 → 時長記 0
+    await prisma.pauseEvent.update({
+      where: { id: own.id },
+      data: { endAt, duration: Math.round((endAt.getTime() - startMs) / 1000) },
+    });
+    result.resumedInterleave = true;
+  }
+
+  if (!target.machineNo) return result;
+
+  // 2) 同機台其他運轉中的工單 → 插單暫停
+  const siblings = await prisma.order.findMany({
+    where: { machineNo: target.machineNo, step11At: null },
+  });
+  for (const o of siblings) {
+    if (o.id === target.id) continue;
+    const started = await prisma.stepEntry.count({ where: { orderId: o.id } });
+    if (!started) continue; // 還沒開始的單維持「等待中」
+    const activePause = await prisma.pauseEvent.findFirst({ where: { orderId: o.id, endAt: null } });
+    if (activePause) {
+      // 手動選「插單」時還不知道下一張是誰 → 這裡補記被誰插單
+      if (activePause.note === INTERLEAVE_NOTE && !activePause.interruptedByOrderNo) {
+        await prisma.pauseEvent.update({
+          where: { id: activePause.id },
+          data: { interruptedByOrderNo: target.orderNo },
+        });
+      }
+      continue; // 已在暫停中（下班/異常/插單）不重複建
+    }
+    await prisma.pauseEvent.create({
+      data: {
+        orderId: o.id, type: '12', note: INTERLEAVE_NOTE,
+        interruptedByOrderNo: target.orderNo, startAt: t,
+      },
+    });
+    result.autoPaused.push(o.orderNo);
+  }
+  return result;
+}
+
+// 同機台是否有其他「已開工、未完成」的工單（插單情境判斷用）
+// 用途：第一筆 40/41 的強制接續規則 —— 插單時代表今天早已開工，不應強制成當日 08:00
+export async function hasRunningSibling(prisma, order) {
+  if (!order || !order.machineNo) return false;
+  const siblings = await prisma.order.findMany({
+    where: { machineNo: order.machineNo, step11At: null },
+  });
+  for (const o of siblings) {
+    if (o.id === order.id) continue;
+    const started = await prisma.stepEntry.count({ where: { orderId: o.id } });
+    if (started > 0) return true;
+  }
+  return false;
+}
