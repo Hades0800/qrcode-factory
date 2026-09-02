@@ -266,5 +266,43 @@ await test('手動選「插單」後掃 B → A 的插單暫停補上被誰插�
   await fastify.close();
 });
 
+
+await test('三張連環插單：A→B→C，重新啟動 A 後狀態全部正確', async () => {
+  const { fastify, prisma, state } = await buildApp();
+  const a = await seedOrder(prisma, 'F1150901001', 'No12');
+  const b = await seedOrder(prisma, 'F1150901002', 'No12', { started: false });
+  const c = await seedOrder(prisma, 'F1150901003', 'No12', { started: false });
+
+  // B 開始生產 → A 被插單
+  await fastify.inject({ method: 'POST', url: '/api/orders/F1150901002/step-entries', payload: { stepNo: '41' } });
+  assert.equal(activePausesOf(state, a.id).length, 1, 'A 應被 B 插單');
+  assert.equal(activePausesOf(state, a.id)[0].interruptedByOrderNo, 'F1150901002');
+
+  // C 開始生產 → B 被插單，A 維持原暫停（不重複建）
+  await fastify.inject({ method: 'POST', url: '/api/orders/F1150901003/step-entries', payload: { stepNo: '41' } });
+  assert.equal(activePausesOf(state, b.id).length, 1, 'B 應被 C 插單');
+  assert.equal(activePausesOf(state, b.id)[0].interruptedByOrderNo, 'F1150901003');
+  assert.equal(activePausesOf(state, a.id).length, 1, 'A 仍只有一筆暫停');
+
+  // 重新啟動 A（即時生產頁按鈕 = resume type 12）
+  const res = await fastify.inject({ method: 'POST', url: '/api/orders/F1150901001/resume', payload: { type: '12' } });
+  assert.equal(res.statusCode, 200);
+  assert.equal(activePausesOf(state, a.id).length, 0, 'A 應恢復生產');
+  assert.equal(activePausesOf(state, c.id).length, 1, 'C 應被 A 插單');
+  assert.equal(activePausesOf(state, c.id)[0].interruptedByOrderNo, 'F1150901001');
+  assert.equal(activePausesOf(state, b.id).length, 1, 'B 維持暫停中，不受影響');
+  const aClosed = state.pauseEvents.filter(p => p.orderId === a.id && p.endAt);
+  assert.equal(aClosed.length, 1, 'A 的插單暫停應有完整起訖');
+  assert.ok(typeof aClosed[0].duration === 'number', 'A 的暫停時長應有計算');
+
+  // 再重新啟動 B → B 恢復、A 被插單，C 維持暫停
+  await fastify.inject({ method: 'POST', url: '/api/orders/F1150901002/resume', payload: { type: '12' } });
+  assert.equal(activePausesOf(state, b.id).length, 0, 'B 應恢復生產');
+  assert.equal(activePausesOf(state, a.id).length, 1, 'A 應再次被插單');
+  assert.equal(activePausesOf(state, a.id)[0].interruptedByOrderNo, 'F1150901002');
+  assert.equal(activePausesOf(state, c.id).length, 1, 'C 維持暫停中');
+  await fastify.close();
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
