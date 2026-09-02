@@ -21,9 +21,12 @@ import {
   hasRunningSibling,
 } from '../domain/orders/helpers.js';
 
-// 會觸發自動插單的工序（記錄這些工序 = 這張單正在被生產）
-// 排除：11(完成)、23(無工令)、12/13(暫停與異常走 pause API)
-const INTERLEAVE_TRIGGER_STEPS = new Set(['1', '2', '3', '4', '5', '6', '7', '8', '21', '22', '30', '40', '41']);
+// 會觸發自動插單的工序（記錄這些工序 = 機台「現在」正在生產這張單）
+// 只含實際生產工序：41(生產開始)、4/5/8(穩定連續生產)、6(後工程接續)、30(生產規格完成)
+// 排除準備類工序（1/2/3/7/21/22/40）—— A 生產中先幫下一張 B 做準備是常態，不代表機台換單
+// 排除 11(完成)、23(無工令)、12/13(暫停與異常走 pause API)
+// 另外：補登（帶 manualTime）一律不觸發 —— 補歷史紀錄不代表機台現在換單
+const INTERLEAVE_TRIGGER_STEPS = new Set(['4', '5', '6', '8', '30', '41']);
 
 // 生產規格完成／生產完成終止前，設備「製造參數」必須已填（防呆）
 // 僅限傳統機台 No1–No6；過濾網／筋網機 No12–No20 不套用此防呆
@@ -325,7 +328,7 @@ export default async function orderRoutes(fastify) {
       },
     });
     let interleave = null;
-    if (INTERLEAVE_TRIGGER_STEPS.has(stepNo)) {
+    if (INTERLEAVE_TRIGGER_STEPS.has(stepNo) && !manualTime) {
       interleave = await autoInterleave(fastify.prisma, order, time);
     }
     const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
@@ -701,7 +704,7 @@ export default async function orderRoutes(fastify) {
     if (step === '11' && qcActualQty != null) updateData.step11QcActualQty = qcActualQty;
 
     let interleave = null;
-    if (INTERLEAVE_TRIGGER_STEPS.has(step)) {
+    if (INTERLEAVE_TRIGGER_STEPS.has(step) && !manualTime) {
       interleave = await autoInterleave(fastify.prisma, order, stepTime);
     }
     const updated = await fastify.prisma.order.update({

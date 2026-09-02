@@ -195,13 +195,41 @@ await test('手動恢復 A 的下班暫停 → B 自動插單暫停', async () =
   await fastify.close();
 });
 
-await test('舊制 /steps/:step（工序 1）也會觸發插單', async () => {
+await test('舊制 /steps/:step（工序 4 穩定連續生產）也會觸發插單', async () => {
   const { fastify, prisma, state } = await buildApp();
   const a = await seedOrder(prisma, 'F1150821009', 'No12');
   await seedOrder(prisma, 'F1150825006', 'No12');
-  const res = await fastify.inject({ method: 'POST', url: '/api/orders/F1150825006/steps/1', payload: {} });
+  const res = await fastify.inject({ method: 'POST', url: '/api/orders/F1150825006/steps/4', payload: {} });
   assert.equal(res.statusCode, 200);
   assert.equal(activePausesOf(state, a.id).length, 1);
+  await fastify.close();
+});
+
+await test('準備工序（40 生產準備）不觸發插單 —— A 生產中可先幫 B 做準備', async () => {
+  const { fastify, prisma, state } = await buildApp();
+  const a = await seedOrder(prisma, 'F1150821009', 'No12');
+  await seedOrder(prisma, 'F1150825006', 'No12');
+  for (const stepNo of ['40', '21', '22', '1', '2', '3']) {
+    if (['40', '21', '22'].includes(stepNo)) {
+      await fastify.inject({ method: 'POST', url: '/api/orders/F1150825006/step-entries', payload: { stepNo } });
+    } else {
+      await fastify.inject({ method: 'POST', url: '/api/orders/F1150825006/steps/' + stepNo, payload: {} });
+    }
+  }
+  assert.equal(activePausesOf(state, a.id).length, 0, '準備工序不應把 A 暫停');
+  await fastify.close();
+});
+
+await test('補登（manualTime）不觸發插單 —— 辦公室補歷史紀錄不代表機台換單', async () => {
+  const { fastify, prisma, state } = await buildApp();
+  const a = await seedOrder(prisma, 'F1150821009', 'No12');
+  await seedOrder(prisma, 'F1150825006', 'No12');
+  const res = await fastify.inject({
+    method: 'POST', url: '/api/orders/F1150825006/step-entries',
+    payload: { stepNo: '4', recordedAt: '2026-08-31T02:00:00Z' },
+  });
+  assert.equal(res.statusCode, 200);
+  assert.equal(activePausesOf(state, a.id).length, 0, '補登不應把 A 暫停');
   await fastify.close();
 });
 
