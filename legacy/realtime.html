@@ -924,6 +924,8 @@ function renderContent() {
             ${o.specType ? `<span class="oi-item"><span class="oi-icon">${icon(o.specType === 'new' ? 'sparkles' : 'box', 14)}</span><span class="oi-label">規格</span><span class="oi-value">${o.specType === 'new' ? escapeHtml(formatNewSpecLabel(o.newSpecAspects)) : '量產規格'}</span></span>` : ''}
             ${o.materialType ? `<span class="oi-item"><span class="oi-icon">${icon('layers', 14)}</span><span class="oi-label">原料</span><span class="oi-value">${o.materialType === 'coil' ? '捲料' : '板料'}</span></span>` : ''}
             ${(o.auxEquipment || o.auxEquipmentCustom) ? `<span class="oi-item"><span class="oi-icon">${icon('gear', 14)}</span><span class="oi-label">輔助設備</span><span class="oi-value">${escapeHtml(auxEquipmentLabel(o.auxEquipment, o.auxEquipmentCustom, o.auxEquipmentNos))}</span></span>` : ''}
+            ${o.operatorName ? `<span class="oi-item"><span class="oi-icon">${icon('user', 14)}</span><span class="oi-label">設備操作</span><span class="oi-value">${escapeHtml(o.operatorName)}</span></span>` : ''}
+            ${o.totalWorkers != null ? `<span class="oi-item"><span class="oi-icon">${icon('user', 14)}</span><span class="oi-label">作業人數</span><span class="oi-value">${escapeHtml(String(o.totalWorkers))} 人</span></span>` : ''}
           </div>
           <div class="rt-ep-section ep-closed" data-coll-id="equip-${escapeHtml(o.orderNo)}" style="margin-top:14px;background:var(--bg);border-radius:8px;padding:10px;">
             <h3 class="ep-header" style="margin:0 0 8px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.8px;" onclick="this.parentNode.classList.toggle('ep-closed')"><span class="ep-chev">▼</span>設備參數</h3>
