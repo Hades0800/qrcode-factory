@@ -338,7 +338,7 @@ function renderOrderStatusBadge(statusKey) {
 // 更換範圍符號 → 顯示文字
 function scopeLabel(s) {
   if (s === '@') return '原料更換';
-  if (s === '#') return '模具';
+  if (s === '#') return '模具更換';
   if (s === '@#') return '原料與模具更換';
   if (s === 'same') return '沿用前單';
   return s || '';
