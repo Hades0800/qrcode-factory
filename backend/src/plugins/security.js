@@ -6,6 +6,7 @@ import rateLimit from '@fastify/rate-limit';
 // CORS：限制白名單 origin
 const ALLOWED_ORIGINS = [
   'https://hades0800.github.io',
+  'https://qrcf-py.zeabur.app',   // Zeabur 前端服務（qrcode-factory-frontend）
   'http://localhost:3000',
   'http://localhost:5500',
   'http://127.0.0.1:5500',
