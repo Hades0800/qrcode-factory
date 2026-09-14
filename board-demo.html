@@ -1,0 +1,325 @@
+<title>即時機台看板</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<style>
+:root {
+  --bg: #F2F1EE;
+  --board: #FFFFFF;
+  --line: #D8D5CE;
+  --ink: #23211D;
+  --muted: #78736A;
+  --brand: #E84133;
+  --run: #2E9E5B;
+  --run-soft: #E3F3E9;
+  --pause: #C8940A;
+  --pause-soft: #FBF2D7;
+  --abn: #D03B2E;
+  --abn-soft: #FBE7E4;
+  --off: #9B968D;
+  --off-soft: #EDEBE7;
+  --cell-head: #2B2925;
+  --cell-head-ink: #F5F3EF;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161511; --board: #201E1A; --line: #3A372F; --ink: #EDEAE3; --muted: #A39D91;
+    --brand: #F0604F; --run: #58BE85; --run-soft: #1E3A2A; --pause: #E0B54B; --pause-soft: #3A3115;
+    --abn: #E9695A; --abn-soft: #421F1A; --off: #7E7A70; --off-soft: #2B2924;
+    --cell-head: #14130F; --cell-head-ink: #D9D5CC;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161511; --board: #201E1A; --line: #3A372F; --ink: #EDEAE3; --muted: #A39D91;
+  --brand: #F0604F; --run: #58BE85; --run-soft: #1E3A2A; --pause: #E0B54B; --pause-soft: #3A3115;
+  --abn: #E9695A; --abn-soft: #421F1A; --off: #7E7A70; --off-soft: #2B2924;
+  --cell-head: #14130F; --cell-head-ink: #D9D5CC;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  padding: 20px 14px 60px;
+}
+.wrap { max-width: 1080px; margin: 0 auto; }
+
+.demo-note {
+  background: var(--pause-soft); color: var(--pause);
+  border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 700;
+  margin-bottom: 14px; display: inline-block;
+}
+.board-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.board-head h1 { font-size: 20px; font-weight: 900; margin: 0; letter-spacing: 1px; }
+.board-head .clock { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.legend { display: flex; gap: 14px; margin-left: auto; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+.legend .l-run i { background: var(--run); }
+.legend .l-pause i { background: var(--pause); }
+.legend .l-abn i { background: var(--abn); }
+.legend .l-off i { background: var(--off); }
+
+.group-label {
+  grid-column: 1 / -1; font-size: 12px; font-weight: 900; letter-spacing: 2px;
+  color: var(--muted); margin: 6px 0 -2px; padding-left: 2px;
+}
+
+/* ─────────── 電腦版：白板式網格（≥768px）─────────── */
+.board { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 10px; }
+.cell {
+  background: var(--board); border: 1px solid var(--line); border-radius: 12px;
+  overflow: hidden; display: flex; flex-direction: column; min-height: 170px;
+}
+.cell-head {
+  background: var(--cell-head); color: var(--cell-head-ink);
+  padding: 7px 12px; font-size: 14px; font-weight: 900; letter-spacing: .5px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.cell-head .spec { font-size: 11px; font-weight: 500; opacity: .75; }
+.status-strip { display: grid; grid-template-columns: 1fr 1fr 1fr; border-bottom: 1px solid var(--line); }
+.status-strip span {
+  text-align: center; font-size: 11px; padding: 5px 0 4px; color: var(--muted);
+  border-right: 1px solid var(--line); font-weight: 500;
+}
+.status-strip span:last-child { border-right: none; }
+.status-strip span.on { font-weight: 900; }
+.status-strip span.on::before {
+  content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+  margin-right: 4px; box-shadow: 0 1px 2px rgba(0,0,0,.25);
+}
+.cell.run   .status-strip span.on { color: var(--run); }
+.cell.run   .status-strip span.on::before { background: var(--run); }
+.cell.pause .status-strip span.on { color: var(--pause); }
+.cell.pause .status-strip span.on::before { background: var(--pause); }
+.cell.abn   .status-strip span.on { color: var(--abn); }
+.cell.abn   .status-strip span.on::before { background: var(--abn); }
+
+.cell-body { padding: 10px 12px 12px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.order-no { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px; color: var(--brand); font-weight: 700; }
+.cell.pause .order-no { color: var(--pause); }
+.cell.abn .order-no { color: var(--abn); }
+.spec-line { font-size: 16px; font-weight: 900; line-height: 1.3; }
+.mold-line { font-size: 13.5px; color: var(--muted); font-weight: 500; }
+.qty-line { margin-top: auto; font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.qty-line b { font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sub-note { font-size: 11.5px; font-weight: 700; }
+.cell.pause .sub-note { color: var(--pause); }
+.cell.abn .sub-note { color: var(--abn); }
+.cell.off .cell-body { align-items: center; justify-content: center; }
+.off-tag {
+  background: var(--off-soft); color: var(--off);
+  font-size: 13px; font-weight: 900; letter-spacing: 2px;
+  padding: 6px 18px; border-radius: 8px; border: 1.5px dashed var(--off);
+}
+/* 手機版專用元素在電腦版隱藏 */
+.m-status, .m-qty { display: none; }
+
+/* ─────────── 手機版：緊湊列表（<768px）─────────── */
+@media (max-width: 767px) {
+  body { padding: 14px 10px 50px; }
+  .board { display: flex; flex-direction: column; gap: 6px; }
+  .group-label { margin: 8px 0 0; }
+
+  .cell {
+    flex-direction: row; align-items: stretch; min-height: 0; border-radius: 10px;
+    border-left: 5px solid var(--off);
+  }
+  .cell.run   { border-left-color: var(--run); }
+  .cell.pause { border-left-color: var(--pause); }
+  .cell.abn   { border-left-color: var(--abn); }
+
+  .cell-head {
+    flex-direction: column; justify-content: center; gap: 1px;
+    width: 74px; flex-shrink: 0; padding: 8px 6px; text-align: center;
+    font-size: 15px;
+  }
+  .cell-head .spec { font-size: 10px; }
+
+  .status-strip { display: none; }           /* 三格狀態列改用左色條＋狀態章 */
+
+  .cell-body { padding: 8px 10px; gap: 2px; min-width: 0; }
+  .spec-line { font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mold-line { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .order-no { font-size: 11px; }
+  .sub-note { font-size: 11px; }
+  .qty-line { display: none; }               /* 數量改到右側直欄 */
+
+  .m-status {
+    display: flex; flex-direction: column; align-items: flex-end; justify-content: center;
+    gap: 3px; padding: 8px 10px 8px 0; flex-shrink: 0;
+  }
+  .m-status .chip {
+    font-size: 11px; font-weight: 900; padding: 2px 9px; border-radius: 999px; white-space: nowrap;
+  }
+  .cell.run   .m-status .chip { background: var(--run-soft); color: var(--run); }
+  .cell.pause .m-status .chip { background: var(--pause-soft); color: var(--pause); }
+  .cell.abn   .m-status .chip { background: var(--abn-soft); color: var(--abn); }
+  .cell.off   .m-status .chip { background: var(--off-soft); color: var(--off); }
+  .m-qty {
+    display: block; font-size: 11px; color: var(--muted);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .m-qty b { color: var(--ink); font-size: 12.5px; }
+
+  .cell.off .cell-body { align-items: flex-start; justify-content: center; }
+  .off-tag { border: none; background: none; padding: 0; letter-spacing: 1px; font-size: 13px; }
+
+  .legend { display: none; }                 /* 手機用色條＋狀態章，不需圖例 */
+}
+</style>
+
+<div class="wrap">
+  <div class="demo-note">DEMO — 版面示意，資料為模擬。電腦＝白板網格；手機＝緊湊列表（縮小視窗即可預覽）</div>
+  <div class="board-head">
+    <h1>即時機台看板</h1>
+    <span class="clock">2026-09-14 14:32 更新</span>
+    <div class="legend">
+      <span class="l-run"><i></i>生產中</span>
+      <span class="l-pause"><i></i>暫停中</span>
+      <span class="l-abn"><i></i>異常停止</span>
+      <span class="l-off"><i></i>未開機／無工令</span>
+    </div>
+  </div>
+
+  <div class="board">
+    <div class="cell run">
+      <div class="cell-head">No1 <span class="spec">350 噸</span></div>
+      <div class="status-strip"><span class="on">生產中</span><span>暫停</span><span>異常</span></div>
+      <div class="cell-body">
+        <span class="order-no">F1150914003</span>
+        <div class="spec-line">FE 4.5 × 4′ × 8′</div>
+        <div class="mold-line">〈50 × 101.5 − 10.25〉</div>
+        <div class="qty-line"><span>完成／派工</span><b>3,120 / 5,000</b></div>
+      </div>
+      <div class="m-status"><span class="chip">生產中</span><span class="m-qty"><b>3,120</b> / 5,000</span></div>
+    </div>
+
+    <div class="cell pause">
+      <div class="cell-head">No2 <span class="spec">250 噸</span></div>
+      <div class="status-strip"><span>生產中</span><span class="on">暫停</span><span>異常</span></div>
+      <div class="cell-body">
+        <span class="order-no">F1150913021</span>
+        <div class="spec-line">AG SKA20-129 2×〈28×61〉</div>
+        <div class="mold-line">〈28 × 61 − 7〉</div>
+        <div class="sub-note">插單暫停 → 改做 F1150914008</div>
+        <div class="qty-line"><span>完成／派工</span><b>870 / 2,400</b></div>
+      </div>
+      <div class="m-status"><span class="chip">暫停中</span><span class="m-qty"><b>870</b> / 2,400</span></div>
+    </div>
+
+    <div class="cell run">
+      <div class="cell-head">No3 <span class="spec">60 噸</span></div>
+      <div class="status-strip"><span class="on">生產中</span><span>暫停</span><span>異常</span></div>
+      <div class="cell-body">
+        <span class="order-no">F1150914001</span>
+        <div class="spec-line">SUS304 1 × 1/2</div>
+        <div class="mold-line">〈12×24−3〉·〈14×24−3〉·〈4×8−0.85〉</div>
+        <div class="qty-line"><span>完成／派工</span><b>12,400 / 20,000</b></div>
+      </div>
+      <div class="m-status"><span class="chip">生產中</span><span class="m-qty"><b>12,400</b> / 20,000</span></div>
+    </div>
+
+    <div class="cell abn">
+      <div class="cell-head">No4 <span class="spec">90 噸</span></div>
+      <div class="status-strip"><span>生產中</span><span>暫停</span><span class="on">異常</span></div>
+      <div class="cell-body">
+        <span class="order-no">F1150914005</span>
+        <div class="spec-line">SUS304 2 × 3/4</div>
+        <div class="mold-line">〈18 × 38 − 3〉</div>
+        <div class="sub-note">異常停止（模具頓刀）· 已停 18 分</div>
+        <div class="qty-line"><span>完成／派工</span><b>5,200 / 9,000</b></div>
+      </div>
+      <div class="m-status"><span class="chip">異常停止</span><span class="m-qty"><b>5,200</b> / 9,000</span></div>
+    </div>
+
+    <div class="cell off">
+      <div class="cell-head">No5 <span class="spec">40 噸</span></div>
+      <div class="status-strip"><span>生產中</span><span>暫停</span><span>異常</span></div>
+      <div class="cell-body"><span class="off-tag">未開機</span></div>
+      <div class="m-status"><span class="chip">未開機</span></div>
+    </div>
+
+    <div class="cell run">
+      <div class="cell-head">No6 <span class="spec">40 噸</span></div>
+      <div class="status-strip"><span class="on">生產中</span><span>暫停</span><span>異常</span></div>
+      <div class="cell-body">
+        <span class="order-no">F1150914010</span>
+        <div class="spec-line">AG 0.2 ×〈5×10〉</div>
+        <div class="mold-line">〈5 × 10 − 1.4〉</div>
+        <div class="qty-line"><span>完成／派工</span><b>28,000 / 60,000</b></div>
+      </div>
+      <div class="m-status"><span class="chip">生產中</span><span class="m-qty"><b>28,000</b> / 60,000</span></div>
+    </div>
+
+    <div class="group-label">過濾網機台</div>
+
+    <div class="cell run">
+      <div class="cell-head">No12 <span class="spec">過濾網</span></div>
+      <div class="status-strip"><span class="on">生產中</span><span>暫停</span><span>異常</span></div>
+      <div class="cell-body">
+        <span class="order-no">F1150914012</span>
+        <div class="spec-line">濾網 480 / 50</div>
+        <div class="mold-line">SKA250-14 3.0T</div>
+        <div class="qty-line"><span>完成／派工</span><b>1,880 / 3,000</b></div>
+      </div>
+      <div class="m-status"><span class="chip">生產中</span><span class="m-qty"><b>1,880</b> / 3,000</span></div>
+    </div>
+
+    <div class="cell run">
+      <div class="cell-head">No13 <span class="spec">過濾網</span></div>
+      <div class="status-strip"><span class="on">生產中</span><span>暫停</span><span>異常</span></div>
+      <div class="cell-body">
+        <span class="order-no">F1150914013</span>
+        <div class="spec-line">濾網 476 / 50</div>
+        <div class="mold-line">SKA250-14 3.0T</div>
+        <div class="qty-line"><span>完成／派工</span><b>950 / 3,000</b></div>
+      </div>
+      <div class="m-status"><span class="chip">生產中</span><span class="m-qty"><b>950</b> / 3,000</span></div>
+    </div>
+
+    <div class="cell pause">
+      <div class="cell-head">No16 <span class="spec">過濾網</span></div>
+      <div class="status-strip"><span>生產中</span><span class="on">暫停</span><span>異常</span></div>
+      <div class="cell-body">
+        <span class="order-no">F1150913030</span>
+        <div class="spec-line">濾網 580 / 30</div>
+        <div class="mold-line">SKA210-8 2.5T</div>
+        <div class="sub-note">下班暫停（隔日生產）</div>
+        <div class="qty-line"><span>完成／派工</span><b>2,600 / 2,600</b></div>
+      </div>
+      <div class="m-status"><span class="chip">暫停中</span><span class="m-qty"><b>2,600</b> / 2,600</span></div>
+    </div>
+
+    <div class="cell off">
+      <div class="cell-head">No17 <span class="spec">過濾網</span></div>
+      <div class="status-strip"><span>生產中</span><span>暫停</span><span>異常</span></div>
+      <div class="cell-body"><span class="off-tag">今日無工令</span></div>
+      <div class="m-status"><span class="chip">無工令</span></div>
+    </div>
+
+    <div class="cell off">
+      <div class="cell-head">No18 <span class="spec">過濾網</span></div>
+      <div class="status-strip"><span>生產中</span><span>暫停</span><span>異常</span></div>
+      <div class="cell-body"><span class="off-tag">未開機</span></div>
+      <div class="m-status"><span class="chip">未開機</span></div>
+    </div>
+
+    <div class="group-label">其他機台</div>
+
+    <div class="cell run">
+      <div class="cell-head">No19 <span class="spec">有筋</span></div>
+      <div class="status-strip"><span class="on">生產中</span><span>暫停</span><span>異常</span></div>
+      <div class="cell-body">
+        <span class="order-no">F1150914019</span>
+        <div class="spec-line">有筋網 60 × 240</div>
+        <div class="mold-line">B-14 #3</div>
+        <div class="qty-line"><span>完成／派工</span><b>340 / 800</b></div>
+      </div>
+      <div class="m-status"><span class="chip">生產中</span><span class="m-qty"><b>340</b> / 800</span></div>
+    </div>
+
+    <div class="cell off">
+      <div class="cell-head">No20 <span class="spec">免拆模</span></div>
+      <div class="status-strip"><span>生產中</span><span>暫停</span><span>異常</span></div>
+      <div class="cell-body"><span class="off-tag">未開機</span></div>
+      <div class="m-status"><span class="chip">未開機</span></div>
+    </div>
+  </div>
+</div>
