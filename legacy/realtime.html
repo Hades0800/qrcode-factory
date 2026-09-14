@@ -70,7 +70,7 @@
   /* Machine tabs — chip 列，可橫向滑動 */
   /* ── 機台看板（頁面上方總覽；電腦=網格、手機=列表）── */
   .machine-board { background: #fff; border-bottom: 1px solid var(--border); padding: 8px 12px 10px; }
-  .mb-bar { display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 2px 2px 6px; }
+  .mb-bar { display: flex; justify-content: space-between; align-items: center; padding: 2px 2px 6px; }
   .mb-title { font-size: 13px; font-weight: 800; letter-spacing: 1px; color: var(--ink); }
   .mb-chev { font-size: 11px; color: var(--muted); font-weight: 600; }
   /* 平均分成上下兩行：欄數 = ceil(機台數/2)，由 JS 塞進 --mb-cols */
@@ -207,11 +207,15 @@
     box-shadow: 0 2px 8px rgba(31, 111, 235, .3);
   }
 
-  /* Content area */
-  .content {
+  /* 整頁捲動區：看板、機台列、內容都在裡面，往下滑會一起滑走（header 仍固定） */
+  .scroll-area {
     flex: 1;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  /* Content area */
+  .content {
     padding: 14px;
     padding-bottom: calc(14px + var(--safe-bottom));
   }
@@ -616,12 +620,14 @@
   </div>
 </header>
 
-<div class="machine-board" id="machineBoard"></div>
+<div class="scroll-area" id="scrollArea">
+  <div class="machine-board" id="machineBoard"></div>
 
-<div class="machine-tabs" id="machineTabs"></div>
+  <div class="machine-tabs" id="machineTabs"></div>
 
-<div class="content" id="content">
-  <div class="empty-msg">請選擇機台</div>
+  <div class="content" id="content">
+    <div class="empty-msg">請選擇機台</div>
+  </div>
 </div>
 
 <script src="config.js"></script>
@@ -715,7 +721,6 @@ function renderMachineTabs() {
 
 // ===== 機台看板（頁面上方總覽）=====
 // 每台機顯示：目前狀態（生產中/暫停/異常/等待/無工令/完工/未開機）＋當前工單的規格與數量
-const MB_COLLAPSE_KEY = 'rt_board_collapsed';
 
 function mbOrdersFor(machineId) {
   const hasTodayAct = o => {
@@ -771,8 +776,6 @@ function mbStateFor(machineId) {
 function renderMachineBoard() {
   const el = $('machineBoard');
   if (!el) return;
-  let collapsed = false;
-  try { collapsed = localStorage.getItem(MB_COLLAPSE_KEY) === '1'; } catch (e) {}
   const isMobile = window.matchMedia('(max-width: 767px)').matches;
   // 重畫前保留滑動位置（自動更新時畫面不跳）
   const prevGrid = el.querySelector('.mb-grid');
@@ -839,19 +842,12 @@ function renderMachineBoard() {
   // 保險：若未來機台增減後總數又變奇數，補一張隱形卡維持偶數對齊
   const mobileSet = allCells + (totalCnt % 2 ? '<div class="mb-cell mb-spacer"></div>' : '');
   const boardHtml = `
-    <div class="mb-bar" id="mbToggle">
-      <span class="mb-title">機台看板</span>
-      <span class="mb-chev">${collapsed ? '▼ 展開' : '▲ 收合'}</span>
-    </div>
-    <div class="mb-grid${collapsed ? ' mb-collapsed' : ''}" style="--mb-cols:${Math.ceil(totalCnt / 2)}">${isMobile ? mobileSet + mobileSet + mobileSet : allCells}</div>`;
+    <div class="mb-bar"><span class="mb-title">機台看板</span></div>
+    <div class="mb-grid" style="--mb-cols:${Math.ceil(totalCnt / 2)}">${isMobile ? mobileSet + mobileSet + mobileSet : allCells}</div>`;
   // 內容沒變就不重畫：避免 30 秒自動更新把看板整塊重建，滑到一半畫面閃動
   if (window.__mbLastHtml === boardHtml) return;
   window.__mbLastHtml = boardHtml;
   el.innerHTML = boardHtml;
-  $('mbToggle').onclick = () => {
-    try { localStorage.setItem(MB_COLLAPSE_KEY, collapsed ? '0' : '1'); } catch (e) {}
-    renderMachineBoard();
-  };
   el.querySelectorAll('[data-mb]').forEach(c => {
     c.onclick = () => {
       activeMachine = c.dataset.mb;
@@ -863,7 +859,7 @@ function renderMachineBoard() {
   // 手機：頭尾相接的無縫循環——內容三份，中間那份是「本尊」，前後各一份當緩衝跑道。
   // 瞬移不在滑動中做（iOS 滑動中改 scrollLeft 會閃/斷慣性），改成「停止滑動後」靜止瞬移，
   // 因為前後內容完全相同，靜止時歸位肉眼無感。
-  if (isMobile && !collapsed) {
+  if (isMobile) {
     const grid = el.querySelector('.mb-grid');
     // 寬度只量一次（scrollWidth 每次讀都會觸發排版計算，滑動中頻繁讀會卡）
     const W = grid.scrollWidth / 3;
@@ -1214,10 +1210,12 @@ function renderContent() {
   }
 
   // 保留捲動位置 + 摺疊狀態：30 秒自動 refresh 後若資料有變動，畫面雖會重畫，但讓使用者停在原本看的位置、保持原本的展開／收折
+  // 捲動容器改為整頁的 scrollArea（看板/機台列/內容一起捲）
+  const scroller = $('scrollArea') || content;
   snapshotCollapseStates(content);
-  const prevScrollTop = content.scrollTop;
+  const prevScrollTop = scroller.scrollTop;
   content.innerHTML = html;
-  content.scrollTop = prevScrollTop;
+  scroller.scrollTop = prevScrollTop;
   applyCollapseStates(content);
 
   // 刪除單筆實態按鈕事件
