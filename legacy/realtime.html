@@ -783,16 +783,26 @@ function renderMachineBoard() {
     const o = s.order;
     let body, mQty = '';
     if (o) {
+      // 過濾網多機台單（F1150803014@4）：生管上傳的規格/派工掛在母單（@ 前的單號），回頭補
+      let base = null;
+      const at = o.orderNo.indexOf('@');
+      if (at > 0) {
+        const baseNo = o.orderNo.slice(0, at);
+        base = allOrders.find(b => b.orderNo === baseNo) || null;
+      }
+      const spec = o.productSpec || o.manuSpec || (base && (base.productSpec || base.manuSpec)) || '—';
+      const mold = o.moldSpec || (base && base.moldSpec) || '';
+      const dispatch = o.dispatchQty != null ? o.dispatchQty : (base ? base.dispatchQty : null);
       const done = mbDoneQty(o);
-      const hasQty = (o.dispatchQty != null || done != null);
-      const qtyStr = (done != null ? fmtN(done) : '—') + ' / ' + (o.dispatchQty != null ? fmtN(o.dispatchQty) : '—');
+      const hasQty = (dispatch != null || done != null);
+      const qtyStr = (done != null ? fmtN(done) : '—') + ' / ' + (dispatch != null ? fmtN(dispatch) : '—');
       body = `
         <span class="mb-order">${escapeHtml(o.orderNo)}</span>
-        <div class="mb-spec">${escapeHtml(o.productSpec || o.manuSpec || '—')}</div>
-        ${o.moldSpec ? `<div class="mb-mold">${escapeHtml(o.moldSpec)}</div>` : ''}
+        <div class="mb-spec">${escapeHtml(spec)}</div>
+        ${mold ? `<div class="mb-mold">${escapeHtml(mold)}</div>` : ''}
         ${s.note ? `<div class="mb-note">${escapeHtml(s.note)}</div>` : ''}
-        ${hasQty ? `<div class="mb-qty"><span>完成／派工</span><b>${qtyStr}</b></div>` : ''}`;
-      if (hasQty) mQty = `<span class="mb-mqty"><b>${done != null ? fmtN(done) : '—'}</b> / ${o.dispatchQty != null ? fmtN(o.dispatchQty) : '—'}</span>`;
+        ${hasQty ? `<div class="mb-qty"><span>完成／派工${base && dispatch != null ? '(總)' : ''}</span><b>${qtyStr}</b></div>` : ''}`;
+      if (hasQty) mQty = `<span class="mb-mqty"><b>${done != null ? fmtN(done) : '—'}</b> / ${dispatch != null ? fmtN(dispatch) : '—'}</span>`;
     } else {
       body = `<span class="mb-offtag">${escapeHtml(s.text || s.label)}</span>`;
     }
