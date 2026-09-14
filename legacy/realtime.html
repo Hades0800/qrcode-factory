@@ -839,11 +839,9 @@ function renderMachineBoard() {
     </div>`;
   const allCells = sumCell + cells; // 匯總卡排第一張（電腦、手機同序）
   const totalCnt = MACHINES.length + 1;
-  // 保險：若未來機台增減後總數又變奇數，補一張隱形卡維持偶數對齊
-  const mobileSet = allCells + (totalCnt % 2 ? '<div class="mb-cell mb-spacer"></div>' : '');
   const boardHtml = `
     <div class="mb-bar"><span class="mb-title">機台看板</span></div>
-    <div class="mb-grid" style="--mb-cols:${Math.ceil(totalCnt / 2)}">${isMobile ? mobileSet + mobileSet + mobileSet : allCells}</div>`;
+    <div class="mb-grid" style="--mb-cols:${Math.ceil(totalCnt / 2)}">${allCells}</div>`;
   // 內容沒變就不重畫：避免 30 秒自動更新把看板整塊重建，滑到一半畫面閃動
   if (window.__mbLastHtml === boardHtml) return;
   window.__mbLastHtml = boardHtml;
@@ -856,38 +854,9 @@ function renderMachineBoard() {
       renderContent();
     };
   });
-  // 手機：頭尾相接的無縫循環——內容三份，中間那份是「本尊」，前後各一份當緩衝跑道。
-  // 瞬移不在滑動中做（iOS 滑動中改 scrollLeft 會閃/斷慣性），改成「停止滑動後」靜止瞬移，
-  // 因為前後內容完全相同，靜止時歸位肉眼無感。
-  if (isMobile) {
-    const grid = el.querySelector('.mb-grid');
-    // 寬度只量一次（scrollWidth 每次讀都會觸發排版計算，滑動中頻繁讀會卡）
-    const W = grid.scrollWidth / 3;
-    const CW = grid.clientWidth;
-    let touching = false;
-    const normalize = () => {
-      if (W <= 0) return;
-      let sl = grid.scrollLeft;
-      if (sl >= W && sl < 2 * W) return; // 已在中間那份，不動
-      while (sl < W) sl += W;
-      while (sl >= 2 * W) sl -= W;
-      grid.scrollLeft = sl;
-    };
-    grid.scrollLeft = (prevScroll != null && prevScroll > 0) ? prevScroll : W;
-    // 手指還按著時絕不歸位（按住時改捲動位置會跟觸控拖曳打架 → 卡頓感的主因）
-    grid.addEventListener('touchstart', () => { touching = true; clearTimeout(grid.__mbIdle); }, { passive: true });
-    grid.addEventListener('touchend', () => {
-      touching = false;
-      clearTimeout(grid.__mbIdle);
-      grid.__mbIdle = setTimeout(normalize, 260);
-    }, { passive: true });
-    grid.onscroll = () => {
-      // 保險絲：真的快撞實體邊界才立即歸位（平常滑不到這裡）
-      if (grid.scrollLeft < 20 || grid.scrollLeft > 3 * W - CW - 20) { normalize(); return; }
-      if (touching) return;
-      clearTimeout(grid.__mbIdle);
-      grid.__mbIdle = setTimeout(normalize, 200);
-    };
+  // 手機：一般橫向捲動（無循環）；重畫後保留原本滑到的位置
+  if (isMobile && prevScroll != null && prevScroll > 0) {
+    el.querySelector('.mb-grid').scrollLeft = prevScroll;
   }
   // 轉向/縮放跨過斷點時重畫（只綁一次）
   if (!window.__mbResizeBound) {
