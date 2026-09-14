@@ -146,7 +146,7 @@
     }
     .mb-grid::-webkit-scrollbar { display: none; }
     .mb-grid.mb-collapsed { display: none; }
-    .mb-cell { min-height: 108px; }
+    .mb-cell { min-height: 108px; contain: content; } /* 每張卡獨立繪製，滑動時不互相牽動重繪 */
     .mb-spec, .mb-mold, .mb-note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   }
 
@@ -824,7 +824,7 @@ function renderMachineBoard() {
         <div class="mb-sumrow"><i class="mb-dot-off"></i>未開機／其他<b>${cnt.idle} 台</b></div>
       </div>
     </div>`;
-  const allCells = cells + sumCell;
+  const allCells = sumCell + cells; // 匯總卡排第一張（電腦、手機同序）
   const totalCnt = MACHINES.length + 1;
   // 保險：若未來機台增減後總數又變奇數，補一張隱形卡維持偶數對齊
   const mobileSet = allCells + (totalCnt % 2 ? '<div class="mb-cell mb-spacer"></div>' : '');
@@ -855,22 +855,32 @@ function renderMachineBoard() {
   // 因為前後內容完全相同，靜止時歸位肉眼無感。
   if (isMobile && !collapsed) {
     const grid = el.querySelector('.mb-grid');
-    const setW = () => grid.scrollWidth / 3;
-    grid.scrollLeft = (prevScroll != null && prevScroll > 0) ? prevScroll : setW();
-    grid.onscroll = () => {
-      const w = setW();
-      if (w <= 0) return;
-      // 保險絲：真的快撞到實體邊界才立即瞬移（單次滑不完一整份，平常不會觸發）
-      if (grid.scrollLeft < 30) grid.scrollLeft += w;
-      else if (grid.scrollLeft > grid.scrollWidth - grid.clientWidth - 30) grid.scrollLeft -= w;
-      // 靜止 120ms 後歸位回中間那份
+    // 寬度只量一次（scrollWidth 每次讀都會觸發排版計算，滑動中頻繁讀會卡）
+    const W = grid.scrollWidth / 3;
+    const CW = grid.clientWidth;
+    let touching = false;
+    const normalize = () => {
+      if (W <= 0) return;
+      let sl = grid.scrollLeft;
+      if (sl >= W && sl < 2 * W) return; // 已在中間那份，不動
+      while (sl < W) sl += W;
+      while (sl >= 2 * W) sl -= W;
+      grid.scrollLeft = sl;
+    };
+    grid.scrollLeft = (prevScroll != null && prevScroll > 0) ? prevScroll : W;
+    // 手指還按著時絕不歸位（按住時改捲動位置會跟觸控拖曳打架 → 卡頓感的主因）
+    grid.addEventListener('touchstart', () => { touching = true; clearTimeout(grid.__mbIdle); }, { passive: true });
+    grid.addEventListener('touchend', () => {
+      touching = false;
       clearTimeout(grid.__mbIdle);
-      grid.__mbIdle = setTimeout(() => {
-        let sl = grid.scrollLeft;
-        while (sl < w) sl += w;
-        while (sl >= 2 * w) sl -= w;
-        if (Math.abs(sl - grid.scrollLeft) > 1) grid.scrollLeft = sl;
-      }, 120);
+      grid.__mbIdle = setTimeout(normalize, 260);
+    }, { passive: true });
+    grid.onscroll = () => {
+      // 保險絲：真的快撞實體邊界才立即歸位（平常滑不到這裡）
+      if (grid.scrollLeft < 20 || grid.scrollLeft > 3 * W - CW - 20) { normalize(); return; }
+      if (touching) return;
+      clearTimeout(grid.__mbIdle);
+      grid.__mbIdle = setTimeout(normalize, 200);
     };
   }
   // 轉向/縮放跨過斷點時重畫（只綁一次）
