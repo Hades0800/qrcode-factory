@@ -70,7 +70,7 @@
   /* Machine tabs — chip 列，可橫向滑動 */
   /* ── 機台看板（頁面上方總覽；電腦=網格、手機=列表）── */
   .machine-board { background: #fff; border-bottom: 1px solid var(--border); padding: 8px 12px 10px; }
-  .mb-bar { display: flex; justify-content: space-between; align-items: center; padding: 2px 2px 6px; }
+  .mb-bar { display: flex; justify-content: space-between; align-items: center; padding: 2px 2px 6px; cursor: pointer; }
   .mb-title { font-size: 13px; font-weight: 800; letter-spacing: 1px; color: var(--ink); }
   .mb-chev { font-size: 11px; color: var(--muted); font-weight: 600; }
   /* 平均分成上下兩行：欄數 = ceil(機台數/2)，由 JS 塞進 --mb-cols */
@@ -721,6 +721,7 @@ function renderMachineTabs() {
 
 // ===== 機台看板（頁面上方總覽）=====
 // 每台機顯示：目前狀態（生產中/暫停/異常/等待/無工令/完工/未開機）＋當前工單的規格與數量
+const MB_COLLAPSE_KEY = 'rt_board_collapsed';
 
 function mbOrdersFor(machineId) {
   const hasTodayAct = o => {
@@ -839,13 +840,22 @@ function renderMachineBoard() {
     </div>`;
   const allCells = sumCell + cells; // 匯總卡排第一張（電腦、手機同序）
   const totalCnt = MACHINES.length + 1;
+  let collapsed = false;
+  try { collapsed = localStorage.getItem(MB_COLLAPSE_KEY) === '1'; } catch (e) {}
   const boardHtml = `
-    <div class="mb-bar"><span class="mb-title">機台看板</span></div>
-    <div class="mb-grid" style="--mb-cols:${Math.ceil(totalCnt / 2)}">${allCells}</div>`;
+    <div class="mb-bar" id="mbToggle">
+      <span class="mb-title">機台看板</span>
+      <span class="mb-chev">${collapsed ? '▼ 展開' : '▲ 收合'}</span>
+    </div>
+    <div class="mb-grid${collapsed ? ' mb-collapsed' : ''}" style="--mb-cols:${Math.ceil(totalCnt / 2)}">${allCells}</div>`;
   // 內容沒變就不重畫：避免 30 秒自動更新把看板整塊重建，滑到一半畫面閃動
   if (window.__mbLastHtml === boardHtml) return;
   window.__mbLastHtml = boardHtml;
   el.innerHTML = boardHtml;
+  $('mbToggle').onclick = () => {
+    try { localStorage.setItem(MB_COLLAPSE_KEY, collapsed ? '0' : '1'); } catch (e) {}
+    renderMachineBoard();
+  };
   el.querySelectorAll('[data-mb]').forEach(c => {
     c.onclick = () => {
       activeMachine = c.dataset.mb;
