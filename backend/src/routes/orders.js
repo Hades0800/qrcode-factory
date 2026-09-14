@@ -1355,6 +1355,23 @@ export default async function orderRoutes(fastify) {
 
   // 列出近期工單（所有登入者都能看全部）
   fastify.get('/', async (request) => {
+    // scope=active：給即時生產頁用——未完成的單全部＋36 小時內完成的單。
+    // 原本的「最近更新前 200 筆」在總單量成長後，任何其他活動（上傳、別台掃碼）
+    // 都會把久未掃碼但仍在生產/暫停中的單擠出清單，造成看板與分頁資料時有時無地跳動。
+    if (request.query.scope === 'active') {
+      const orders = await fastify.prisma.order.findMany({
+        where: {
+          OR: [
+            { step11At: null },
+            { step11At: { gte: new Date(Date.now() - 36 * 3600 * 1000) } },
+          ],
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 500,
+        include: ORDER_INCLUDE,
+      });
+      return { orders: orders.map(serializeOrder) };
+    }
     const limit = Math.min(Number(request.query.limit) || 50, 200);
     const orders = await fastify.prisma.order.findMany({
       orderBy: { updatedAt: 'desc' },

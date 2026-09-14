@@ -915,7 +915,7 @@ async function loadOrders() {
   } catch (e) {}
 
   const [ordersRes, idleRes] = await Promise.all([
-    api('/api/orders?limit=200'),
+    api('/api/orders?scope=active&limit=200'), // 未完成＋36h 內完成的單，不受「前 200 筆」排擠（limit 為舊後端過渡期的後備）
     api('/api/idle-events?limit=50'),
   ]);
   if (ordersRes.ok) allOrders = ordersRes.data.orders || [];
@@ -1854,7 +1854,7 @@ updBanner.onclick = () => {
 
 async function checkForUpdates() {
   const [ordersRes, idleRes] = await Promise.all([
-    api('/api/orders?limit=200'),
+    api('/api/orders?scope=active&limit=200'), // 未完成＋36h 內完成的單，不受「前 200 筆」排擠（limit 為舊後端過渡期的後備）
     api('/api/idle-events?limit=50'),
   ]);
   if (!ordersRes.ok) return;
