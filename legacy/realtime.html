@@ -793,12 +793,16 @@ function renderMachineBoard() {
         <div class="mb-mstat"><span class="mb-chip">${escapeHtml(s.label)}</span>${mQty}</div>
       </div>`;
   }).join('');
-  el.innerHTML = `
+  const boardHtml = `
     <div class="mb-bar" id="mbToggle">
       <span class="mb-title">機台看板</span>
       <span class="mb-chev">${collapsed ? '▼ 展開' : '▲ 收合'}</span>
     </div>
     <div class="mb-grid${collapsed ? ' mb-collapsed' : ''}" style="--mb-cols:${Math.ceil(MACHINES.length / 2)}">${isMobile ? cells + cells + cells : cells}</div>`;
+  // 內容沒變就不重畫：避免 30 秒自動更新把看板整塊重建，滑到一半畫面閃動
+  if (window.__mbLastHtml === boardHtml) return;
+  window.__mbLastHtml = boardHtml;
+  el.innerHTML = boardHtml;
   $('mbToggle').onclick = () => {
     try { localStorage.setItem(MB_COLLAPSE_KEY, collapsed ? '0' : '1'); } catch (e) {}
     renderMachineBoard();
@@ -811,7 +815,9 @@ function renderMachineBoard() {
       renderContent();
     };
   });
-  // 手機：頭尾相接的無縫循環——內容三份，滑進頭/尾複製區時瞬移一份寬度（畫面內容相同，無感）
+  // 手機：頭尾相接的無縫循環——內容三份，中間那份是「本尊」，前後各一份當緩衝跑道。
+  // 瞬移不在滑動中做（iOS 滑動中改 scrollLeft 會閃/斷慣性），改成「停止滑動後」靜止瞬移，
+  // 因為前後內容完全相同，靜止時歸位肉眼無感。
   if (isMobile && !collapsed) {
     const grid = el.querySelector('.mb-grid');
     const setW = () => grid.scrollWidth / 3;
@@ -819,8 +825,17 @@ function renderMachineBoard() {
     grid.onscroll = () => {
       const w = setW();
       if (w <= 0) return;
-      if (grid.scrollLeft < w * 0.5) grid.scrollLeft += w;
-      else if (grid.scrollLeft >= w * 1.5) grid.scrollLeft -= w;
+      // 保險絲：真的快撞到實體邊界才立即瞬移（單次滑不完一整份，平常不會觸發）
+      if (grid.scrollLeft < 30) grid.scrollLeft += w;
+      else if (grid.scrollLeft > grid.scrollWidth - grid.clientWidth - 30) grid.scrollLeft -= w;
+      // 靜止 120ms 後歸位回中間那份
+      clearTimeout(grid.__mbIdle);
+      grid.__mbIdle = setTimeout(() => {
+        let sl = grid.scrollLeft;
+        while (sl < w) sl += w;
+        while (sl >= 2 * w) sl -= w;
+        if (Math.abs(sl - grid.scrollLeft) > 1) grid.scrollLeft = sl;
+      }, 120);
     };
   }
   // 轉向/縮放跨過斷點時重畫（只綁一次）
