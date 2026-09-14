@@ -118,6 +118,17 @@
   }
   .mb-cell.done .mb-offtag { color: #2ea043; border-color: #2ea043; background: #e6f7ea; }
   .mb-mstat { display: none; }
+  /* 全機台匯總卡（湊偶數對齊循環用，同時可點跳全機台分頁） */
+  .mb-cell.sum .mb-head { background: #1f6feb; }
+  .mb-sumbody { justify-content: center; gap: 3px; }
+  .mb-sumrow { font-size: 11.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .mb-sumrow b { color: var(--ink); font-size: 13px; margin-left: auto; }
+  .mb-sumrow i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .mb-dot-run { background: #2ea043; }
+  .mb-dot-pause { background: #b8860b; }
+  .mb-dot-abn { background: #c0392b; }
+  .mb-dot-off { background: #9b968d; }
+  .mb-spacer { visibility: hidden; border: none; }
   /* 手機：與電腦相同的卡片，固定兩行、橫向滑動、頭尾相接（JS 複製三份實現無縫循環） */
   @media (max-width: 767px) {
     .machine-board { padding: 6px 0 8px; }
@@ -793,12 +804,36 @@ function renderMachineBoard() {
         <div class="mb-mstat"><span class="mb-chip">${escapeHtml(s.label)}</span>${mQty}</div>
       </div>`;
   }).join('');
+  // 「全機台匯總」卡：把總卡數湊成偶數（奇數會讓兩行直排的三份複製內容錯位、循環瞬移閃動），
+  // 也提供各狀態台數一覽，點了跳全機台分頁
+  const cnt = { run: 0, pause: 0, abn: 0, idle: 0 };
+  MACHINES.forEach(m => {
+    const st = mbStateFor(m.id).st;
+    if (st === 'run') cnt.run++;
+    else if (st === 'pause') cnt.pause++;
+    else if (st === 'abn') cnt.abn++;
+    else cnt.idle++;
+  });
+  const sumCell = `
+    <div class="mb-cell sum${activeMachine === '__all' ? ' cur' : ''}" data-mb="__all">
+      <div class="mb-head">全機台 <span class="mb-hspec">本日匯總</span></div>
+      <div class="mb-body mb-sumbody">
+        <div class="mb-sumrow"><i class="mb-dot-run"></i>生產中<b>${cnt.run} 台</b></div>
+        <div class="mb-sumrow"><i class="mb-dot-pause"></i>暫停中<b>${cnt.pause} 台</b></div>
+        <div class="mb-sumrow"><i class="mb-dot-abn"></i>異常<b>${cnt.abn} 台</b></div>
+        <div class="mb-sumrow"><i class="mb-dot-off"></i>未開機／其他<b>${cnt.idle} 台</b></div>
+      </div>
+    </div>`;
+  const allCells = cells + sumCell;
+  const totalCnt = MACHINES.length + 1;
+  // 保險：若未來機台增減後總數又變奇數，補一張隱形卡維持偶數對齊
+  const mobileSet = allCells + (totalCnt % 2 ? '<div class="mb-cell mb-spacer"></div>' : '');
   const boardHtml = `
     <div class="mb-bar" id="mbToggle">
       <span class="mb-title">機台看板</span>
       <span class="mb-chev">${collapsed ? '▼ 展開' : '▲ 收合'}</span>
     </div>
-    <div class="mb-grid${collapsed ? ' mb-collapsed' : ''}" style="--mb-cols:${Math.ceil(MACHINES.length / 2)}">${isMobile ? cells + cells + cells : cells}</div>`;
+    <div class="mb-grid${collapsed ? ' mb-collapsed' : ''}" style="--mb-cols:${Math.ceil(totalCnt / 2)}">${isMobile ? mobileSet + mobileSet + mobileSet : allCells}</div>`;
   // 內容沒變就不重畫：避免 30 秒自動更新把看板整塊重建，滑到一半畫面閃動
   if (window.__mbLastHtml === boardHtml) return;
   window.__mbLastHtml = boardHtml;
