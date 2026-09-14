@@ -659,7 +659,7 @@
   </div>
   <button class="menu-toggle" id="menuBtn" style="display:none;" onclick="$('dropMenu').classList.toggle('show')"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="18" x2="20" y2="18"/></svg></button>
   <div class="dropdown-menu" id="dropMenu">
-    <a href="index.html" class="nav-active">生產實態紀錄</a>
+    <a href="index.html?p=scan" class="nav-active">生產實態紀錄</a>
     <a href="records.html">歷史實態紀錄</a>
     <a href="realtime.html">即時生產資訊</a>
     <a href="plan-stats.html">生產進度統計</a>
@@ -2681,13 +2681,20 @@ if (API_URL.startsWith('PASTE_')) {
 } else if (!token) {
   showLogin();
 } else {
-  loadIdleMachines();
-  const resumeNo = new URLSearchParams(location.search).get('resume');
-  if (resumeNo) {
-    history.replaceState(null, '', location.pathname); // 清掉參數，避免重新整理重複觸發
-    openOrderFromRealtime(resumeNo.toUpperCase());
+  const entryParams = new URLSearchParams(location.search);
+  if (!entryParams.has('p') && !entryParams.has('resume')) {
+    // 已登入者直接開首頁（無參數）→ 轉「即時生產資訊」（多數使用者的主畫面）
+    // 選單的「生產實態紀錄」帶 ?p=scan、即時頁「重新啟動」帶 ?resume=，皆停留本頁
+    location.replace('realtime.html');
   } else {
-    restoreSavedState();
+    loadIdleMachines();
+    const resumeNo = entryParams.get('resume');
+    if (resumeNo) {
+      history.replaceState(null, '', location.pathname); // 清掉參數，避免重新整理重複觸發
+      openOrderFromRealtime(resumeNo.toUpperCase());
+    } else {
+      restoreSavedState();
+    }
   }
 }
 
