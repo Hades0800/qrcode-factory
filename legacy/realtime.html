@@ -118,27 +118,25 @@
   }
   .mb-cell.done .mb-offtag { color: #2ea043; border-color: #2ea043; background: #e6f7ea; }
   .mb-mstat { display: none; }
+  /* 手機：與電腦相同的卡片，固定兩行、橫向滑動、頭尾相接（JS 複製三份實現無縫循環） */
   @media (max-width: 767px) {
-    .machine-board { padding: 6px 10px 8px; }
-    .mb-grid { display: flex; flex-direction: column; gap: 5px; }
+    .machine-board { padding: 6px 0 8px; }
+    .mb-bar { padding: 2px 12px 6px; }
+    .mb-grid {
+      grid-template-columns: none;
+      grid-auto-flow: column;
+      grid-template-rows: repeat(2, 1fr);
+      grid-auto-columns: 152px;
+      gap: 6px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding: 0 10px;
+    }
+    .mb-grid::-webkit-scrollbar { display: none; }
     .mb-grid.mb-collapsed { display: none; }
-    .mb-cell { flex-direction: row; min-height: 0; border-left: 4px solid var(--border); border-radius: 8px; }
-    .mb-cell.run { border-left-color: #2ea043; }
-    .mb-cell.pause { border-left-color: #b8860b; }
-    .mb-cell.abn { border-left-color: #c0392b; }
-    .mb-head { flex-direction: column; gap: 0; width: 62px; flex-shrink: 0; justify-content: center; text-align: center; font-size: 13px; }
-    .mb-strip { display: none; }
-    .mb-body { padding: 6px 8px; min-width: 0; }
+    .mb-cell { min-height: 108px; }
     .mb-spec, .mb-mold, .mb-note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mb-qty { display: none; }
-    .mb-offtag { margin: 0; border: none; background: none; padding: 0; letter-spacing: 1px; }
-    .mb-mstat { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 2px; padding: 6px 9px 6px 0; flex-shrink: 0; }
-    .mb-chip { font-size: 10px; font-weight: 800; padding: 1px 8px; border-radius: 999px; background: var(--bg); color: var(--muted); white-space: nowrap; }
-    .mb-cell.run .mb-chip { background: #e6f7ea; color: #2ea043; }
-    .mb-cell.pause .mb-chip { background: #fff8e8; color: #b8860b; }
-    .mb-cell.abn .mb-chip { background: #fde8e8; color: #c0392b; }
-    .mb-mqty { font-size: 10px; color: var(--muted); white-space: nowrap; }
-    .mb-mqty b { color: var(--ink); font-size: 11px; }
   }
 
   .machine-tabs {
@@ -764,6 +762,10 @@ function renderMachineBoard() {
   if (!el) return;
   let collapsed = false;
   try { collapsed = localStorage.getItem(MB_COLLAPSE_KEY) === '1'; } catch (e) {}
+  const isMobile = window.matchMedia('(max-width: 767px)').matches;
+  // 重畫前保留滑動位置（自動更新時畫面不跳）
+  const prevGrid = el.querySelector('.mb-grid');
+  const prevScroll = prevGrid ? prevGrid.scrollLeft : null;
   const fmtN = n => Number(n).toLocaleString('zh-TW');
   const cells = MACHINES.map(m => {
     const s = mbStateFor(m.id);
@@ -796,7 +798,7 @@ function renderMachineBoard() {
       <span class="mb-title">機台看板</span>
       <span class="mb-chev">${collapsed ? '▼ 展開' : '▲ 收合'}</span>
     </div>
-    <div class="mb-grid${collapsed ? ' mb-collapsed' : ''}" style="--mb-cols:${Math.ceil(MACHINES.length / 2)}">${cells}</div>`;
+    <div class="mb-grid${collapsed ? ' mb-collapsed' : ''}" style="--mb-cols:${Math.ceil(MACHINES.length / 2)}">${isMobile ? cells + cells + cells : cells}</div>`;
   $('mbToggle').onclick = () => {
     try { localStorage.setItem(MB_COLLAPSE_KEY, collapsed ? '0' : '1'); } catch (e) {}
     renderMachineBoard();
@@ -809,6 +811,24 @@ function renderMachineBoard() {
       renderContent();
     };
   });
+  // 手機：頭尾相接的無縫循環——內容三份，滑進頭/尾複製區時瞬移一份寬度（畫面內容相同，無感）
+  if (isMobile && !collapsed) {
+    const grid = el.querySelector('.mb-grid');
+    const setW = () => grid.scrollWidth / 3;
+    grid.scrollLeft = (prevScroll != null && prevScroll > 0) ? prevScroll : setW();
+    grid.onscroll = () => {
+      const w = setW();
+      if (w <= 0) return;
+      if (grid.scrollLeft < w * 0.5) grid.scrollLeft += w;
+      else if (grid.scrollLeft >= w * 1.5) grid.scrollLeft -= w;
+    };
+  }
+  // 轉向/縮放跨過斷點時重畫（只綁一次）
+  if (!window.__mbResizeBound) {
+    window.__mbResizeBound = true;
+    let mbRz;
+    window.addEventListener('resize', () => { clearTimeout(mbRz); mbRz = setTimeout(renderMachineBoard, 200); });
+  }
 }
 
 const CACHE_RT = 'cache_rt_v1';
