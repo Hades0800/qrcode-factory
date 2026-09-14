@@ -68,6 +68,75 @@
   .dropdown-menu a.menu-logout { color: var(--muted); }
 
   /* Machine tabs — chip 列，可橫向滑動 */
+  /* ── 機台看板（頁面上方總覽；電腦=網格、手機=列表）── */
+  .machine-board { background: #fff; border-bottom: 1px solid var(--border); padding: 8px 12px 10px; }
+  .mb-bar { display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 2px 2px 6px; }
+  .mb-title { font-size: 13px; font-weight: 800; letter-spacing: 1px; color: var(--ink); }
+  .mb-chev { font-size: 11px; color: var(--muted); font-weight: 600; }
+  .mb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .mb-grid.mb-collapsed { display: none; }
+  .mb-cell {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    overflow: hidden; display: flex; flex-direction: column; cursor: pointer; min-height: 118px;
+  }
+  .mb-cell.cur { box-shadow: 0 0 0 2px var(--brand); }
+  .mb-head {
+    background: #2b2925; color: #f5f3ef; padding: 4px 9px; font-size: 12px; font-weight: 800;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .mb-hspec { font-size: 10px; font-weight: 500; opacity: .75; }
+  .mb-strip { display: grid; grid-template-columns: 1fr 1fr 1fr; border-bottom: 1px solid var(--border); }
+  .mb-strip span { text-align: center; font-size: 10px; padding: 3px 0; color: var(--muted); border-right: 1px solid var(--border); }
+  .mb-strip span:last-child { border-right: none; }
+  .mb-strip span.on { font-weight: 800; }
+  .mb-strip span.on::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 3px; }
+  .mb-cell.run .mb-strip .on { color: #2ea043; }
+  .mb-cell.run .mb-strip .on::before { background: #2ea043; }
+  .mb-cell.pause .mb-strip .on { color: #b8860b; }
+  .mb-cell.pause .mb-strip .on::before { background: #b8860b; }
+  .mb-cell.abn .mb-strip .on { color: #c0392b; }
+  .mb-cell.abn .mb-strip .on::before { background: #c0392b; }
+  .mb-body { padding: 7px 9px 8px; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .mb-order { font-size: 10.5px; font-weight: 700; color: var(--brand); word-break: break-all; }
+  .mb-cell.pause .mb-order { color: #b8860b; }
+  .mb-cell.abn .mb-order { color: #c0392b; }
+  .mb-cell.wait .mb-order { color: var(--muted); }
+  .mb-spec { font-size: 13px; font-weight: 800; line-height: 1.25; color: var(--ink); }
+  .mb-mold { font-size: 11px; color: var(--muted); }
+  .mb-note { font-size: 10.5px; font-weight: 700; }
+  .mb-cell.pause .mb-note { color: #b8860b; }
+  .mb-cell.abn .mb-note { color: #c0392b; }
+  .mb-qty { margin-top: auto; font-size: 10px; color: var(--muted); display: flex; justify-content: space-between; gap: 6px; align-items: baseline; }
+  .mb-qty b { font-size: 12px; color: var(--ink); white-space: nowrap; }
+  .mb-offtag {
+    margin: auto; font-size: 12px; font-weight: 800; letter-spacing: 2px; color: var(--muted);
+    border: 1.5px dashed var(--border); border-radius: 8px; padding: 4px 14px; background: var(--bg);
+  }
+  .mb-cell.done .mb-offtag { color: #2ea043; border-color: #2ea043; background: #e6f7ea; }
+  .mb-mstat { display: none; }
+  @media (max-width: 767px) {
+    .machine-board { padding: 6px 10px 8px; }
+    .mb-grid { display: flex; flex-direction: column; gap: 5px; }
+    .mb-grid.mb-collapsed { display: none; }
+    .mb-cell { flex-direction: row; min-height: 0; border-left: 4px solid var(--border); border-radius: 8px; }
+    .mb-cell.run { border-left-color: #2ea043; }
+    .mb-cell.pause { border-left-color: #b8860b; }
+    .mb-cell.abn { border-left-color: #c0392b; }
+    .mb-head { flex-direction: column; gap: 0; width: 62px; flex-shrink: 0; justify-content: center; text-align: center; font-size: 13px; }
+    .mb-strip { display: none; }
+    .mb-body { padding: 6px 8px; min-width: 0; }
+    .mb-spec, .mb-mold, .mb-note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mb-qty { display: none; }
+    .mb-offtag { margin: 0; border: none; background: none; padding: 0; letter-spacing: 1px; }
+    .mb-mstat { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 2px; padding: 6px 9px 6px 0; flex-shrink: 0; }
+    .mb-chip { font-size: 10px; font-weight: 800; padding: 1px 8px; border-radius: 999px; background: var(--bg); color: var(--muted); white-space: nowrap; }
+    .mb-cell.run .mb-chip { background: #e6f7ea; color: #2ea043; }
+    .mb-cell.pause .mb-chip { background: #fff8e8; color: #b8860b; }
+    .mb-cell.abn .mb-chip { background: #fde8e8; color: #c0392b; }
+    .mb-mqty { font-size: 10px; color: var(--muted); white-space: nowrap; }
+    .mb-mqty b { color: var(--ink); font-size: 11px; }
+  }
+
   .machine-tabs {
     display: flex;
     gap: 8px;
@@ -534,6 +603,8 @@
   </div>
 </header>
 
+<div class="machine-board" id="machineBoard"></div>
+
 <div class="machine-tabs" id="machineTabs"></div>
 
 <div class="content" id="content">
@@ -623,6 +694,114 @@ function renderMachineTabs() {
       activeMachine = b.dataset.m;
       renderMachineTabs();
       lastRenderHash = ''; // 強制重畫（因為內容類型完全切換）
+      renderContent();
+    };
+  });
+  renderMachineBoard();
+}
+
+// ===== 機台看板（頁面上方總覽）=====
+// 每台機顯示：目前狀態（生產中/暫停/異常/等待/無工令/完工/未開機）＋當前工單的規格與數量
+const MB_COLLAPSE_KEY = 'rt_board_collapsed';
+
+function mbOrdersFor(machineId) {
+  const hasTodayAct = o => {
+    const times = [];
+    (o.stepEntries || []).forEach(e => times.push(e.recordedAt));
+    ['step1At','step2At','step3At','step4At','step5At','step6At','step7At','step11At','step21At','step22At','step23At']
+      .forEach(k => { if (o[k]) times.push(o[k]); });
+    ((o.pause12 && o.pause12.history) || []).forEach(e => { if (e.startAt) times.push(e.startAt); if (e.endAt) times.push(e.endAt); });
+    ((o.pause13 && o.pause13.history) || []).forEach(e => { if (e.startAt) times.push(e.startAt); if (e.endAt) times.push(e.endAt); });
+    return times.some(t => isToday(t));
+  };
+  return allOrders
+    .filter(o => o.machineNo === machineId)
+    .filter(o => isToday(o.productionDate) || hasTodayAct(o) ||
+      (!o.step11At && ((o.pause12 && o.pause12.active) || (o.pause13 && o.pause13.active))))
+    .sort(scheduleCmp);
+}
+
+// 完成數：優先用完成終止的 QC 數；否則加總各段規格完成與暫停回報的數量
+function mbDoneQty(o) {
+  if (o.step11QcActualQty != null) return o.step11QcActualQty;
+  let sum = 0, has = false;
+  (o.stepEntries || []).forEach(e => { if (e.stepNo === '30' && e.qcActualQty != null) { sum += e.qcActualQty; has = true; } });
+  ((o.pause12 && o.pause12.history) || []).forEach(e => { if (e.qcActualQty != null) { sum += e.qcActualQty; has = true; } });
+  return has ? sum : null;
+}
+
+function mbStateFor(machineId) {
+  const orders = mbOrdersFor(machineId);
+  const running = orders.filter(o => !o.step11At && hasAnyActivity(o) &&
+    !(o.pause12 && o.pause12.active) && !(o.pause13 && o.pause13.active));
+  if (running.length) {
+    const o = running.reduce((a, b) => (getLastActivityTime(b) || 0) > (getLastActivityTime(a) || 0) ? b : a);
+    return { st: 'run', label: '生產中', order: o };
+  }
+  const abn = orders.find(o => !o.step11At && o.pause13 && o.pause13.active);
+  if (abn) return { st: 'abn', label: '異常停止', order: abn, note: (abn.pause13.active.note || '異常停止') };
+  const paused = orders.find(o => !o.step11At && o.pause12 && o.pause12.active);
+  if (paused) {
+    const a = paused.pause12.active;
+    const note = a.note === '插單暫停'
+      ? ('插單 → 改做 ' + (a.interruptedByOrderNo || '其他工單'))
+      : (a.note || '暫停中');
+    return { st: 'pause', label: '暫停中', order: paused, note };
+  }
+  if (idleMachinesToday.has(machineId)) return { st: 'off', label: '無工令', text: '今日無工令' };
+  if (orders.length > 0 && orders.every(o => o.step11At)) return { st: 'done', label: '已完工', text: '本日已完工' };
+  const waiting = orders.find(o => !o.step11At);
+  if (waiting) return { st: 'wait', label: '等待中', order: waiting };
+  return { st: 'off', label: '未開機', text: '未開機' };
+}
+
+function renderMachineBoard() {
+  const el = $('machineBoard');
+  if (!el) return;
+  let collapsed = false;
+  try { collapsed = localStorage.getItem(MB_COLLAPSE_KEY) === '1'; } catch (e) {}
+  const fmtN = n => Number(n).toLocaleString('zh-TW');
+  const cells = MACHINES.map(m => {
+    const s = mbStateFor(m.id);
+    const o = s.order;
+    let body, mQty = '';
+    if (o) {
+      const done = mbDoneQty(o);
+      const hasQty = (o.dispatchQty != null || done != null);
+      const qtyStr = (done != null ? fmtN(done) : '—') + ' / ' + (o.dispatchQty != null ? fmtN(o.dispatchQty) : '—');
+      body = `
+        <span class="mb-order">${escapeHtml(o.orderNo)}</span>
+        <div class="mb-spec">${escapeHtml(o.productSpec || o.manuSpec || '—')}</div>
+        ${o.moldSpec ? `<div class="mb-mold">${escapeHtml(o.moldSpec)}</div>` : ''}
+        ${s.note ? `<div class="mb-note">${escapeHtml(s.note)}</div>` : ''}
+        ${hasQty ? `<div class="mb-qty"><span>完成／派工</span><b>${qtyStr}</b></div>` : ''}`;
+      if (hasQty) mQty = `<span class="mb-mqty"><b>${done != null ? fmtN(done) : '—'}</b> / ${o.dispatchQty != null ? fmtN(o.dispatchQty) : '—'}</span>`;
+    } else {
+      body = `<span class="mb-offtag">${escapeHtml(s.text || s.label)}</span>`;
+    }
+    return `
+      <div class="mb-cell ${s.st}${activeMachine === m.id ? ' cur' : ''}" data-mb="${m.id}">
+        <div class="mb-head">${escapeHtml(m.num)} <span class="mb-hspec">${escapeHtml(m.spec)}</span></div>
+        <div class="mb-strip"><span class="${s.st === 'run' ? 'on' : ''}">生產中</span><span class="${s.st === 'pause' ? 'on' : ''}">暫停</span><span class="${s.st === 'abn' ? 'on' : ''}">異常</span></div>
+        <div class="mb-body">${body}</div>
+        <div class="mb-mstat"><span class="mb-chip">${escapeHtml(s.label)}</span>${mQty}</div>
+      </div>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="mb-bar" id="mbToggle">
+      <span class="mb-title">機台看板</span>
+      <span class="mb-chev">${collapsed ? '▼ 展開' : '▲ 收合'}</span>
+    </div>
+    <div class="mb-grid${collapsed ? ' mb-collapsed' : ''}">${cells}</div>`;
+  $('mbToggle').onclick = () => {
+    try { localStorage.setItem(MB_COLLAPSE_KEY, collapsed ? '0' : '1'); } catch (e) {}
+    renderMachineBoard();
+  };
+  el.querySelectorAll('[data-mb]').forEach(c => {
+    c.onclick = () => {
+      activeMachine = c.dataset.mb;
+      renderMachineTabs();
+      lastRenderHash = '';
       renderContent();
     };
   });
