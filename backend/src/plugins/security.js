@@ -11,6 +11,11 @@ const ALLOWED_ORIGINS = [
   'http://localhost:5500',
   'http://127.0.0.1:5500',
 ];
+// 本地開發用：EXTRA_ORIGIN=http://192.168.x.x:5500 可放行區網來源（例如用手機連 Mac 測試）
+// 正式環境不設此變數即無作用
+if (process.env.EXTRA_ORIGIN) {
+  ALLOWED_ORIGINS.push(...process.env.EXTRA_ORIGIN.split(',').map(s => s.trim()).filter(Boolean));
+}
 
 // 註冊安全／效能相關外掛：壓縮、安全 headers、CORS、速率限制
 export async function registerSecurity(fastify) {
