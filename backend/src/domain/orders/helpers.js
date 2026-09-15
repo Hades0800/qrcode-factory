@@ -163,6 +163,8 @@ export async function getPrevMachineEndAt(prisma, order) {
 // 注意：只自動恢復「插單暫停」；下班／午休／異常停止仍須手動恢復（維持既有流程與防呆）。
 // ────────────────────────────────────────────────────
 export const INTERLEAVE_NOTE = '插單暫停';
+// 插單只影響「最近有掃碼」的同機台工單；超過此時間窗的視為殭屍單，不自動暫停
+export const INTERLEAVE_SIBLING_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 export async function autoInterleave(prisma, target, eventTime) {
   const now = new Date();
@@ -185,14 +187,21 @@ export async function autoInterleave(prisma, target, eventTime) {
 
   if (!target.machineNo) return result;
 
-  // 2) 同機台其他運轉中的工單 → 插單暫停
+  // 2) 同機台其他「最近運轉中」的工單 → 插單暫停
+  // 只影響 48 小時內有掃碼的單：機台上可能殘留數月前開工、從未結單的殭屍單，
+  // 若不設時間窗，掃任何新單會把整批殭屍單掛上插單暫停（且永遠沒人恢復），
+  // 還會因「暫停中」被撈回即時生產頁（2026-09-15 現場實例：No1/No3 各 6~7 張陳年單被誤掛）。
   const siblings = await prisma.order.findMany({
     where: { machineNo: target.machineNo, step11At: null },
   });
   for (const o of siblings) {
     if (o.id === target.id) continue;
-    const started = await prisma.stepEntry.count({ where: { orderId: o.id } });
-    if (!started) continue; // 還沒開始的單維持「等待中」
+    const lastEntry = await prisma.stepEntry.findFirst({
+      where: { orderId: o.id },
+      orderBy: { recordedAt: 'desc' },
+    });
+    if (!lastEntry) continue; // 還沒開始的單維持「等待中」
+    if (Date.now() - new Date(lastEntry.recordedAt).getTime() > INTERLEAVE_SIBLING_WINDOW_MS) continue; // 殭屍單不動
     const activePause = await prisma.pauseEvent.findFirst({ where: { orderId: o.id, endAt: null } });
     if (activePause) {
       // 手動選「插單」時還不知道下一張是誰 → 這裡補記被誰插單
@@ -215,7 +224,7 @@ export async function autoInterleave(prisma, target, eventTime) {
   return result;
 }
 
-// 同機台是否有其他「已開工、未完成」的工單（插單情境判斷用）
+// 同機台是否有其他「最近開工、未完成」的工單（插單情境判斷用；同樣排除殭屍單）
 // 用途：第一筆 40/41 的強制接續規則 —— 插單時代表今天早已開工，不應強制成當日 08:00
 export async function hasRunningSibling(prisma, order) {
   if (!order || !order.machineNo) return false;
@@ -224,8 +233,11 @@ export async function hasRunningSibling(prisma, order) {
   });
   for (const o of siblings) {
     if (o.id === order.id) continue;
-    const started = await prisma.stepEntry.count({ where: { orderId: o.id } });
-    if (started > 0) return true;
+    const lastEntry = await prisma.stepEntry.findFirst({
+      where: { orderId: o.id },
+      orderBy: { recordedAt: 'desc' },
+    });
+    if (lastEntry && Date.now() - new Date(lastEntry.recordedAt).getTime() <= INTERLEAVE_SIBLING_WINDOW_MS) return true;
   }
   return false;
 }

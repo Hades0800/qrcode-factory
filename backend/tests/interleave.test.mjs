@@ -72,17 +72,19 @@ async function buildApp() {
 }
 
 // 建一張「已開始生產、未完成」的工單（machineNo 用非 No1-350 等避免製造參數防呆）
-async function seedOrder(prisma, orderNo, machineNo, { started = true, done = false } = {}) {
+async function seedOrder(prisma, orderNo, machineNo, { started = true, done = false, lastScanAgoMs = 3600e3 } = {}) {
+  // lastScanAgoMs：最後掃碼距今多久（預設 1 小時前 = 最近運轉中；殭屍單測試傳大值）
+  const scanAt = new Date(Date.now() - lastScanAgoMs);
   const order = await prisma.order.create({
     data: {
       orderNo, machineNo,
-      step11At: done ? new Date('2026-08-30T02:00:00Z') : null,
-      actualStartDate: started ? new Date('2026-08-30T00:00:00Z') : null,
+      step11At: done ? new Date(scanAt.getTime() + 1800e3) : null,
+      actualStartDate: started ? scanAt : null,
     },
   });
   if (started) {
     await prisma.stepEntry.create({
-      data: { orderId: order.id, stepNo: '41', seq: 1, recordedAt: new Date('2026-08-30T00:30:00Z') },
+      data: { orderId: order.id, stepNo: '41', seq: 1, recordedAt: scanAt },
     });
   }
   return order;
@@ -301,6 +303,19 @@ await test('三張連環插單：A→B→C，重新啟動 A 後狀態全部正�
   assert.equal(activePausesOf(state, a.id).length, 1, 'A 應再次被插單');
   assert.equal(activePausesOf(state, a.id)[0].interruptedByOrderNo, 'F1150901002');
   assert.equal(activePausesOf(state, c.id).length, 1, 'C 維持暫停中');
+  await fastify.close();
+});
+
+
+await test('殭屍單（最後掃碼超過 48 小時）不會被插單暫停', async () => {
+  const { fastify, prisma, state } = await buildApp();
+  // 三個月前開工、從未結單的殭屍單
+  const zombie = await seedOrder(prisma, 'F1150313040', 'No12', { lastScanAgoMs: 90 * 24 * 3600e3 });
+  const recent = await seedOrder(prisma, 'F1150914012', 'No12'); // 1 小時前掃過 → 正常插單對象
+  await seedOrder(prisma, 'F1150915001', 'No12', { started: false });
+  await fastify.inject({ method: 'POST', url: '/api/orders/F1150915001/step-entries', payload: { stepNo: '41' } });
+  assert.equal(activePausesOf(state, zombie.id).length, 0, '殭屍單不應被掛插單暫停');
+  assert.equal(activePausesOf(state, recent.id).length, 1, '最近運轉中的單照常被插單');
   await fastify.close();
 });
 
