@@ -1067,7 +1067,8 @@ function applyFilters(list) {
       const hay = (o.orderNo + ' ' + o.machineNo + ' ' + o.leaderName).toLowerCase();
       if (!hay.includes(text)) return false;
     }
-    if (from || to) {
+    // 有關鍵字時忽略日期範圍：輸單號就是要找到那張單，不管多舊
+    if (!text && (from || to)) {
       // 收集所有活動時間（stepEntries + pauseEvents + 舊格式 stepXAt）
       const times = [];
       if (o.productionDate) times.push(new Date(o.productionDate));
@@ -1108,6 +1109,24 @@ function applyFilters(list) {
 ['filterText','filterFrom','filterTo','filterStatus'].forEach(id => {
   $(id).addEventListener('input', () => { render(); renderIdleEvents(); });
   $(id).addEventListener('change', () => { render(); renderIdleEvents(); });
+});
+
+// 關鍵字同步打後端搜尋（直接查資料庫，舊單也找得到），結果合併進 allOrders 再走原本的前端篩選
+let serverSearchTimer = null;
+let lastServerSearchQ = '';
+$('filterText').addEventListener('input', () => {
+  const q = $('filterText').value.trim();
+  clearTimeout(serverSearchTimer);
+  if (q.length < 3 || q === lastServerSearchQ) return; // 太短的字先不打（避免每個字母都查一次）
+  serverSearchTimer = setTimeout(async () => {
+    lastServerSearchQ = q;
+    const r = await api('/api/orders?q=' + encodeURIComponent(q));
+    if (!r.ok || !r.data.orders) return;
+    const known = new Set(allOrders.map(o => o.orderNo));
+    let added = 0;
+    r.data.orders.forEach(o => { if (!known.has(o.orderNo)) { allOrders.push(o); added++; } });
+    if (added > 0) { render(); renderIdleEvents(); }
+  }, 400);
 });
 
 // 預設日期範圍 = 今天
