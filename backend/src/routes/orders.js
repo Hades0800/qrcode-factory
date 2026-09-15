@@ -1388,7 +1388,32 @@ export default async function orderRoutes(fastify) {
         take: 500,
         include: ORDER_INCLUDE,
       });
-      return { orders: orders.map(serializeOrder) };
+      // 多規格單的派工總數：Order.dispatchQty 只存第一列規格的量（上傳規則：不同規格的列
+      // 不覆寫工單欄位），整張單的派工要用上傳明細加總——同規格取最新批次，仿 upload-rows 去重
+      const baseNos = [...new Set(orders.map(o => o.orderNo.split('@')[0]))];
+      const uploadRows = baseNos.length === 0 ? [] : await fastify.prisma.uploadRow.findMany({
+        where: { orderNo: { in: baseNos }, status: { not: 'error' }, batch: { cancelledAt: null } },
+        orderBy: [{ batchId: 'asc' }, { id: 'asc' }], // 舊→新，讓較新批次覆蓋
+        select: { orderNo: true, productSpec: true, dispatchQty: true },
+      });
+      const specQtyByOrder = new Map(); // orderNo → Map(productSpec → dispatchQty)
+      for (const r of uploadRows) {
+        let m = specQtyByOrder.get(r.orderNo);
+        if (!m) specQtyByOrder.set(r.orderNo, (m = new Map()));
+        m.set((r.productSpec || '').trim(), r.dispatchQty);
+      }
+      const dispatchTotals = {};
+      for (const [no, m] of specQtyByOrder) {
+        let sum = 0, has = false;
+        for (const q of m.values()) { if (q != null) { sum += q; has = true; } }
+        if (has) dispatchTotals[no] = sum;
+      }
+      return { orders: orders.map(o => {
+        const s = serializeOrder(o);
+        const total = dispatchTotals[o.orderNo.split('@')[0]];
+        if (total != null) s.dispatchQtyTotal = total;
+        return s;
+      }) };
     }
     const limit = Math.min(Number(request.query.limit) || 50, 200);
     const orders = await fastify.prisma.order.findMany({
