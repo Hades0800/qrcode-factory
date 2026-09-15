@@ -2091,7 +2091,10 @@ function renderSteps() {
       if (!text) { toast(sel ? '請選擇完成的規格' : '請填入規格描述', 'error'); (sel || input)?.focus(); return; }
       const qc = Number(qcInput?.value);
       if (!Number.isInteger(qc) || qc < 0) { toast('請填入此規格實際生產數量（非負整數）', 'error'); qcInput?.focus(); return; }
-      if (!confirmQtyBeforeSave(qc, '生產規格完成：' + text)) { qcInput?.focus(); qcInput?.select(); return; }
+      // 派工數：多規格單優先用「該規格那一列」的派工數，找不到才用整張單的
+      const specRow = (currentSpecRows || []).find(r => (r.productSpec || '').trim() === text);
+      const specDispatch = (specRow && specRow.dispatchQty != null) ? specRow.dispatchQty : (order && order.dispatchQty);
+      if (!confirmQtyBeforeSave(qc, '生產規格完成：' + text, specDispatch)) { qcInput?.focus(); qcInput?.select(); return; }
       recordSpecChange(text, qc);
     };
   }
@@ -2318,8 +2321,8 @@ function showInterruptModal() {
           if (dt > new Date()) { toast('時間不能超過現在', 'error'); return; }
           startAt = dt.toISOString();
         }
-        // 入庫前確認數量：按取消回到輸入框修改（視窗不關）
-        if (!confirmQtyBeforeSave(qc, cfg.title)) { qcInput.focus(); qcInput.select(); return; }
+        // 入庫前確認數量（派工數 vs QC 完成數）：按取消回到輸入框修改（視窗不關）
+        if (!confirmQtyBeforeSave(qc, cfg.title, order && order.dispatchQty)) { qcInput.focus(); qcInput.select(); return; }
         modal.remove();
         executePause({ type: cfg.type, title: cfg.title, opt: btn.dataset.opt }, fullNote, qc, startAt);
       };
@@ -2452,12 +2455,18 @@ async function submitStepWithBody(stepId, body) {
   return true;
 }
 
-// 生產完成數量的入庫確認：按「確定」才送出入庫；按「取消」回到輸入框修改
-function confirmQtyBeforeSave(qty, contextTitle) {
-  return confirm('【確認生產完成數量】\n\n' +
-    (contextTitle ? contextTitle + '\n' : '') +
-    '數量：' + Number(qty).toLocaleString('zh-TW') + '\n\n' +
-    '數量正確 → 按「確定」入庫\n發現錯誤 → 按「取消」回去修改');
+// 生產完成數量的入庫確認：並列「派工數 vs QC 完成數量」供 QC 最後比對。
+// 按「確定」才送出入庫；按「取消」回到輸入框修改後可再次確認。
+function confirmQtyBeforeSave(qty, contextTitle, dispatchQty) {
+  const fmt = n => Number(n).toLocaleString('zh-TW');
+  let msg = '【QC 入庫確認】\n\n' + (contextTitle ? contextTitle + '\n\n' : '');
+  msg += '派工數：' + (dispatchQty != null ? fmt(dispatchQty) : '—（無上傳資料）') + '\n';
+  msg += 'QC 完成數量：' + fmt(qty) + '\n';
+  if (dispatchQty != null && Number(qty) > Number(dispatchQty)) {
+    msg += '\n⚠ 完成數量大於派工數，請再次確認！\n';
+  }
+  msg += '\n數量正確 → 按「確定」完成入庫\n發現錯誤 → 按「取消」回去修改';
+  return confirm(msg);
 }
 
 async function executePause(p, note, qcActualQty, startAt) {
