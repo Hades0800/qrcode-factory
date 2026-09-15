@@ -741,12 +741,14 @@ function mbOrdersFor(machineId) {
     .sort(scheduleCmp);
 }
 
-// 完成數：優先用完成終止的 QC 數；否則加總各段規格完成與暫停回報的數量
+// 完成數 =「各規格完成生產的總數」：
+//   加總每筆「生產規格完成」(step 30) 回報的數量；
+//   多規格單最後一段規格的量記在完成終止（step11QcActualQty），一併計入。
+//   下班／中斷回報的當日數量「不計」——那是同批貨的中途回報，規格完成時會整段再報一次，加了會重複。
 function mbDoneQty(o) {
-  if (o.step11QcActualQty != null) return o.step11QcActualQty;
   let sum = 0, has = false;
   (o.stepEntries || []).forEach(e => { if (e.stepNo === '30' && e.qcActualQty != null) { sum += e.qcActualQty; has = true; } });
-  ((o.pause12 && o.pause12.history) || []).forEach(e => { if (e.qcActualQty != null) { sum += e.qcActualQty; has = true; } });
+  if (o.step11QcActualQty != null) { sum += o.step11QcActualQty; has = true; }
   return has ? sum : null;
 }
 
