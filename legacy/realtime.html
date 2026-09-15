@@ -106,6 +106,7 @@
   .mb-cell.abn .mb-order { color: #c0392b; }
   .mb-cell.wait .mb-order { color: var(--muted); }
   .mb-spec { font-size: 13px; font-weight: 800; line-height: 1.25; color: var(--ink); }
+  .mb-spec.mb-nospec { color: var(--muted); font-weight: 500; font-size: 12px; }
   .mb-mold { font-size: 11px; color: var(--muted); }
   .mb-note { font-size: 10.5px; font-weight: 700; }
   .mb-cell.pause .mb-note { color: #b8860b; }
@@ -794,7 +795,7 @@ function renderMachineBoard() {
         const baseNo = o.orderNo.slice(0, at);
         base = allOrders.find(b => b.orderNo === baseNo) || null;
       }
-      const spec = o.productSpec || o.manuSpec || (base && (base.productSpec || base.manuSpec)) || '—';
+      const spec = o.productSpec || o.manuSpec || (base && (base.productSpec || base.manuSpec)) || '';
       const mold = o.moldSpec || (base && base.moldSpec) || '';
       const dispatch = o.dispatchQty != null ? o.dispatchQty : (base ? base.dispatchQty : null);
       const done = mbDoneQty(o);
@@ -802,7 +803,7 @@ function renderMachineBoard() {
       const qtyStr = (done != null ? fmtN(done) : '—') + ' / ' + (dispatch != null ? fmtN(dispatch) : '—');
       body = `
         <span class="mb-order">${escapeHtml(o.orderNo)}</span>
-        <div class="mb-spec">${escapeHtml(spec)}</div>
+        <div class="mb-spec${spec ? '' : ' mb-nospec'}">${escapeHtml(spec || '生產規格尚未上傳')}</div>
         ${mold ? `<div class="mb-mold">${escapeHtml(mold)}</div>` : ''}
         ${s.note ? `<div class="mb-note">${escapeHtml(s.note)}</div>` : ''}
         ${hasQty ? `<div class="mb-qty"><span>完成／派工${base && dispatch != null ? '(總)' : ''}</span><b>${qtyStr}</b></div>` : ''}`;
