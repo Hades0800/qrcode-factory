@@ -1130,7 +1130,6 @@ function renderContent() {
       const isCarryOver = o.productionDate && !isToday(o.productionDate);
       const carryOverTag = isCarryOver ? '<span class="oc-pill carryover">隔日生產</span>' : '';
       const scopeTag = o.changeScope ? `<span class="oc-pill scope">${escapeHtml(scopeLabel(o.changeScope))}</span>` : '';
-      const hasTags = !!(carryOverTag || scopeTag);
       // 狀態四態：已完成 → 異常停止 → 暫停中 → 生產中 → 等待中
       const p12 = o.pause12 && o.pause12.active;
       const p13 = o.pause13 && o.pause13.active;
@@ -1152,10 +1151,11 @@ function renderContent() {
             <div class="oc-title">
               <span class="oc-no">${escapeHtml(o.orderNo)}</span>
               <div class="oc-badge${badgeCls}">${badgeText}</div>
-              ${interleaveTag}
-              ${restartBtn}
+              ${carryOverTag}
             </div>
-            ${hasTags ? `<div class="oc-tags">${scopeTag}${carryOverTag}</div>` : ''}
+            ${interleaveTag ? `<div class="oc-interleave-row">${interleaveTag}</div>` : ''}
+            ${restartBtn ? `<div class="oc-restart-row">${restartBtn}</div>` : ''}
+            ${scopeTag ? `<div class="oc-tags">${scopeTag}</div>` : ''}
           </div>
           <div class="oc-customer">🏢 客戶：${escapeHtml(resolveCustomerName(o) || '（未填客戶名稱）')}</div>
           <div id="rt-spec-${escapeHtml(o.orderNo)}" class="rt-spec-area"></div>
