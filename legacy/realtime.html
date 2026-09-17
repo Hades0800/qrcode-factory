@@ -302,6 +302,11 @@
   .order-card.active .oc-badge { background: var(--brand); color: #fff; }
   .order-card .oc-badge.paused { background: #fff3cd; color: #b8860b; }
   .order-card .oc-badge.abnormal { background: #fde8e8; color: #c0392b; }
+  /* 匯總表的工單號連結：點了捲到該單的生產實態卡片 */
+  .oc-goto { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+  .order-card.oc-flash { box-shadow: 0 0 0 3px var(--brand); }
+  .order-card { transition: box-shadow .35s; }
+
   .order-card .oc-interleave {
     font-size: 11px;
     font-weight: 700;
@@ -933,6 +938,31 @@ async function loadOrders() {
   renderContent();
 }
 
+// 匯總表點工單號 → 捲到該單的生產實態卡片並高亮；在全機台分頁點的話先切到該機台再跳
+function gotoOrderCard(orderNo, machineId) {
+  const jump = () => {
+    const card = document.getElementById('oc-' + orderNo);
+    if (!card) { toast && toast('此工單不在今日清單中', 'error'); return; }
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    card.classList.add('oc-flash');
+    setTimeout(() => card.classList.remove('oc-flash'), 1600);
+  };
+  if (machineId && machineId !== activeMachine) {
+    activeMachine = machineId;
+    renderMachineTabs();
+    lastRenderHash = '';
+    renderContent();
+    setTimeout(jump, 150); // 等切換分頁重畫完成
+  } else {
+    jump();
+  }
+}
+// 事件委派：兩個分頁（機台/全機台）重畫後都不用重綁
+document.addEventListener('click', e => {
+  const a = e.target.closest && e.target.closest('[data-goto]');
+  if (a) gotoOrderCard(a.dataset.goto, a.dataset.gotoM);
+});
+
 // 上次 render 的資料指紋；相同代表畫面無需重畫，避免每 30 秒自動 refresh 導致畫面閃動 / scroll 位置重設
 let lastRenderHash = '';
 
@@ -1150,7 +1180,7 @@ function renderContent() {
       const restartBtn = isInterleavePause
         ? `<button class="oc-restart" data-restart="${escapeHtml(o.orderNo)}">${icon('play', 12)} 重新啟動</button>` : '';
       html += `
-        <div class="order-card${isActive ? ' active' : ''}">
+        <div class="order-card${isActive ? ' active' : ''}" id="oc-${escapeHtml(o.orderNo)}">
           <div class="oc-header">
             <div class="oc-title">
               <span class="oc-no">${escapeHtml(o.orderNo)}</span>
@@ -1402,7 +1432,7 @@ function renderDailySummaryCard(machineId, machineOrders) {
     const rProd = Math.round(r.prodSec / 60);
     return `
     <tr>
-      <td style="padding:6px 8px;font-weight:700;font-size:12px;">${escapeHtml(r.orderNo)}${r.isCrossDay ? '<span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;background:#fff8e8;color:#b8860b;margin-left:4px;">隔日</span>' : ''}${renderOrderStatusBadge(r.status)}</td>
+      <td style="padding:6px 8px;font-weight:700;font-size:12px;"><a class="oc-goto" data-goto="${escapeHtml(r.orderNo)}" data-goto-m="${escapeHtml(machineId)}">${escapeHtml(r.orderNo)}</a>${r.isCrossDay ? '<span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 6px;border-radius:6px;background:#fff8e8;color:#b8860b;margin-left:4px;">隔日</span>' : ''}${renderOrderStatusBadge(r.status)}</td>
       <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${rPrep}</td>
       <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;">${rProd}</td>
       <td style="padding:6px 8px;font-family:monospace;font-size:13px;text-align:center;font-weight:600;color:${effColor(rPrep, rProd)};">${effRate(rPrep, rProd)}</td>
