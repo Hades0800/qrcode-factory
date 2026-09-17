@@ -302,6 +302,33 @@
   .order-card.active .oc-badge { background: var(--brand); color: #fff; }
   .order-card .oc-badge.paused { background: #fff3cd; color: #b8860b; }
   .order-card .oc-badge.abnormal { background: #fde8e8; color: #c0392b; }
+  /* 右下角「至頂」懸浮按鈕：捲動超過一個螢幕才出現 */
+  .back-top {
+    position: fixed;
+    right: 14px;
+    bottom: calc(18px + var(--safe-bottom, 0px));
+    z-index: 900;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: inherit;
+    color: #fff;
+    background: rgba(43, 41, 37, .82);
+    border: none;
+    border-radius: 999px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .25);
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+    transition: opacity .2s, transform .2s;
+  }
+  .back-top.show {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+
   /* 匯總表的工單號連結：點了捲到該單的生產實態卡片 */
   .oc-goto { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
   .order-card.oc-flash { box-shadow: 0 0 0 3px var(--brand); }
@@ -636,6 +663,8 @@
   </div>
 </div>
 
+<button id="backTopBtn" class="back-top" aria-label="回到頁面頂部">▲ 至頂</button>
+
 <script src="config.js"></script>
 <script src="utils.js?v=20260902a"></script>
 <script>
@@ -962,6 +991,17 @@ document.addEventListener('click', e => {
   const a = e.target.closest && e.target.closest('[data-goto]');
   if (a) gotoOrderCard(a.dataset.goto, a.dataset.gotoM);
 });
+
+// 右下角「至頂」按鈕：捲動超過一個螢幕高才出現
+(function setupBackTop() {
+  const btn = $('backTopBtn');
+  const scroller = $('scrollArea');
+  if (!btn || !scroller) return;
+  scroller.addEventListener('scroll', () => {
+    btn.classList.toggle('show', scroller.scrollTop > window.innerHeight);
+  }, { passive: true });
+  btn.onclick = () => scroller.scrollTo({ top: 0, behavior: 'smooth' });
+})();
 
 // 上次 render 的資料指紋；相同代表畫面無需重畫，避免每 30 秒自動 refresh 導致畫面閃動 / scroll 位置重設
 let lastRenderHash = '';
