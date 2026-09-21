@@ -193,6 +193,12 @@
   table.ps-grid th.ps-sum-col { background: #fafafc; color: var(--muted); }
   table.ps-grid tr:hover td.ps-sum-col { background: #fff3d6; }
 
+  /* 拆單（@N 多機台）的「合計」列：只在同母單有兩列以上時出現 */
+  table.ps-grid tr.ps-total-row td { background: #eef4ff; font-weight: 800; }
+  table.ps-grid tr.ps-total-row td.ps-order-col { color: #1f6feb; background: #eef4ff; }
+  table.ps-grid tr.ps-total-row td.ps-sum-col { color: #1f6feb; background: #e7f0ff; }
+  table.ps-grid tr.ps-total-row .ps-qty { color: #1f6feb; font-weight: 800; }
+
   table.ps-grid td.ps-cell { min-width: 30px; padding: 6px 5px; }
   .ps-cell .ps-dot { width: 12px; height: 12px; }
   .ps-cell .ps-cellwrap { display: inline-flex; align-items: center; justify-content: center; gap: 3px; }
@@ -671,7 +677,17 @@ function render() {
   html += '<th class="ps-sum-col">加總</th>';
   html += '</tr></thead><tbody>';
 
+  // 依母單分組：拆單（@N 兩列以上）的單在其各機台列後面補一列「合計」；沒拆單的維持單列
+  const orderGroups = [];
+  const orderGroupIdx = new Map();
   for (const o of rows) {
+    const b = (o.orderNo || '').split('@')[0];
+    if (!orderGroupIdx.has(b)) { orderGroupIdx.set(b, orderGroups.length); orderGroups.push({ base: b, items: [] }); }
+    orderGroups[orderGroupIdx.get(b)].items.push(o);
+  }
+
+  for (const g of orderGroups) {
+  for (const o of g.items) {
     const plan = getPlannedYmd(o);
     const start = getActualStartYmd(o);
     const done = getCompletionYmd(o);
@@ -758,6 +774,28 @@ function render() {
       .reduce((s, k) => s + (Number(qtyMap[k]) || 0), 0);
     html += `<td class="ps-sum-col">${rowSum > 0 ? rowSum.toLocaleString('zh-TW') : ''}</td>`;
     html += '</tr>';
+  }
+
+  // 拆單合計列：同母單兩列以上（@N 分機生產）才出現，逐日加總各機台數量
+  if (g.items.length >= 2) {
+    const sumByDay = {};
+    let groupMonthTotal = 0;
+    g.items.forEach(o => {
+      const qm = qtyByDayOf(o);
+      Object.keys(qm).forEach(k => {
+        if (!k.startsWith(monthStr)) return;
+        sumByDay[k] = (sumByDay[k] || 0) + (Number(qm[k]) || 0);
+        groupMonthTotal += Number(qm[k]) || 0;
+      });
+    });
+    html += `<tr class="ps-total-row"><td class="ps-order-col">${escapeHtml(g.base)} 合計</td>`;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dYmd = monthStr + '-' + String(d).padStart(2, '0');
+      const q = sumByDay[dYmd];
+      html += `<td class="ps-cell ${dYmd === todayYmd ? 'today' : ''}">${q ? `<span class="ps-qty">${q}</span>` : ''}</td>`;
+    }
+    html += `<td class="ps-sum-col">${groupMonthTotal > 0 ? groupMonthTotal.toLocaleString('zh-TW') : ''}</td></tr>`;
+  }
   }
   html += '</tbody></table>';
   $('gridArea').innerHTML = html;
