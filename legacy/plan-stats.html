@@ -178,6 +178,21 @@
   table.ps-grid tr:hover td { background: #fafafc; }
   table.ps-grid tr:hover td.ps-order-col { background: #fafafc; }
 
+  /* 最右側「加總」欄：釘住右邊，捲動時恆常可見 */
+  table.ps-grid th.ps-sum-col,
+  table.ps-grid td.ps-sum-col {
+    position: sticky; right: 0;
+    text-align: center;
+    font-weight: 800;
+    color: var(--ink);
+    background: #fff8e8;
+    box-shadow: -1px 0 0 var(--border);
+    min-width: 56px;
+    font-variant-numeric: tabular-nums;
+  }
+  table.ps-grid th.ps-sum-col { background: #fafafc; color: var(--muted); }
+  table.ps-grid tr:hover td.ps-sum-col { background: #fff3d6; }
+
   table.ps-grid td.ps-cell { min-width: 30px; padding: 6px 5px; }
   .ps-cell .ps-dot { width: 12px; height: 12px; }
   .ps-cell .ps-cellwrap { display: inline-flex; align-items: center; justify-content: center; gap: 3px; }
@@ -653,6 +668,7 @@ function render() {
     const isToday = dYmd === todayYmd;
     html += `<th class="${isToday ? 'today' : ''}">${mm}/${d}</th>`;
   }
+  html += '<th class="ps-sum-col">加總</th>';
   html += '</tr></thead><tbody>';
 
   for (const o of rows) {
@@ -682,6 +698,7 @@ function render() {
       segs.forEach((seg, i) => {
         const segStart = i === 0 ? (orderStart || seg.ymd) : segs[i - 1].ymd;
         const segEnd = seg.closed ? seg.ymd : todayYmd;
+        let rowSum = 0; // 本列（本月格內）顯示數量的加總
         html += `<tr><td class="ps-order-col ps-order-click" data-orderno="${escapeHtml(o.orderNo)}" data-segidx="${i + 1}" title="點一下看生產規格">${escapeHtml(o.orderNo)}-${i + 1}${machineTag}</td>`;
         for (let d = 1; d <= daysInMonth; d++) {
           const dYmd = monthStr + '-' + String(d).padStart(2,'0');
@@ -690,15 +707,18 @@ function render() {
           if (segStart && segEnd && dYmd >= segStart && dYmd <= segEnd) {
             if (seg.closed && dYmd === seg.ymd) {
               const qtyHtml = (seg.qty != null) ? `<span class="ps-qty">${seg.qty}</span>` : '';
+              if (seg.qty != null) rowSum += Number(seg.qty) || 0;
               inner = `<span class="ps-cellwrap"><span class="ps-dot green" title="已完成"></span>${qtyHtml}</span>`;
             } else {
               const q = offQtyByDay[dYmd];
               const qtyHtml = (q != null) ? `<span class="ps-qty">${q}</span>` : '';
+              if (q != null) rowSum += Number(q) || 0;
               inner = `<span class="ps-cellwrap"><span class="ps-dot yellow" title="生產中"></span>${qtyHtml}</span>`;
             }
           }
           html += `<td class="ps-cell ${isToday ? 'today' : ''}">${inner}</td>`;
         }
+        html += `<td class="ps-sum-col">${rowSum > 0 ? rowSum.toLocaleString('zh-TW') : ''}</td>`;
         html += '</tr>';
       });
       continue;
@@ -732,6 +752,11 @@ function render() {
       const cellInner = (dot || qtyHtml) ? `<span class="ps-cellwrap">${dot}${qtyHtml}</span>` : '';
       html += `<td class="ps-cell ${isToday ? 'today' : ''}">${cellInner}</td>`;
     }
+    // 本列（本月格內）顯示數量的加總
+    const rowSum = Object.keys(qtyMap)
+      .filter(k => k.startsWith(monthStr))
+      .reduce((s, k) => s + (Number(qtyMap[k]) || 0), 0);
+    html += `<td class="ps-sum-col">${rowSum > 0 ? rowSum.toLocaleString('zh-TW') : ''}</td>`;
     html += '</tr>';
   }
   html += '</tbody></table>';
