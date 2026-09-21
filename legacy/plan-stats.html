@@ -517,6 +517,9 @@ function render() {
     } else {
       if (!orderMatchesMachine(o, machine)) return false;
     }
+    // 工單號查詢不限月份：單號都指定了就該找到——生產常跨月（計畫在上月、做到本月），
+    // 若仍限「計畫日期在所選月份」，跨月單會顯示「找不到」
+    if (orderQ) return true;
     const p = getPlannedYmd(o);
     if (!p) return false;
     return p.startsWith(monthStr);
@@ -575,7 +578,7 @@ function render() {
 
   // 上方統計列：工單／客戶查詢顯示對應資訊（跨機台），否則顯示機台
   $('psSummary').innerHTML = orderQ
-    ? `<div class="ps-line"><span class="lbl">工單：</span><span class="val brand">${escapeHtml(orderQ)}</span><span class="lbl" style="margin-left:10px;">（含各機台 @N，跨所有機台，共 ${rows.length} 筆）</span></div>`
+    ? `<div class="ps-line"><span class="lbl">工單：</span><span class="val brand">${escapeHtml(orderQ)}</span><span class="lbl" style="margin-left:10px;">（含各機台 @N，跨所有機台、不限月份，共 ${rows.length} 筆）</span></div>`
     : custQ
       ? `<div class="ps-line"><span class="lbl">客戶：</span><span class="val brand">${escapeHtml(custQ)}</span><span class="lbl" style="margin-left:10px;">（跨所有機台，共 ${rows.length} 張工單）</span></div>`
       : `<div class="ps-line"><span class="lbl">機台編號：</span><span class="val">${machine}</span></div>`;
@@ -583,7 +586,7 @@ function render() {
   // 沒資料
   if (rows.length === 0) {
     $('gridArea').innerHTML = '<div class="empty">' +
-      (orderQ ? '本月份找不到工單「' + escapeHtml(orderQ) + '」（或其 @N 機台紀錄）'
+      (orderQ ? '找不到工單「' + escapeHtml(orderQ) + '」（或其 @N 機台紀錄）'
         : custQ ? '本月份找不到客戶「' + escapeHtml(custQ) + '」的工單'
         : '此機台本月份沒有計畫工單') + '</div>';
     return;
@@ -690,6 +693,24 @@ function render() {
 });
 $('filterCustomer').addEventListener('input', render);   // 邊打邊篩，清空即回到機台檢視
 $('filterOrder').addEventListener('input', render);      // 工單號查詢（含 @N），優先於客戶／機台
+
+// 工單號查詢同步打後端搜尋（直查資料庫，不受「最近 500 筆」限制）——結果合併進 allOrders 再重畫
+let psSearchTimer = null;
+let psLastSearchQ = '';
+$('filterOrder').addEventListener('input', () => {
+  const q = $('filterOrder').value.trim();
+  clearTimeout(psSearchTimer);
+  if (q.length < 3 || q === psLastSearchQ) return;
+  psSearchTimer = setTimeout(async () => {
+    psLastSearchQ = q;
+    const r = await api('/api/orders?q=' + encodeURIComponent(q));
+    if (!r.ok || !r.data.orders) return;
+    const known = new Set(allOrders.map(o => o.orderNo));
+    let added = 0;
+    r.data.orders.forEach(o => { if (!known.has(o.orderNo)) { allOrders.push(o); added++; } });
+    if (added > 0) render();
+  }, 400);
+});
 $('refreshBtn').onclick = loadOrders;
 
 // 工單完成進度狀態：完成 / 進行中 / 未進行
