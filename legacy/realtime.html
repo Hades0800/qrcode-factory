@@ -771,7 +771,7 @@ function mbOrdersFor(machineId) {
   return allOrders
     .filter(o => o.machineNo === machineId)
     .filter(o => isToday(o.productionDate) || hasTodayAct(o) ||
-      (!o.step11At && ((o.pause12 && o.pause12.active) || (o.pause13 && o.pause13.active))))
+      (!o.step11At && ((o.pause12 && o.pause12.active) || (o.pause13 && o.pause13.active)) && !isStalePaused(o)))
     .sort(scheduleCmp);
 }
 
@@ -1074,8 +1074,8 @@ function renderContent() {
     .filter(o => {
       if (isToday(o.productionDate)) return true;
       if (hasTodayActivity(o)) return true;
-      // 未完成且暫停中的隔日工單
-      if (!o.step11At && ((o.pause12 && o.pause12.active) || (o.pause13 && o.pause13.active))) return true;
+      // 未完成且暫停中的隔日工單（殘留過久的不算，見 isStalePaused）
+      if (!o.step11At && ((o.pause12 && o.pause12.active) || (o.pause13 && o.pause13.active)) && !isStalePaused(o)) return true;
       return false;
     })
     .sort(scheduleCmp); // 依生管上傳順序：計畫日期 → 計畫序號 → 工單號（共用 utils.js）
@@ -1546,6 +1546,15 @@ function getFirstActivityTime(o) {
   ((o.pause13 && o.pause13.history) || []).forEach(e => { consider(e.startAt); consider(e.endAt); });
   return min;
 }
+// 殘留暫停判定：暫停/異常「進行中」但整張單最後活動已超過 7 天 → 視為忘了收尾的殘留，
+// 不再讓機台掛著暫停/異常（實例：8/5 打錯單掃了異常停止沒人恢復，No18 紅了一個月）。
+// 7 天涵蓋下班+週末+連假的正常跨日暫停；真正要恢復生產時一掃碼就會回到畫面上。
+const STALE_PAUSE_MS = 7 * 24 * 60 * 60 * 1000;
+function isStalePaused(o) {
+  const last = getLastActivityTime(o);
+  return last != null && (Date.now() - last) > STALE_PAUSE_MS;
+}
+
 function getLastActivityTime(o) {
   // 回傳工單最後一次有動作的時間（毫秒），尚未開始則為 null（用於插單後判斷目前生產單）
   let max = null;
