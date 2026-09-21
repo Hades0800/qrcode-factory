@@ -611,7 +611,9 @@ function render() {
   const monthRate = lastDay > 0 ? (rateSum / lastDay * 100).toFixed(1) : null;
 
   // 標題
-  $('psTitle').textContent = yy + '年' + mm + '月份生產進度統計' + (orderQ ? '（工單查詢）' : custQ ? '（客戶查詢）' : '');
+  $('psTitle').textContent = orderQ
+    ? '生產進度統計（工單查詢・全期間）'
+    : yy + '年' + mm + '月份生產進度統計' + (custQ ? '（客戶查詢）' : '');
 
   // 上方統計列：工單／客戶查詢顯示對應資訊（跨機台），否則顯示機台
   $('psSummary').innerHTML = orderQ
@@ -666,13 +668,39 @@ function render() {
   // 依計畫日期 → 計畫序號(Excel 列順序) → 工單號 排序
   rows.sort(scheduleCmp);
 
+  // 顯示的日期欄：
+  //   機台/客戶模式 = 所選月份的每一天
+  //   工單號查詢   = 全期間（第一天生產日 → 完成日或今天），不受月份選擇限制
+  //                  —— 庫存單常被訂單插單、跨月生產，查單就要看得到完整軌跡
+  let dayList = [];
+  if (orderQ) {
+    const starts = rows.map(o => getActualStartYmd(o) || getPlannedYmd(o)).filter(Boolean).sort();
+    const ends = rows.map(o => getCompletionYmd(o)).filter(Boolean).sort();
+    const allDone = rows.every(o => !!o.step11At);
+    const s = starts[0] || todayYmd;
+    let e = (allDone && ends.length) ? ends[ends.length - 1] : todayYmd;
+    if (e < s) e = s;
+    // 安全上限 124 天（約 4 個月）：更久的只顯示最後 124 天，避免表格爆炸
+    const sD = new Date(s + 'T00:00:00');
+    const eD = new Date(e + 'T00:00:00');
+    const capStart = new Date(Math.max(sD.getTime(), eD.getTime() - 123 * 86400000));
+    for (let cur = new Date(capStart); cur <= eD; cur.setDate(cur.getDate() + 1)) dayList.push(ymd(cur));
+  } else {
+    for (let d = 1; d <= daysInMonth; d++) dayList.push(monthStr + '-' + String(d).padStart(2, '0'));
+  }
+  const rangeStart = dayList[0];
+  const rangeEnd = dayList[dayList.length - 1];
+  const inRange = k => k >= rangeStart && k <= rangeEnd;
+  const dayLabel = dYmd => {
+    const p = dYmd.split('-');
+    return parseInt(p[1], 10) + '/' + parseInt(p[2], 10);
+  };
+
   // 表格
   let html = '<table class="ps-grid"><thead><tr>';
   html += '<th class="ps-order-col">工號</th>';
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dYmd = monthStr + '-' + String(d).padStart(2,'0');
-    const isToday = dYmd === todayYmd;
-    html += `<th class="${isToday ? 'today' : ''}">${mm}/${d}</th>`;
+  for (const dYmd of dayList) {
+    html += `<th class="${dYmd === todayYmd ? 'today' : ''}">${dayLabel(dYmd)}</th>`;
   }
   html += '<th class="ps-sum-col">加總</th>';
   html += '</tr></thead><tbody>';
@@ -714,10 +742,9 @@ function render() {
       segs.forEach((seg, i) => {
         const segStart = i === 0 ? (orderStart || seg.ymd) : segs[i - 1].ymd;
         const segEnd = seg.closed ? seg.ymd : todayYmd;
-        let rowSum = 0; // 本列（本月格內）顯示數量的加總
+        let rowSum = 0; // 本列（顯示範圍內）數量的加總
         html += `<tr><td class="ps-order-col ps-order-click" data-orderno="${escapeHtml(o.orderNo)}" data-segidx="${i + 1}" title="點一下看生產規格">${escapeHtml(o.orderNo)}-${i + 1}${machineTag}</td>`;
-        for (let d = 1; d <= daysInMonth; d++) {
-          const dYmd = monthStr + '-' + String(d).padStart(2,'0');
+        for (const dYmd of dayList) {
           const isToday = dYmd === todayYmd;
           let inner = '';
           if (segStart && segEnd && dYmd >= segStart && dYmd <= segEnd) {
@@ -741,8 +768,7 @@ function render() {
     }
 
     html += `<tr><td class="ps-order-col ps-order-click" data-orderno="${escapeHtml(o.orderNo)}" title="點一下看生產規格">${escapeHtml(o.orderNo)}${machineTag}</td>`;
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dYmd = monthStr + '-' + String(d).padStart(2,'0');
+    for (const dYmd of dayList) {
       const isToday = dYmd === todayYmd;
 
       // 顯示範圍：plan 到 (done 或 今天)
@@ -768,9 +794,9 @@ function render() {
       const cellInner = (dot || qtyHtml) ? `<span class="ps-cellwrap">${dot}${qtyHtml}</span>` : '';
       html += `<td class="ps-cell ${isToday ? 'today' : ''}">${cellInner}</td>`;
     }
-    // 本列（本月格內）顯示數量的加總
+    // 本列（顯示範圍內）數量的加總
     const rowSum = Object.keys(qtyMap)
-      .filter(k => k.startsWith(monthStr))
+      .filter(inRange)
       .reduce((s, k) => s + (Number(qtyMap[k]) || 0), 0);
     html += `<td class="ps-sum-col">${rowSum > 0 ? rowSum.toLocaleString('zh-TW') : ''}</td>`;
     html += '</tr>';
@@ -783,14 +809,13 @@ function render() {
     g.items.forEach(o => {
       const qm = qtyByDayOf(o);
       Object.keys(qm).forEach(k => {
-        if (!k.startsWith(monthStr)) return;
+        if (!inRange(k)) return;
         sumByDay[k] = (sumByDay[k] || 0) + (Number(qm[k]) || 0);
         groupMonthTotal += Number(qm[k]) || 0;
       });
     });
     html += `<tr class="ps-total-row"><td class="ps-order-col">${escapeHtml(g.base)} 合計</td>`;
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dYmd = monthStr + '-' + String(d).padStart(2, '0');
+    for (const dYmd of dayList) {
       const q = sumByDay[dYmd];
       html += `<td class="ps-cell ${dYmd === todayYmd ? 'today' : ''}">${q ? `<span class="ps-qty">${q}</span>` : ''}</td>`;
     }
