@@ -104,6 +104,21 @@
   .ps-line .val.brand { color: var(--brand); }
   .ps-line .val.success { color: var(--success); }
 
+  /* 統計磚：總數與達成率 */
+  .ps-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+    gap: 8px;
+    margin: 10px 0 12px;
+  }
+  .ps-stats:empty { display: none; }
+  .ps-stat { background: var(--bg); border-radius: 10px; padding: 10px 12px; text-align: center; }
+  .ps-stat .l { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+  .ps-stat .v { font-size: 18px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .ps-stat .v .u { font-size: 11px; color: var(--muted); font-weight: 500; margin-left: 2px; }
+  .ps-stat.good .v { color: var(--success); }
+  .ps-stat.brand .v { color: var(--brand); }
+
   .ps-legend {
     display: flex;
     gap: 14px;
@@ -275,6 +290,7 @@
   <div class="card" id="summaryCard">
     <h2 class="ps-title" id="psTitle">—</h2>
     <div class="ps-summary" id="psSummary"></div>
+    <div class="ps-stats" id="psStats"></div>
     <div class="ps-legend">
       <span class="lg"><span class="ps-dot red"></span>未進行/未完成</span>
       <span class="lg"><span class="ps-dot yellow"></span>進行中</span>
@@ -582,6 +598,22 @@ function render() {
     : custQ
       ? `<div class="ps-line"><span class="lbl">客戶：</span><span class="val brand">${escapeHtml(custQ)}</span><span class="lbl" style="margin-left:10px;">（跨所有機台，共 ${rows.length} 張工單）</span></div>`
       : `<div class="ps-line"><span class="lbl">機台編號：</span><span class="val">${machine}</span></div>`;
+
+  // 統計磚：工單總數／完成／派工與完成總數量；機台模式再加月/日達成率
+  const fmtQty = n => Number(n || 0).toLocaleString('zh-TW');
+  const totalPlannedQty = rows.reduce((s, o) => s + (Number(plannedQtyOf(o)) || 0), 0);
+  const totalDoneQty = rows.reduce((s, o) => s + (Number(actualQtyOf(o)) || 0), 0);
+  let statsHtml = `
+    <div class="ps-stat"><div class="l">計畫工單</div><div class="v">${monthPlanned}<span class="u">張</span></div></div>
+    <div class="ps-stat${monthDone >= monthPlanned && monthPlanned > 0 ? ' good' : ''}"><div class="l">已完成</div><div class="v">${monthDone}<span class="u">張</span></div></div>
+    <div class="ps-stat"><div class="l">派工總數</div><div class="v">${fmtQty(totalPlannedQty)}<span class="u">件</span></div></div>
+    <div class="ps-stat"><div class="l">完成總數</div><div class="v">${fmtQty(totalDoneQty)}<span class="u">件</span></div></div>`;
+  if (!crossMachine) {
+    statsHtml += `
+    <div class="ps-stat${monthRate != null && parseFloat(monthRate) >= 100 ? ' good' : ' brand'}"><div class="l">月達成率${todayInThisMonth ? '（至今日）' : ''}</div><div class="v">${monthRate != null ? monthRate + '%' : '—'}</div></div>
+    <div class="ps-stat${dayRate != null && parseFloat(dayRate) >= 100 ? ' good' : ' brand'}"><div class="l">本日達成率</div><div class="v">${dayRate != null ? dayRate + '%' : '—'}</div></div>`;
+  }
+  $('psStats').innerHTML = statsHtml;
 
   // 沒資料
   if (rows.length === 0) {
