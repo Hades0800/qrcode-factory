@@ -600,8 +600,20 @@ function render() {
       : `<div class="ps-line"><span class="lbl">機台編號：</span><span class="val">${machine}</span></div>`;
 
   // 統計磚：工單總數／完成／派工與完成總數量；機台模式再加月/日達成率
+  // 派工加總「同母單只計一次」：@ 分機單每張都帶母單的派工總數（dispatchQtyTotal），直接加會乘以機台數
   const fmtQty = n => Number(n || 0).toLocaleString('zh-TW');
-  const totalPlannedQty = rows.reduce((s, o) => s + (Number(plannedQtyOf(o)) || 0), 0);
+  const sumDispatchDedup = list => {
+    const seen = new Set();
+    let s = 0;
+    list.forEach(o => {
+      const base = (o.orderNo || '').split('@')[0];
+      if (seen.has(base)) return;
+      seen.add(base);
+      s += Number(o.dispatchQtyTotal != null ? o.dispatchQtyTotal : o.dispatchQty) || 0;
+    });
+    return s;
+  };
+  const totalPlannedQty = sumDispatchDedup(rows);
   const totalDoneQty = rows.reduce((s, o) => s + (Number(actualQtyOf(o)) || 0), 0);
   let statsHtml = `
     <div class="ps-stat"><div class="l">計畫工單</div><div class="v">${monthPlanned}<span class="u">張</span></div></div>
@@ -614,6 +626,12 @@ function render() {
     <div class="ps-stat${dayRate != null && parseFloat(dayRate) >= 100 ? ' good' : ' brand'}"><div class="l">本日達成率</div><div class="v">${dayRate != null ? dayRate + '%' : '—'}</div></div>`;
   }
   $('psStats').innerHTML = statsHtml;
+
+  // 工單查詢：跨月累計摘要——「此單 8 月開始生產至今，總共生產多少件」一行看懂
+  if (orderQ && rows.length > 0) {
+    const starts = rows.map(o => getActualStartYmd(o)).filter(Boolean).sort();
+    $('psSummary').innerHTML += `<div class="ps-line"><span class="lbl">跨月累計：</span><span class="val">${starts[0] ? '自 ' + starts[0] + ' 開始生產，' : ''}累計完成 <span style="color:var(--success);font-weight:800;">${fmtQty(totalDoneQty)}</span> 件／派工 ${fmtQty(totalPlannedQty)} 件</span></div>`;
+  }
 
   // 沒資料
   if (rows.length === 0) {
