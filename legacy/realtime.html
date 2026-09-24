@@ -728,6 +728,19 @@ if (me && me.isAdmin) $('adminLink').style.display = 'flex';
 if (me && (me.isAdmin || me.isPlanner)) $('uploadLink').style.display = 'flex';
 $('logoutLink').onclick = e => { e.preventDefault(); localStorage.clear(); location.href = 'index.html'; };
 
+// 記住目前選的機台：重新整理、手機瀏覽器背景後自動重載，都停在原本看的機台
+const ACTIVE_MACHINE_KEY = 'rt_active_machine';
+function rememberActiveMachine() {
+  try { localStorage.setItem(ACTIVE_MACHINE_KEY, activeMachine || ''); } catch (e) {}
+}
+function restoreActiveMachine() {
+  try {
+    const saved = localStorage.getItem(ACTIVE_MACHINE_KEY);
+    if (saved && (saved === '__all' || MACHINES.some(m => m.id === saved))) return saved;
+  } catch (e) {}
+  return MACHINES.length > 0 ? MACHINES[0].id : '';
+}
+
 // Machine tabs
 function renderMachineTabs() {
   const machineHtml = MACHINES.map(m => {
@@ -746,6 +759,7 @@ function renderMachineTabs() {
   $('machineTabs').querySelectorAll('.machine-tab').forEach(b => {
     b.onclick = () => {
       activeMachine = b.dataset.m;
+      rememberActiveMachine();
       renderMachineTabs();
       lastRenderHash = ''; // 強制重畫（因為內容類型完全切換）
       renderContent();
@@ -898,6 +912,7 @@ function renderMachineBoard() {
   el.querySelectorAll('[data-mb]').forEach(c => {
     c.onclick = () => {
       activeMachine = c.dataset.mb;
+      rememberActiveMachine();
       renderMachineTabs();
       lastRenderHash = '';
       renderContent();
@@ -926,7 +941,7 @@ async function loadOrders() {
       idleMachinesToday = new Set(cached.idleMachines || []);
       idleEventIdByMachine = cached.idleEventIds || {};
       renderMachineTabs();
-      if (MACHINES.length > 0 && !activeMachine) activeMachine = MACHINES[0].id;
+      if (MACHINES.length > 0 && !activeMachine) activeMachine = restoreActiveMachine();
       renderMachineTabs();
       renderContent();
     }
@@ -961,7 +976,7 @@ async function loadOrders() {
   } catch (e) {}
   renderMachineTabs();
   if (MACHINES.length > 0 && !activeMachine) {
-    activeMachine = MACHINES[0].id;
+    activeMachine = restoreActiveMachine();
     renderMachineTabs();
   }
   renderContent();
@@ -978,6 +993,7 @@ function gotoOrderCard(orderNo, machineId) {
   };
   if (machineId && machineId !== activeMachine) {
     activeMachine = machineId;
+    rememberActiveMachine();
     renderMachineTabs();
     lastRenderHash = '';
     renderContent();
