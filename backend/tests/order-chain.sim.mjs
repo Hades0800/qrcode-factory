@@ -7,7 +7,7 @@
 //   工單 3：11:04 開始（強制）→ 13:46 結束
 
 import Fastify from 'fastify';
-import orderRoutes from '../src/routes/orders.js';
+import orderRoutes from '../src/modules/production/routes/orders.js';
 
 function makeMockPrisma() {
   const state = {

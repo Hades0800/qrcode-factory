@@ -9,7 +9,11 @@ export const prisma = new PrismaClient();
 // 逃生口：caller 在 where 內明確指定 deletedAt（即使是 undefined）即可跳過自動過濾，
 //        用於「查含已刪除」或「restore 前 lookup」等場景。
 // 注意：nested include 不會進 middleware，必須在 include 內手動加 where: { deletedAt: null }
-const SOFT_DELETE_MODELS = new Set(['Order', 'Leader', 'IdleEvent', 'StepEntry', 'PauseEvent']);
+const SOFT_DELETE_MODELS = new Set([
+  'Order', 'Leader', 'IdleEvent', 'StepEntry', 'PauseEvent',
+  // 入出庫 / 裁切 / 出貨模組
+  'Label', 'Location', 'StockMove', 'ProcessOrder', 'ProcessEntry', 'Shipment', 'ShipmentItem',
+]);
 prisma.$use(async (params, next) => {
   if (!SOFT_DELETE_MODELS.has(params.model)) return next(params);
 

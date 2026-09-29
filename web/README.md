@@ -30,9 +30,13 @@ web/
       types.ts    # 工單等 API 回傳型別
     components/
       Toast.tsx   # 提示訊息
-    pages/
-      NewFeaturePage.tsx  # 新功能頁（目前是占位 + 技術棧煙霧測試）
-    App.tsx       # 登入守衛 + 路由（目前單頁）
+      ui.tsx      # 四個模組頁共用的卡片、欄位、按鈕、QR 圖
+    pages/        # 依「簡易關聯圖」的四個系統各一頁（見 ../docs/MODULES.md）
+      InventoryPage.tsx   # 原料管理（入出庫）：建 QR 標籤、入庫/出庫、庫存
+      ProductionPage.tsx  # 生產 MES：入口與說明，現場操作仍在舊 HTML 頁
+      CuttingPage.tsx     # 裁切 MES：加工單（G 號）綁定製造單、工序、QR 結案入庫
+      ShippingPage.tsx    # 出貨管理：出貨單、庫存 QR / 零購 QR、倉管檢核、出庫
+    App.tsx       # 登入守衛 + hash 切換四個模組（#/inventory、#/production、#/cutting、#/shipping）
     main.tsx      # 進入點
 ```
 

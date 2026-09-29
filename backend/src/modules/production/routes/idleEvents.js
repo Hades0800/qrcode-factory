@@ -1,5 +1,5 @@
-import { ALLOWED_MACHINES } from '../lib/machines.js';
-import { audit } from '../lib/audit.js';
+import { ALLOWED_MACHINES } from '../../../lib/machines.js';
+import { audit } from '../../../lib/audit.js';
 
 // 無工令事件（機台閒置紀錄），註冊於根路徑（路徑含 /api/idle-events）
 export default async function idleEventRoutes(fastify) {

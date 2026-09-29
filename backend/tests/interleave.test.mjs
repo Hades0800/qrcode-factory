@@ -3,8 +3,8 @@
 
 import assert from 'node:assert/strict';
 import Fastify from 'fastify';
-import orderRoutes from '../src/routes/orders.js';
-import { INTERLEAVE_NOTE } from '../src/domain/orders/helpers.js';
+import orderRoutes from '../src/modules/production/routes/orders.js';
+import { INTERLEAVE_NOTE } from '../src/modules/production/domain/helpers.js';
 
 // ────────────────────────────────────────────────────
 // Mock prisma

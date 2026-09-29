@@ -1,4 +1,4 @@
-import { toTaiwanDate } from '../../lib/date.js';
+import { toTaiwanDate } from '../../../lib/date.js';
 
 // 「公司編號」欄格式為「77960005 禾鉅」或「26-62530001+ 毅欣」→ 去掉開頭編號只留客戶名稱
 export function stripCustomerCode(s) {

@@ -7,8 +7,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// 模組切分(對照 docs/MODULES.md 與「QR Code MES 關聯表」的簡易關聯圖):
+//   共用層      Leader、AuditLog
+//   入出庫      Label、LabelSpec、Location、StockMove          ← 標籤在這裡,四個系統共用
+//   生產 MES    Order、EquipmentParam、StepEntry、PauseEvent、UploadBatch、UploadRow、IdleEvent
+//   裁切 MES    ProcessOrder、ProcessEntry
+//   出貨管理    Shipment、ShipmentItem
+// 同一個資料庫,靠標籤(Label)把四個系統串起來;各模組只寫自己的表,跨模組一律經由 Label。
+
 // ───────────────────────────────
-// 帳號管理
+// 共用層:帳號管理
 // ───────────────────────────────
 
 model Leader {
@@ -18,6 +26,7 @@ model Leader {
   displayName  String
   isAdmin      Boolean   @default(false)
   isPlanner    Boolean   @default(false)
+  roles        String?   // 角色,逗號字串:sales / warehouse / planner / production / processing(見 lib/roles.js)
   createdAt    DateTime  @default(now())
   deletedAt    DateTime?
 
@@ -37,6 +46,12 @@ model Order {
   plannedMachineNo  String?  // 上傳時 Excel 排定的機台（現場實際紀錄機台以 machineNo 為準，兩者不同時代表現場跳機台）
   leaderId          Int?
   leader            Leader?  @relation(fields: [leaderId], references: [id])
+  // 對照 QR 標籤(入出庫模組):同一張製造單可能貼多張標籤(多規格),這裡記最後產生的那張
+  labelId           Int?
+  label             Label?   @relation(fields: [labelId], references: [id])
+  poNo              String?  // 訂單編號(客戶 PO;標籤第 2 項)
+  dueDate           DateTime? // 交貨 / 納期(週排程表的交貨日期;標籤第 5 項)
+  remark            String?  // 備註說明(例:需委外鍍鋅與整平;標籤第 5 項)
 
   // 匯入欄位（生管 Excel 上傳）
   productionDate DateTime?  // 已棄用：保留兼容，新邏輯改用 plannedDate / actualStartDate
@@ -280,4 +295,190 @@ model AuditLog {
   @@index([createdAt])
   @@index([actorId])
   @@index([action])
+}
+
+// ═══════════════════════════════════════════════
+// 入出庫模組:QR 標籤(四個系統共用的載體)
+// ═══════════════════════════════════════════════
+
+// 一張標籤 = 一個 QR。QR 內容是「範例一~三」定義的六項文字(每項一行),見 modules/inventory/domain/label.js:
+//   1 客戶/廠商  2 訂單編號  3 製造單號[ , 加工單號]  4 倉庫儲位[ , 機台編號]
+//   5 製造/納期[ , 備註]      6.. 每一條規格:規格 , 數量 , 重量(多規格就多行)
+// 沒有的項目填「-」(範例三的原料標籤)。掃到 QR 之後用 parseQrText 還原欄位,再對回這張表。
+model Label {
+  id             Int       @id @default(autoincrement())
+  code           String    @unique   // 標籤碼(LB + 日期 + 流水),印在標籤角落當備援,不進 QR
+  kind           String              // material 原料 / semi 半成品 / finished 成品 / outsourced 委外加工
+  customer       String?
+  poNo           String?
+  manuOrderNo    String?             // 製造單號 F…(生產 MES 的 Order.orderNo)
+  processOrderNo String?             // 加工單號 G…(裁切 MES 的 ProcessOrder.processNo)
+  location       String?             // 倉庫儲位
+  machineNo      String?
+  dueDate        DateTime?
+  remark         String?
+  qrText         String              // 六項文字,每項一行;產 QR 圖就用這段
+  status         String    @default("active") // active / closed(裁切結案) / shipped(已出貨)
+  createdBy      Int?
+  createdByName  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  specs         LabelSpec[]
+  moves         StockMove[]
+  orders        Order[]
+  processOrders ProcessOrder[]
+  shipmentItems ShipmentItem[]
+
+  @@index([manuOrderNo])
+  @@index([processOrderNo])
+  @@index([kind])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+// 標籤上的規格列(範例二一張標籤 7 條規格)
+model LabelSpec {
+  id      Int    @id @default(autoincrement())
+  labelId Int
+  label   Label  @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  seq     Int
+  spec    String
+  qty     Int?
+  weight  Float?
+
+  @@index([labelId])
+}
+
+// 倉庫儲位(D-C-F123 這種代碼)
+model Location {
+  id        Int       @id @default(autoincrement())
+  code      String    @unique
+  name      String?
+  zone      String?
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@index([deletedAt])
+}
+
+// 入庫 / 出庫紀錄(關聯表的「入庫 QR Code」「出庫 QR Code」;四個階段共用同一張表,用 stage 區分)
+model StockMove {
+  id        Int       @id @default(autoincrement())
+  labelId   Int
+  label     Label     @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  type      String    // in 入庫 / out 出庫
+  stage     String    // material 原料 / semi 生產-半成品 / finished 生產或庫存-成品 / outsourced 委外/加工/包裝/整修
+  location  String?   // 入庫放哪、出庫從哪
+  qty       Int?
+  weight    Float?
+  refType   String?   // 誰引起的:order 製造單 / process 加工單 / shipment 出貨單 / manual 手動
+  refNo     String?
+  note      String?
+  actorId   Int?
+  actorName String?
+  at        DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@index([labelId])
+  @@index([at])
+  @@index([refType, refNo])
+  @@index([deletedAt])
+}
+
+// ═══════════════════════════════════════════════
+// 裁切 MES 模組:加工單(G 號),綁定製造單(F 號)
+// ═══════════════════════════════════════════════
+
+model ProcessOrder {
+  id              Int       @id @default(autoincrement())
+  processNo       String    @unique   // 加工單號 G…
+  manuOrderNo     String?             // 綁定的製造單號 F…(關聯表「含加工單-綁定」)
+  labelId         Int?
+  label           Label?    @relation(fields: [labelId], references: [id])
+  customer        String?
+  spec            String?             // 裁切規格(多條用換行)
+  qty             Int?
+  weight          Float?
+  machineNo       String?
+  plannedDate     DateTime?           // 每周生產計畫的排定日
+  dueDate         DateTime?
+  remark          String?
+  status          String    @default("open")  // open / done(QR Code 結案)
+  completedAt     DateTime?
+  completedQty    Int?
+  completedWeight Float?
+  createdBy       Int?
+  createdByName   String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  entries ProcessEntry[]
+
+  @@index([manuOrderNo])
+  @@index([status])
+  @@index([plannedDate])
+  @@index([deletedAt])
+}
+
+// 裁切工序紀錄(日誌式,跟生產 MES 的 StepEntry 同一套想法)
+model ProcessEntry {
+  id             Int          @id @default(autoincrement())
+  processOrderId Int
+  processOrder   ProcessOrder @relation(fields: [processOrderId], references: [id], onDelete: Cascade)
+  stepNo         String       // 1 領料 / 2 裁切開始 / 3 裁切完成 / 4 包裝 / 9 其他
+  note           String?
+  recordedAt     DateTime     @default(now())
+  leaderId       Int?
+  leaderName     String?
+  deletedAt      DateTime?
+
+  @@index([processOrderId])
+  @@index([deletedAt])
+}
+
+// ═══════════════════════════════════════════════
+// 出貨管理模組:出貨單
+// ═══════════════════════════════════════════════
+
+model Shipment {
+  id            Int       @id @default(autoincrement())
+  shipNo        String    @unique
+  customer      String?
+  shipDate      DateTime?
+  status        String    @default("open")  // open / checked(倉管 QR 檢核完) / shipped(已出庫)
+  note          String?
+  createdBy     Int?
+  createdByName String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  items ShipmentItem[]
+
+  @@index([status])
+  @@index([shipDate])
+  @@index([deletedAt])
+}
+
+// 出貨單明細:掃「庫存 QR」(成品標籤)或「零購 QR」(零售/零購,可能沒有標籤)加入
+model ShipmentItem {
+  id            Int       @id @default(autoincrement())
+  shipmentId    Int
+  shipment      Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  labelId       Int?
+  label         Label?    @relation(fields: [labelId], references: [id])
+  source        String    // stock 庫存 QR / retail 零購 QR
+  spec          String?
+  qty           Int?
+  weight        Float?
+  checkedAt     DateTime? // 倉管 QR 檢核時間
+  checkedByName String?
+  deletedAt     DateTime?
+
+  @@index([shipmentId])
+  @@index([labelId])
+  @@index([deletedAt])
 }

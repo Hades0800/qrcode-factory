@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict';
 import Fastify from 'fastify';
-import orderRoutes from '../src/routes/orders.js';
+import orderRoutes from '../src/modules/production/routes/orders.js';
 
 // ────────────────────────────────────────────────────
 // Mock prisma（狀態 + middleware 模擬）

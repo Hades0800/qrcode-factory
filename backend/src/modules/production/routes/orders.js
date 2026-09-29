@@ -1,14 +1,14 @@
 // ── 共用常數與 helper（已抽出至 lib/ 與 domain/orders/）──
-import { validOrderNo, clipStr } from '../lib/validation.js';
-import { validMachine } from '../lib/machines.js';
-import { toTaiwanDate, taiwanDateAt8 } from '../lib/date.js';
-import { audit } from '../lib/audit.js';
+import { validOrderNo, clipStr } from '../../../lib/validation.js';
+import { validMachine } from '../../../lib/machines.js';
+import { toTaiwanDate, taiwanDateAt8 } from '../../../lib/date.js';
+import { audit } from '../../../lib/audit.js';
 import {
   STEP_COLS,
   ORDER_INCLUDE,
   serializeOrder,
   serializeWithPrev,
-} from '../domain/orders/serialize.js';
+} from '../domain/serialize.js';
 import {
   stripCustomerCode,
   hasActivity,
@@ -19,7 +19,7 @@ import {
   hasEquipmentParamFile,
   autoInterleave,
   hasRunningSibling,
-} from '../domain/orders/helpers.js';
+} from '../domain/helpers.js';
 
 // 會觸發自動插單的工序（記錄這些工序 = 機台「現在」正在生產這張單）
 // 只含實際生產工序：41(生產開始)、4/5/8(穩定連續生產)、6(後工程接續)、30(生產規格完成)

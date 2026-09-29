@@ -12,7 +12,7 @@
 //   ✓ 恢復後 pause12.active 變 null、pause12.count = 1、totalSec = 50400
 
 import Fastify from 'fastify';
-import orderRoutes from '../src/routes/orders.js';
+import orderRoutes from '../src/modules/production/routes/orders.js';
 
 // ── Mock prisma（跟 routes.test.mjs 同一份，僅補 startAt 預設）──
 function makeMockPrisma() {

@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
-import { audit } from '../lib/audit.js';
+import { audit } from '../../../lib/audit.js';
+import { ROLES, parseRoles } from '../../../lib/roles.js';
 
 export default async function adminRoutes(fastify) {
   fastify.addHook('onRequest', fastify.authenticate);
@@ -15,15 +16,29 @@ export default async function adminRoutes(fastify) {
         displayName: true,
         isAdmin: true,
         isPlanner: true,
+        roles: true,
         createdAt: true,
       },
     });
-    return { leaders };
+    return { leaders, roles: ROLES };
+  });
+
+  // 指定角色(關聯表的擔當同仁;逗號字串,空字串 = 清除 → 過渡期視為不限制)
+  fastify.patch('/leaders/:id/roles', async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!id) return reply.code(400).send({ error: '無效 id' });
+    const roles = parseRoles(request.body?.roles);
+    const leader = await fastify.prisma.leader.update({
+      where: { id }, data: { roles: roles.length ? roles.join(',') : null },
+      select: { id: true, username: true, displayName: true, roles: true },
+    });
+    await audit(fastify.prisma, request, 'set_roles', leader.username, roles.join(',') || '(清除)');
+    return { leader };
   });
 
   // 新增
   fastify.post('/leaders', async (request, reply) => {
-    const { username, password, displayName, isAdmin, isPlanner } = request.body || {};
+    const { username, password, displayName, isAdmin, isPlanner, roles } = request.body || {};
     if (!username || !password || !displayName) {
       return reply.code(400).send({ error: '請填寫帳號、密碼、顯示名稱' });
     }
@@ -40,8 +55,9 @@ export default async function adminRoutes(fastify) {
     if (exists) return reply.code(409).send({ error: '帳號已存在' });
     const passwordHash = await bcrypt.hash(password, 10);
     const leader = await fastify.prisma.leader.create({
-      data: { username, passwordHash, displayName, isAdmin: !!isAdmin, isPlanner: !!isPlanner },
-      select: { id: true, username: true, displayName: true, isAdmin: true, isPlanner: true, createdAt: true },
+      data: { username, passwordHash, displayName, isAdmin: !!isAdmin, isPlanner: !!isPlanner,
+              roles: parseRoles(roles).join(',') || null },
+      select: { id: true, username: true, displayName: true, isAdmin: true, isPlanner: true, roles: true, createdAt: true },
     });
     try {
       await fastify.prisma.auditLog.create({

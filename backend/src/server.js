@@ -4,12 +4,7 @@ import { prisma } from './plugins/prisma.js';
 import { registerSecurity } from './plugins/security.js';
 import { registerAuth } from './plugins/auth.js';
 
-import authRoutes from './routes/auth.js';
-import orderRoutes from './routes/orders.js';
-import adminRoutes from './routes/admin.js';
-import equipmentParamRoutes from './routes/equipmentParams.js';
-import maintenanceRoutes from './routes/maintenance.js';
-import idleEventRoutes from './routes/idleEvents.js';
+import { registerModules } from './modules/index.js';
 
 import { runDbPush } from './startup/runDbPush.js';
 import { ensureAdmin } from './startup/ensureAdmin.js';
@@ -29,13 +24,8 @@ await registerSecurity(fastify);
 // JWT + authenticate / requireAdmin 裝飾器（須在路由註冊前）
 await registerAuth(fastify);
 
-// 路由
-await fastify.register(authRoutes, { prefix: '/api/auth' });
-await fastify.register(orderRoutes, { prefix: '/api/orders' });
-await fastify.register(adminRoutes, { prefix: '/api/admin' });
-await fastify.register(equipmentParamRoutes, { prefix: '/api/equipment-params' });
-await fastify.register(maintenanceRoutes); // /、/health、/diag、/api/fix-dates
-await fastify.register(idleEventRoutes);   // /api/idle-events
+// 路由:依「簡易關聯圖」切成四個系統模組(見 src/modules/index.js),各模組自己掛路徑
+await registerModules(fastify);
 
 const port = Number(process.env.PORT || 8080);
 const host = '0.0.0.0';

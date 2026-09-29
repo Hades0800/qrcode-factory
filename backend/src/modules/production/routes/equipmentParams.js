@@ -3,7 +3,7 @@
 //  - GET  /:orderNo  → 讀取（沒有就回 null）
 //  - 寫入前驗證：工單必須存在且為「今日有活動」的工單
 
-import { validOrderNo, clipStr } from '../lib/validation.js';
+import { validOrderNo, clipStr } from '../../../lib/validation.js';
 
 function intOrNull(v) {
   if (v == null || v === '') return null;
