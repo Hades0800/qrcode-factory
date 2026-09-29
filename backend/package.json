@@ -8,7 +8,13 @@
     "dev": "node --watch src/server.js",
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
-    "db:migrate": "prisma migrate deploy"
+    "db:migrate": "prisma migrate deploy",
+    "db:test:up": "docker compose -f ../docker-compose.test.yml up -d --wait",
+    "db:test:down": "docker compose -f ../docker-compose.test.yml down",
+    "db:test:reset": "docker compose -f ../docker-compose.test.yml down -v && npm run db:test:up && npm run db:test:push && npm run seed:test",
+    "db:test:push": "DATABASE_URL=postgresql://qrcode:devpass@localhost:5433/qrcode_factory_test prisma db push --skip-generate",
+    "seed:test": "node --env-file=.env.test prisma/seed.mjs",
+    "dev:test": "node --env-file=.env.test --watch src/server.js"
   },
   "dependencies": {
     "@fastify/compress": "^7.0.3",

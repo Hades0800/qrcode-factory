@@ -1,0 +1,29 @@
+# 測試資料庫（獨立於開發庫）。
+#   起動：npm run db:test:up        砍掉重來：npm run db:test:reset
+#
+# 刻意做兩件事避免動到開發環境：
+#   1. name 指定成 qrcode-factory-test——compose 專案名稱與開發環境不同，
+#      不會把開發庫的容器當成同一個服務去重建
+#   2. 埠用 5433，開發庫維持 5432
+name: qrcode-factory-test
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: qrcode_factory_testdb
+    environment:
+      POSTGRES_USER: qrcode
+      POSTGRES_PASSWORD: devpass
+      POSTGRES_DB: qrcode_factory_test
+    ports:
+      - '5433:5432'
+    volumes:
+      - testdb:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U qrcode -d qrcode_factory_test']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  testdb:
