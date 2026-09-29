@@ -845,7 +845,7 @@ function renderMachineBoard() {
         const baseNo = o.orderNo.slice(0, at);
         base = allOrders.find(b => b.orderNo === baseNo) || null;
       }
-      const spec = o.productSpec || o.manuSpec || (base && (base.productSpec || base.manuSpec)) || '';
+      const spec = o.productSpec || o.manuSpec || o.uploadProductSpec || (base && (base.productSpec || base.manuSpec || base.uploadProductSpec)) || '';
       const mold = o.moldSpec || (base && base.moldSpec) || '';
       // 派工數優先序：全規格加總（後端算好）→ 工單主檔（僅第一列規格）→ 母單（@分機單）
       const pick = x => x && (x.dispatchQtyTotal != null ? x.dispatchQtyTotal : x.dispatchQty);

@@ -1370,15 +1370,23 @@ export default async function orderRoutes(fastify) {
       m.set((r.productSpec || '').trim(), r.dispatchQty);
     }
     const dispatchTotals = {};
+    const uploadSpecs = {};  // 母單號 → 上傳明細第一列的規格（主檔規格缺漏時前端退用）
     for (const [no, m] of specQtyByOrder) {
       let sum = 0, has = false;
       for (const qv of m.values()) { if (qv != null) { sum += qv; has = true; } }
       if (has) dispatchTotals[no] = sum;
+      const firstSpec = [...m.keys()].find(k => k);
+      if (firstSpec) uploadSpecs[no] = firstSpec;
     }
     return orders.map(o => {
       const s = serializeOrder(o);
-      const total = dispatchTotals[o.orderNo.split('@')[0]];
+      const base = o.orderNo.split('@')[0];
+      const total = dispatchTotals[base];
       if (total != null) s.dispatchQtyTotal = total;
+      // 主檔規格缺漏時附上上傳明細的規格：bulk-upload 對「規格不一致的列」
+      // 會整列跳過（防蓋錯單），副作用是主檔規格可能一直是空的，
+      // 看板只讀主檔就會顯示「生產規格尚未上傳」，但規格卡（讀明細）有資料。
+      if (!s.productSpec && !s.manuSpec && uploadSpecs[base]) s.uploadProductSpec = uploadSpecs[base];
       return s;
     });
   }
