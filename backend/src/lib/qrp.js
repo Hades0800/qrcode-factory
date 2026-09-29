@@ -23,7 +23,7 @@ const isSeq = s => /^\d{3,4}$/.test(norm(s || ''));
 
 // 表單上所有「標籤」文字：用來判斷某一格是欄位名而不是值（很多格沒有冒號）
 const LABELS = new Set([
-  '製造單號', '加工單號', '工令單號', '訂單號碼', '派工日期', '客戶名稱', '區域', '產品型號', '交貨日期',
+  '製造單號', '加工單號', '製造回單號', '加工回單號', '工令單號', '訂單號碼', '派工日期', '客戶名稱', '區域', '產品型號', '交貨日期',
   '油污', '毛邊', '對目', '平坦度', '待料中', '零星裁剪', '備料人員',
   '寬度公差', '長度公差', '對角線公差', '齒輪', '軋平後T', '軋平後W', '模具', '衝擊力', '機器SPM', '送料設定',
   '產品', '品管', '要點', '裁剪方式', '包裝方式', '用料備註', '製造要點', '操作機台', '操作員',
@@ -210,11 +210,18 @@ export function parseQrp(buf) {
   }
   const rows = toRows(texts);
   const all = rows.map(r => norm(r.texts.join(''))).join('');
-  const docType = all.includes('【製造單】') ? 'manufacture' : all.includes('【加工單】') ? 'process' : null;
+  // 單別：ERP 的單據層級是 訂單 → 工令 E → 製造單 F / 加工單 G → 回單（完工回報）
+  const docType =
+    all.includes('【製造回單】') ? 'manufacture_return' :
+    all.includes('【加工回單】') ? 'process_return' :
+    all.includes('【製造單】') ? 'manufacture' :
+    all.includes('【加工單】') ? 'process' : null;
+  const isReturn = docType === 'manufacture_return' || docType === 'process_return';
 
   const tables = readTables(rows, lines);
   const fields = {
-    docNo: findRight(rows, docType === 'process' ? '加工單號' : '製造單號'),
+    docNo: findRight(rows, '加工單號') ?? findRight(rows, '製造單號')
+        ?? findRight(rows, '加工回單號') ?? findRight(rows, '製造回單號'),
     workOrderNo: findRight(rows, '工令單號'),      // E 號：製造單與加工單靠它對應
     poNo: findRight(rows, '訂單號碼'),
     customer: findRight(rows, '客戶名稱'),
@@ -295,7 +302,8 @@ export function parseQrp(buf) {
 
   const warnings = [];
   if (!docType) warnings.push('認不出單別（不是【製造單】也不是【加工單】），請確認檔案');
-  if (!fields.docNo) warnings.push(`抓不到${docType === 'process' ? '加工' : '製造'}單號`);
+  if (!fields.docNo) warnings.push('抓不到單號');
+  if (isReturn) warnings.push('這是【回單】（完工回報），欄位配置未經樣本驗證，請逐項核對');
   if (!fields.workOrderNo) warnings.push('抓不到工令單號');
   if (!items.length) warnings.push(docType === 'process' ? '抓不到裁剪 / 加工明細' : '抓不到生產明細');
   if (!materials.length) warnings.push('抓不到領用材料');
