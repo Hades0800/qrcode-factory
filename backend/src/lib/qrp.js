@@ -141,7 +141,17 @@ export function toNum(s) {
   return Number.isFinite(n) ? n : null;
 }
 
-// ── 5. 讀所有明細表：表頭列以「序號」開頭，往下讀到不是序號列為止 ──────────────
+// ── 5. 讀所有明細表 ─────────────────────────────────────────────────────────
+// 一行就是一筆，不依序號合併：ERP 會把「備註」也印成明細行（同序號、數量填 1），
+// 合併會把規格與備註混在一起、數量也對不上。改成原樣保留，另外標記哪些看起來是品項。
+//
+// 品項判斷是「建議」不是結論——確認畫面要讓人改。規則：規格以材質開頭且含數字。
+const SPEC_HEAD = /^(擴張網|鋁板|鋁捲|鋁|黑鐵|白鐵|不[銹鏽]鋼|鐵板|鐵|銅|鋅|熱鍍鋅|SUS|GI|FE|AL)/;
+export const looksLikeSpec = s => {
+  const t = String(s || '').trim();
+  return SPEC_HEAD.test(t) && /\d/.test(t);
+};
+
 function readTables(rows, lines) {
   const tables = [];
   for (let hi = 0; hi < rows.length; hi++) {
@@ -149,52 +159,42 @@ function readTables(rows, lines) {
     const header = rows[hi];
     let last = hi;
     for (let i = hi + 1; i < rows.length; i++) {
-      if (!isSeq(rows[i].texts[0])) break;
+      if (rows[i].page !== header.page || !isSeq(rows[i].texts[0])) break;
       last = i;
     }
-    if (last === hi) { tables.push({ columns: header.texts.map(t => t.trim()), records: [], empty: true }); continue; }
-
-    const bounds = columnBoundaries(lines, header.page, header.top, rows[last].bottom);
+    const bounds = last > hi ? columnBoundaries(lines, header.page, header.top, rows[last].bottom) : [];
     const columns = [];
     if (bounds.length) for (const c of header.cells) columns[colIndex(c, bounds)] = c.text.trim();
     else header.cells.forEach((c, i) => { columns[i] = c.text.trim(); });
 
-    // 逐列歸欄；同序號的連續列合併成一筆（跨行儲存格）
     const records = [];
-    const conflicts = [];
     for (let i = hi + 1; i <= last; i++) {
-      const r = rows[i];
-      const cellsByCol = {};
-      r.cells.forEach((c, idx) => {
+      const rec = { _page: rows[i].page, _y: rows[i].y };
+      rows[i].cells.forEach((c, idx) => {
         const ci = bounds.length ? colIndex(c, bounds) : idx;
         const name = columns[ci] ?? `col${ci}`;
-        cellsByCol[name] = cellsByCol[name] ? `${cellsByCol[name]} ${c.text.trim()}` : c.text.trim();
+        rec[name] = rec[name] ? `${rec[name]} ${c.text.trim()}` : c.text.trim();
       });
-      const seq = cellsByCol[columns[0]] ?? null;
-      const prev = records[records.length - 1];
-      if (prev && seq && prev[columns[0]] === seq) {
-        for (const [k, v] of Object.entries(cellsByCol)) {
-          if (k === columns[0]) continue;
-          if (prev[k] == null || prev[k] === '') prev[k] = v;
-          else if (prev[k] !== v) {
-            // 文字接續換行；數字不一致才是真衝突
-            if (toNum(prev[k]) != null && toNum(v) != null) conflicts.push(`序號 ${seq} 的「${k}」出現兩個值：${prev[k]} / ${v}`);
-            else prev[k] = `${prev[k]}\n${v}`;
-          }
-        }
-      } else {
-        records.push(cellsByCol);
-      }
+      records.push(rec);
     }
-    tables.push({ columns: columns.filter(Boolean), records, conflicts, noGrid: !bounds.length });
+    tables.push({ columns: columns.filter(Boolean), records, noGrid: last > hi && !bounds.length, page: header.page });
+    hi = last;
   }
-  return tables;
+  // 跨頁的同一張表（欄位結構相同）接起來
+  const merged = [];
+  for (const t of tables) {
+    const sig = t.columns.map(norm).join('|');
+    const prev = merged.find(m => m.sig === sig);
+    if (prev) { prev.records.push(...t.records); prev.noGrid = prev.noGrid || t.noGrid; }
+    else merged.push({ ...t, sig });
+  }
+  return merged;
 }
 
-// 依欄名關鍵字取值
+// 依欄名關鍵字取值（欄名有空白、換行、全形都容忍）
 const pick = (rec, ...keys) => {
   for (const k of keys) {
-    const hit = Object.keys(rec).find(name => norm(name).includes(norm(k)));
+    const hit = Object.keys(rec).find(name => !name.startsWith('_') && norm(name).includes(norm(k)));
     if (hit && rec[hit] !== '') return rec[hit];
   }
   return null;
@@ -249,34 +249,49 @@ export function parseQrp(buf) {
   // 領用材料：製造單是「訂單品名規格 / 訂單數 / 領用材料 / 數量 / 重量」，
   //           加工單是「領用材料 / 領用數量 / 總數 / 實際使用數量 / 餘庫存」
   const mt = findTable(tables, '領用材料');
-  const materials = (mt?.records ?? []).map(rec => ({
-    seq: pick(rec, '序號'),
-    orderSpec: pick(rec, '訂單品名規格'),
-    orderQty: toNum(pick(rec, '訂單數')),
-    spec: pick(rec, '領用材料'),
-    qty: toNum(pick(rec, '領用數量', '數量')),
-    weight: toNum(pick(rec, '重量')),
-    total: toNum(pick(rec, '總數')),
-    actualQty: toNum(pick(rec, '實際使用數量')),
-    stock: toNum(pick(rec, '餘庫存', '餘')),
-  }));
+  const materialLines = (mt?.records ?? []).map(rec => {
+    const spec = pick(rec, '領用材料');
+    return {
+      seq: pick(rec, '序號'),
+      page: rec._page,
+      orderSpec: pick(rec, '訂單品名規格'),
+      orderQty: toNum(pick(rec, '訂單數')),
+      spec,
+      qty: toNum(pick(rec, '領用數量', '數量')),
+      weight: toNum(pick(rec, '重量')),
+      total: toNum(pick(rec, '總數')),
+      actualQty: toNum(pick(rec, '實際使用數量')),
+      stock: toNum(pick(rec, '餘庫存', '餘')),
+      isSpec: looksLikeSpec(spec) || looksLikeSpec(pick(rec, '訂單品名規格')),
+    };
+  });
 
   // 生產 / 裁剪明細：另一張有「品名規格」的表（製造單的領用表也含「訂單品名規格」，要排除）
   const it = tables.find(t => t !== mt && t.columns.some(c => norm(c).includes('品名規格')));
-  const items = (it?.records ?? []).map(rec => ({
-    seq: pick(rec, '序號'),
-    spec: pick(rec, '生產品名規格', '品名規格'),
-    qty: toNum(pick(rec, '派工數', '數量')),
-    producedQty: toNum(pick(rec, '生產數')),
-    productWeight: toNum(pick(rec, '成品重')),
-    assignedWeight: toNum(pick(rec, '指定重')),
-    theoreticalWeight: toNum(pick(rec, '理論重')),
-    blades: toNum(pick(rec, '刀數')),
-    manuSpec: pick(rec, '製造規格'),
-    productSize: pick(rec, '產品寬長'),
-    actualSpecQty: pick(rec, '實際領用規格'),
-    oddSizeQty: pick(rec, '使用零星尺寸'),
-  }));
+  const itemLines = (it?.records ?? []).map(rec => {
+    const spec = pick(rec, '生產品名規格', '品名規格');
+    return {
+      seq: pick(rec, '序號'),
+      page: rec._page,
+      spec,
+      qty: toNum(pick(rec, '派工數', '數量')),
+      producedQty: toNum(pick(rec, '生產數')),
+      productWeight: toNum(pick(rec, '成品重')),
+      assignedWeight: toNum(pick(rec, '指定重')),
+      theoreticalWeight: toNum(pick(rec, '理論重')),
+      blades: toNum(pick(rec, '刀數')),
+      manuSpec: pick(rec, '製造規格'),
+      productSize: pick(rec, '產品寬長'),
+      actualSpecQty: pick(rec, '實際領用規格'),
+      oddSizeQty: pick(rec, '使用零星尺寸'),
+      isSpec: looksLikeSpec(spec),
+    };
+  });
+
+  // items / materials 只留看起來是品項的行；備註行另外給，確認畫面兩邊都要顯示
+  const materials = materialLines.filter(l => l.isSpec);
+  const items = itemLines.filter(l => l.isSpec);
+  const notes = [...materialLines, ...itemLines].filter(l => !l.isSpec).map(l => l.spec).filter(Boolean);
 
   const warnings = [];
   if (!docType) warnings.push('認不出單別（不是【製造單】也不是【加工單】），請確認檔案');
@@ -284,22 +299,22 @@ export function parseQrp(buf) {
   if (!fields.workOrderNo) warnings.push('抓不到工令單號');
   if (!items.length) warnings.push(docType === 'process' ? '抓不到裁剪 / 加工明細' : '抓不到生產明細');
   if (!materials.length) warnings.push('抓不到領用材料');
-  for (const t of tables) {
-    if (t.noGrid) warnings.push('某張明細表找不到格線，欄位可能對不準，請逐項核對');
-    for (const c of t.conflicts ?? []) warnings.push(c);
+  for (const m of materials) {
+    if (m.spec && !looksLikeSpec(m.spec)) warnings.push(`領用材料寫的是文字指示「${m.spec.split('\n')[0].slice(0, 20)}」，請人工指定實際用料`);
   }
-  for (const i of items) {
-    if (!i.spec) warnings.push(`明細 ${i.seq ?? '?'} 沒有品名規格`);
-    if (i.qty == null) warnings.push(`明細 ${i.seq ?? '?'} 沒有數量`);
-  }
+  for (const t of tables) if (t.noGrid) warnings.push('某張明細表找不到格線，欄位可能對不準，請逐項核對');
+  for (const i of items) if (i.qty == null) warnings.push(`明細「${String(i.spec).slice(0, 20)}」沒有數量`);
 
   return {
     ok: warnings.length === 0,
     docType,                // 'manufacture'（F）| 'process'（G）
     fields,
     params,
-    materials,
+    materials,      // 看起來是品項的行
     items,
+    materialLines,  // 全部原樣的行（含備註），確認畫面用
+    itemLines,
+    notes,          // 被判為備註的文字（公差、包裝要求、交辦事項…）
     tables,
     warnings,
     pages: Math.max(...texts.map(t => t.page)),

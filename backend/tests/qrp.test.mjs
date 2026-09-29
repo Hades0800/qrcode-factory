@@ -4,12 +4,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { parseQrp, parseRocDate, toNum, scan } from '../src/lib/qrp.js';
+import { parseQrp, parseRocDate, toNum, scan, looksLikeSpec } from '../src/lib/qrp.js';
 import { toProcessOrderDraft, parseProcessOrderQrp } from '../src/modules/cutting/domain/qrp.js';
 
 const fixture = n => readFileSync(fileURLToPath(new URL(`./fixtures/${n}`, import.meta.url)));
 const PROCESS = fixture('process-order-sample.qrp');      // 加工單 G
 const MANUFACTURE = fixture('manufacture-order-sample.qrp'); // 製造單 F
+const PAIR_G1 = fixture('workorder-pair-g1.qrp'); // 同一工令 E1150911001 的兩張加工單
+const PAIR_G2 = fixture('workorder-pair-g2.qrp');
 const ymd = d => (d ? d.toISOString().slice(0, 10) : null);
 
 test('EMF 掃描：抓得到文字、邊界框與表格格線', () => {
@@ -70,7 +72,6 @@ test('加工單 G1150929002：單別、表頭、明細', () => {
 test('製造單 F1150924004：單別、表頭、製造參數', () => {
   const r = parseQrp(MANUFACTURE);
   assert.equal(r.docType, 'manufacture');
-  assert.equal(r.ok, true, `不該有 warning：${r.warnings}`);
   assert.equal(r.fields.docNo, 'F1150924004');
   assert.equal(r.fields.workOrderNo, 'E1150924005');
   assert.equal(r.fields.customer, 'HIGANO日本');
@@ -87,23 +88,66 @@ test('製造單 F1150924004：單別、表頭、製造參數', () => {
   assert.equal(r.params.widthTolerance, null); // 空白欄位不可撿到隔壁的標籤
 });
 
-test('製造單：跨行儲存格合併成一筆，數字不重複累加', () => {
+test('製造單：備註行不會被當成品項', () => {
   const r = parseQrp(MANUFACTURE);
-  // 生產明細三行同為序號 0010 → 一筆，規格接成多行
+  // 生產明細印了三行（同序號 0010），只有第一行是真品項
+  assert.equal(r.itemLines.length, 3);
   assert.equal(r.items.length, 1);
-  assert.equal(r.items[0].seq, '0010');
   assert.equal(r.items[0].qty, 12);
   assert.match(r.items[0].spec, /SKA20-142/);
-  assert.match(r.items[0].spec, /完整孔\(3孔\)/);
-  assert.match(r.items[0].spec, /寄日本/);
-  assert.equal(r.items[0].spec.split('\n').length, 3);
+  assert.ok(r.notes.some(n => /完整孔/.test(n)));
+  assert.ok(r.notes.some(n => /寄日本/.test(n)));
 
-  // 領用材料兩行同序號 → 一筆，文字接續、數量不變成 2
+  // 這一行的「訂單品名規格」是真規格所以算品項，但「領用材料」欄寫的是文字指示 → 要提醒
   assert.equal(r.materials.length, 1);
   assert.equal(r.materials[0].orderQty, 12);
-  assert.equal(r.materials[0].qty, 1);
+  assert.match(r.materials[0].orderSpec, /SKA20-142/);
   assert.match(r.materials[0].spec, /零星料/);
-  assert.match(r.materials[0].spec, /雙面貼膜/);
+  assert.equal(r.materials[0].isSpec, true);
+  assert.ok(r.warnings.some(w => /文字指示/.test(w)), `warnings: ${r.warnings}`);
+});
+
+test('品項 / 備註判斷', () => {
+  assert.equal(looksLikeSpec("鋁板1050  2.0T*4'*1950mm"), true);
+  assert.equal(looksLikeSpec("擴張網 黑鐵 0.5T*(3*6)*0.6W*142*300'"), true);
+  assert.equal(looksLikeSpec('寬度公差+1 , -2mm  長度可長不可短'), false);
+  assert.equal(looksLikeSpec('捲圓內徑約100~130mm  防水紙密封包裝'), false);
+  assert.equal(looksLikeSpec('請先找廠內零星料製作'), false);
+  assert.equal(looksLikeSpec('鋁'), false); // 只有材質沒有尺寸不算
+});
+
+// ── 同一工令下的兩張加工單 ──────────────────────────────────────────────────
+test('工令 E1150911001：兩張加工單靠工令單號關聯', () => {
+  const a = parseQrp(PAIR_G1);
+  const b = parseQrp(PAIR_G2);
+  assert.equal(a.fields.workOrderNo, 'E1150911001');
+  assert.equal(b.fields.workOrderNo, 'E1150911001');
+  assert.equal(a.fields.workOrderNo, b.fields.workOrderNo); // 這就是關聯鍵
+  assert.equal(a.fields.docNo, 'G1150911001');
+  assert.equal(b.fields.docNo, 'G1150911002');
+  assert.equal(a.docType, 'process');
+  assert.equal(b.docType, 'process');
+  assert.equal(a.fields.customer, '上碩');
+  assert.equal(b.fields.customer, '上碩');
+
+  // 道次：G1 把 4' 分條成 635，G2 再把 635 分條成 142
+  assert.match(a.materials[0].spec, /4'\*300'/);
+  assert.ok(a.items.some(i => /635\*300'/.test(i.spec)));
+  assert.match(b.materials[0].spec, /635\*300'/);
+  assert.ok(b.items.some(i => /142\*300'/.test(i.spec)));
+});
+
+test('跨頁：兩頁的加工單只有一組表頭與明細', () => {
+  const r = parseQrp(PAIR_G1);
+  assert.equal(r.pages, 2);
+  assert.equal(r.ok, true, `不該有 warning：${r.warnings}`);
+  assert.equal(r.fields.docNo, 'G1150911001');
+  assert.equal(r.materials.length, 3);  // 300' / 296' / 277'
+  assert.equal(r.items.length, 6);
+  assert.equal(r.items[0].qty, 200);
+  // 三行包裝與公差要求歸為備註
+  assert.equal(r.notes.length, 3);
+  assert.ok(r.notes.every(n => !looksLikeSpec(n)));
 });
 
 // ── 建單草稿與防呆 ──────────────────────────────────────────────────────────
