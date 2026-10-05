@@ -415,11 +415,57 @@ model ProcessOrder {
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
 
+  // 生管在 MES 填（QRP 上這幾欄是空白的，印出來才手寫）
+  preparerName    String?             // 備料人員
+  operatorName    String?             // 操作員
+  // 現場填
+  oddCutting      Boolean   @default(false)  // 零星裁剪:現場依狀況決定
+  // ERP 帶的（這張加工單若由製造單產生，ERP 會自動帶出）
+  poNo            String?             // 訂單號碼
+  productModel    String?             // 產品型號
+  // Excel 排單檔帶的
+  customerCode    String?             // 公司編號(含代號),例 26-33610003 台鎰
+  area            String?             // 區域:北區/中區/南區
+  category        String?             // 類別:擴張網/編織網
+  returnedQty     Int?                // 已回數量(ERP 回單進度,重傳 Excel 可同步)
+  pendingQty      Int?                // 未回數量
+  erpClosed       Boolean   @default(false)  // ERP 結案
+  // 這張單的資料分別從哪來(qrp / excel / manual,逗號字串)
+  sources         String?
+
   entries ProcessEntry[]
+  items   ProcessOrderItem[]
 
   @@index([manuOrderNo])
   @@index([status])
   @@index([plannedDate])
+  @@index([deletedAt])
+}
+
+// 加工單明細。一張加工單可以有多個項次,數量各自不同
+// (實例:G1150811002 有 11 個項次)。原本只用 ProcessOrder.spec 一個文字欄存不下。
+model ProcessOrderItem {
+  id             Int          @id @default(autoincrement())
+  processOrderId Int
+  processOrder   ProcessOrder @relation(fields: [processOrderId], references: [id], onDelete: Cascade)
+  seq            String       // 項次:0010 / 0020 …
+  spec           String       // 品名規格
+  qty            Int?
+  unit           String?      // PCS / 捲
+  unitWeight     Float?       // 單重
+  totalWeight    Float?       // 總數(重量)
+  modelCode      String?      // 型號代碼
+  materialCode   String?      // 材質編號:鋁 / SUS304 …
+  kind           String       @default("item") // item 品項 / note 備註(QRP 會把公差、包裝要求也印成明細行)
+  returnedQty    Int?         // 該項次已回數量
+  pendingQty     Int?
+  source         String?      // qrp / excel / manual
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+
+  @@unique([processOrderId, seq, spec])
+  @@index([processOrderId])
   @@index([deletedAt])
 }
 
