@@ -984,7 +984,35 @@ export default async function orderRoutes(fastify) {
       data: { rowCount: processedOrderNos.length, orderNos: processedOrderNos },
     });
 
-    return { ok: true, created, updated, skipped, errors, total: rows.length, batchId: batch.id };
+    // 自動取消被抽掉的計畫單（軟刪除，回收桶可救回）：
+    // 臨時調整計畫時生管重傳當日清單，「同計畫日、同機台、完全未開工、且不在本次清單」
+    // 的單視為被抽單。範圍限定「本次檔案有出現的機台」——只補傳某一台的計畫時，
+    // 其他機台的單絕不受牽連；已開工（有任何掃碼/暫停）的單永遠不動。
+    let autoCancelled = [];
+    const uploadMachines = [...new Set(rawRows.map(r => r.machineNo).filter(Boolean))];
+    if (batchProductionDate && uploadMachines.length > 0 && processedOrderNos.length > 0) {
+      const stale = await fastify.prisma.order.findMany({
+        where: {
+          plannedDate: batchProductionDate,
+          machineNo: { in: uploadMachines },
+          orderNo: { notIn: processedOrderNos },
+          actualStartDate: null,
+          step11At: null,
+          stepEntries: { none: {} },
+          pauseEvents: { none: {} },
+        },
+        select: { id: true, orderNo: true },
+      });
+      if (stale.length > 0) {
+        await fastify.prisma.order.deleteMany({ where: { id: { in: stale.map(o => o.id) } } }); // middleware 轉軟刪除
+        autoCancelled = stale.map(o => o.orderNo);
+        await audit(fastify.prisma, request, 'bulk_upload_auto_cancel', String(batch.id), {
+          orderNos: autoCancelled,
+        });
+      }
+    }
+
+    return { ok: true, created, updated, skipped, errors, total: rows.length, batchId: batch.id, autoCancelled };
   });
 
   // 客戶名稱補登（管理員）：簡表（工單號＋客戶名稱）一次補齊

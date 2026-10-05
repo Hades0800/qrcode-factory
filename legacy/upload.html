@@ -553,6 +553,9 @@ $('uploadBtn').onclick = async () => {
   }
   const d = res.data;
   let html = `<div class="result ok">上傳完成：新增 ${d.created} 筆、更新 ${d.updated} 筆<br>可切到「📋 上傳紀錄」查看明細</div>`;
+  if (d.autoCancelled && d.autoCancelled.length > 0) {
+    html += `<div class="result" style="margin-top:8px;background:#fff8e8;color:#b8860b;">已自動取消 ${d.autoCancelled.length} 張被抽掉的計畫單（同日同機台、未開工、不在本次清單）：<br>${d.autoCancelled.map(n => escapeHtml(n)).join('、')}<br>誤刪可請管理員從回收桶救回</div>`;
+  }
   if (d.errors && d.errors.length > 0) {
     html += `<div class="result fail" style="margin-top:8px;">錯誤 ${d.errors.length} 筆：<br>${d.errors.map(e => escapeHtml(e)).join('<br>')}</div>`;
   }
