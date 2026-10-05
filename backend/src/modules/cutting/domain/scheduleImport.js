@@ -99,7 +99,7 @@ export function mapScheduleRows(rows) {
       customerCode: code,
       area: g('area') ? String(g('area')).trim() : null,
       category: g('category') ? String(g('category')).trim() : null,
-      plannedDate: parseRocDate(g('date')),
+      dispatchDate: parseRocDate(g('date')),   // 報表的「日期」= 派工日期，業務助理開單時決定
       dueDate: parseRocDate(g('dueDate')),
       erpClosed: toBool(g('closed')),
       oddCutting: toBool(g('oddCutting')),
@@ -117,7 +117,7 @@ export function mapScheduleRows(rows) {
           warnings.push(`${processNo}：第 ${lineNo} 列的「${k}」與前面不同（${order[k]} / ${header[k]}）`);
         }
       }
-      for (const k of ['plannedDate', 'dueDate']) {
+      for (const k of ['dispatchDate', 'dueDate']) {
         const a = order[k]?.getTime?.(), b = header[k]?.getTime?.();
         if (a && b && a !== b) warnings.push(`${processNo}：第 ${lineNo} 列的「${k}」與前面不同`);
       }

@@ -50,7 +50,7 @@ test('加工單 G1150929002：單別、表頭、明細', () => {
   assert.equal(r.fields.workOrderNo, 'E1150929002');
   assert.equal(r.fields.customer, '凱詮');
   assert.equal(r.fields.area, '北區');
-  assert.equal(ymd(r.fields.plannedDate), '2026-09-29');
+  assert.equal(ymd(r.fields.dispatchDate), '2026-09-29');   // 派工日期：業務助理
   assert.equal(ymd(r.fields.dueDate), '2026-10-01');
   assert.equal(r.fields.poNo, null);         // 訂單號碼、產品型號由業助之後補填
   assert.equal(r.fields.productModel, null);

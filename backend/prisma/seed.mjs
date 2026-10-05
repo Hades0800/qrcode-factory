@@ -78,7 +78,7 @@ async function main() {
     const r = parseQrp(readFileSync(path));
     if (!r.fields?.docNo) { console.warn(`  · ${f} 解析不出單號，略過`); skipped++; continue; }
 
-    const { docNo, workOrderNo, customer, plannedDate, dueDate } = r.fields;
+    const { docNo, workOrderNo, customer, dispatchDate, dueDate } = r.fields;
 
     // 領用材料 → 原料標籤 + 入庫異動
     let label = null;
@@ -132,7 +132,7 @@ async function main() {
         customer,
         spec,
         qty: r.items.reduce((s, i) => s + (i.qty || 0), 0) || null,
-        plannedDate, dueDate,
+        dispatchDate, dueDate,   // 預計日 / 完工日由生管排單時才填
         remark: r.notes.join('；').slice(0, 120) || null,
         createdBy: sales?.id ?? null, createdByName: sales?.displayName ?? null,
       },

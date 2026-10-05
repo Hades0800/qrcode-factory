@@ -227,7 +227,7 @@ export function parseQrp(buf) {
     customer: findRight(rows, '客戶名稱'),
     area: findRight(rows, '區域'),
     productModel: findRight(rows, '產品型號'),
-    plannedDate: parseRocDate(findRight(rows, '派工日期')),
+    dispatchDate: parseRocDate(findRight(rows, '派工日期')),   // 業務助理（ERP 帶出）
     dueDate: parseRocDate(findRight(rows, '交貨日期')),
     machineNo: findRight(rows, '操作機台'),
     operator: findRight(rows, '操作員'),

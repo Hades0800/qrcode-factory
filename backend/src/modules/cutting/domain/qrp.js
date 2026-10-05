@@ -12,7 +12,7 @@ export function toProcessOrderDraft(parsed) {
     spec: items.map(i => (i.qty == null ? i.spec : `${i.spec} , ${i.qty}`)).join('\n') || null,
     qty: items.reduce((s, i) => s + (i.qty || 0), 0) || null,
     machineNo: fields.machineNo,
-    plannedDate: fields.plannedDate,
+    dispatchDate: fields.dispatchDate,
     dueDate: fields.dueDate,
     remark: [fields.cutMethod, fields.packMethod].filter(Boolean).join('；') || null,
     sourceMaterials: materials.map(m => ({ spec: m.spec, qty: m.qty, total: m.total, stock: m.stock })),

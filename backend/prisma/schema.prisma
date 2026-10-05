@@ -401,9 +401,12 @@ model ProcessOrder {
   spec            String?             // 裁切規格(多條用換行)
   qty             Int?
   weight          Float?
-  machineNo       String?
-  plannedDate     DateTime?           // 每周生產計畫的排定日
-  dueDate         DateTime?
+  machineNo       String?             // 操作機台:生管指派
+  // 四個日期分屬不同人,不要混用
+  dispatchDate    DateTime?           // 派工日期:業務助理(ERP 帶出)
+  dueDate         DateTime?           // 交貨日期:業務助理(ERP 帶出)
+  plannedDate     DateTime?           // 預計日期:生管排單時填
+  finishDate      DateTime?           // 完工日期:生管填(與系統結案時間 completedAt 不同)
   remark          String?
   status          String    @default("open")  // open / done(QR Code 結案)
   completedAt     DateTime?
@@ -439,6 +442,8 @@ model ProcessOrder {
   @@index([manuOrderNo])
   @@index([status])
   @@index([plannedDate])
+  @@index([dispatchDate])
+  @@index([dueDate])
   @@index([deletedAt])
 }
 

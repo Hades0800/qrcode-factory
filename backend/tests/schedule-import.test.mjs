@@ -48,7 +48,8 @@ test('表頭欄位對應', () => {
   assert.equal(o.customer, '台鎰');
   assert.equal(o.area, '北區');
   assert.equal(o.category, '擴張網');
-  assert.equal(ymd(o.plannedDate), '2026-08-03');
+  assert.equal(ymd(o.dispatchDate), '2026-08-03');   // 報表「日期」= 派工日期
+  assert.equal(o.plannedDate, undefined, '預計日期由生管排單時填，匯入不帶');
   assert.equal(ymd(o.dueDate), '2026-08-24');
   assert.equal(o.erpClosed, false);   // 結案 0.否
   assert.equal(o.oddCutting, false);  // 零星裁剪 N.否

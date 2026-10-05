@@ -20,7 +20,9 @@ export default async function processOrderRoutes(fastify) {
     if (!validOrderNo(processNo)) return reply.code(400).send({ error: '加工單號格式錯誤(例 G1150810006)' });
     const manuOrderNo = b.manuOrderNo ? String(b.manuOrderNo).trim() : null;
     if (manuOrderNo && !validOrderNo(manuOrderNo)) return reply.code(400).send({ error: '製造單號格式錯誤(例 F1150810001)' });
-    if (b.plannedDate && !parseDate(b.plannedDate)) return reply.code(400).send({ error: '排定日格式需為 yyyy.mm.dd' });
+    for (const [k, label] of [['dispatchDate', '派工日'], ['plannedDate', '預計日'], ['finishDate', '完工日']]) {
+      if (b[k] && !parseDate(b[k])) return reply.code(400).send({ error: `${label}格式需為 yyyy.mm.dd` });
+    }
     if (b.dueDate && !parseDate(b.dueDate)) return reply.code(400).send({ error: '納期格式需為 yyyy.mm.dd' });
     const exists = await fastify.prisma.processOrder.findFirst({ where: { processNo } });
     if (exists) return reply.code(409).send({ error: '加工單已存在' });
@@ -37,7 +39,9 @@ export default async function processOrderRoutes(fastify) {
         spec: clipStr(b.spec, 600) || null,
         qty: numOrNull(b.qty, true), weight: numOrNull(b.weight),
         machineNo: clipStr(b.machineNo, 20) || null,
+        dispatchDate: b.dispatchDate ? parseDate(b.dispatchDate) : null,
         plannedDate: b.plannedDate ? parseDate(b.plannedDate) : null,
+        finishDate: b.finishDate ? parseDate(b.finishDate) : null,
         dueDate: b.dueDate ? parseDate(b.dueDate) : null,
         remark: clipStr(b.remark, 120) || null,
         createdBy: request.user.id, createdByName: request.user.displayName || null,
@@ -59,7 +63,7 @@ export default async function processOrderRoutes(fastify) {
         ...(status ? { status: String(status) } : {}),
         ...(q ? { OR: ['processNo', 'manuOrderNo', 'customer'].map(k => ({ [k]: { contains: String(q) } })) } : {}),
       },
-      include: INCLUDE, orderBy: [{ plannedDate: 'asc' }, { createdAt: 'desc' }], take: limit,
+      include: INCLUDE, orderBy: [{ plannedDate: 'asc' }, { dispatchDate: 'asc' }, { createdAt: 'desc' }], take: limit,
     });
     return { processOrders };
   });
