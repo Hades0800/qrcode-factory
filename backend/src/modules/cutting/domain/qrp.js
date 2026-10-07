@@ -7,7 +7,8 @@ export function toProcessOrderDraft(parsed) {
   const { fields, items, materials } = parsed;
   return {
     processNo: fields.docNo,
-    manuOrderNo: fields.workOrderNo, // 工令單號 E：製造單與加工單靠它對應
+    workOrderNo: fields.workOrderNo,   // 工令 E：製造單與加工單掛在同一個工令底下
+    manuOrderNo: parsed.refs?.find(r => r.startsWith('F')) ?? null, // 領料欄若寫到製造單號就帶出來
     customer: fields.customer,
     spec: items.map(i => (i.qty == null ? i.spec : `${i.spec} , ${i.qty}`)).join('\n') || null,
     qty: items.reduce((s, i) => s + (i.qty || 0), 0) || null,

@@ -151,10 +151,27 @@ test('跨頁：兩頁的加工單只有一組表頭與明細', () => {
 });
 
 // ── 建單草稿與防呆 ──────────────────────────────────────────────────────────
+test('引用單號：領料／明細文字裡提到的其他單號要抓出來', () => {
+  // 四份樣本都沒有互相引用，refs 應為空陣列而不是 undefined
+  for (const buf of [PROCESS, MANUFACTURE, PAIR_G1, PAIR_G2]) {
+    assert.deepEqual(parseQrp(buf).refs, []);
+  }
+  // 製造單的領料欄若寫「裁切G1150929003」要認得（實務上會出現，樣本還沒拿到）
+  const fake = {
+    materialLines: [{ spec: '酸洗板 3.0T*4*2400mm' }, { spec: '裁切G1150929003' }],
+    itemLines: [{ spec: '擴張網 黑鐵 3T*(19*50)*3.9W*2400*1200' }],
+  };
+  const refs = [...new Set(
+    [...fake.materialLines, ...fake.itemLines].map(l => l.spec).join('\n').match(/[EFG]\d{10}/g) ?? [],
+  )];
+  assert.deepEqual(refs, ['G1150929003']);
+});
+
 test('加工單 → ProcessOrder 草稿', () => {
   const d = toProcessOrderDraft(parseQrp(PROCESS));
   assert.equal(d.processNo, 'G1150929002');
-  assert.equal(d.manuOrderNo, 'E1150929002');
+  assert.equal(d.workOrderNo, 'E1150929002');   // 工令
+  assert.equal(d.manuOrderNo, null);            // 這張沒有對應製造單，計畫表顯示 ------
   assert.equal(d.qty, 45);
   assert.match(d.spec, /鋁板1050.*, 45/);
   assert.equal(d.sourceMaterials.length, 1);

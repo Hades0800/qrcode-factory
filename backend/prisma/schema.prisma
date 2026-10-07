@@ -394,14 +394,17 @@ model StockMove {
 model ProcessOrder {
   id              Int       @id @default(autoincrement())
   processNo       String    @unique   // 加工單號 G…
-  manuOrderNo     String?             // 綁定的製造單號 F…(關聯表「含加工單-綁定」)
+  workOrderNo     String?             // 工令單號 E…:製造單與加工單掛在同一個工令底下
+  manuOrderNo     String?             // 對應的製造單號 F…(沒有對應製造單時為空,計畫表顯示 ------)
   labelId         Int?
   label           Label?    @relation(fields: [labelId], references: [id])
   customer        String?
   spec            String?             // 裁切規格(多條用換行)
   qty             Int?
   weight          Float?
-  machineNo       String?             // 操作機台:生管指派
+  machineNo       String?             // 操作機台:生管指派(31 / 32 / 33)
+  seqNo           Int?                // 生產順序:同機台同日的排序,生管排單時決定
+  layoutFile      String?             // 加工配置圖(SKCutTool 輸出),計畫表上點「開啟」看的就是它
   // 四個日期分屬不同人,不要混用
   dispatchDate    DateTime?           // 派工日期:業務助理(ERP 帶出)
   dueDate         DateTime?           // 交貨日期:業務助理(ERP 帶出)
@@ -421,8 +424,13 @@ model ProcessOrder {
   // 生管在 MES 填（QRP 上這幾欄是空白的，印出來才手寫）
   preparerName    String?             // 備料人員
   operatorName    String?             // 操作員
-  // 現場填
+  // 現場填(對照「裁切加工計畫表」畫面)
   oddCutting      Boolean   @default(false)  // 零星裁剪:現場依狀況決定
+  waitingMaterial Boolean   @default(false)  // 等待材料
+  startedAt       DateTime?           // 開始時間:現場點一下記錄
+  finishedAt      DateTime?           // 完成時間:現場點一下記錄
+  totalWorkers    Int?                // 作業總人數
+  storageLocation String?             // 入庫儲位
   // ERP 帶的（這張加工單若由製造單產生，ERP 會自動帶出）
   poNo            String?             // 訂單號碼
   productModel    String?             // 產品型號
@@ -439,8 +447,10 @@ model ProcessOrder {
   entries ProcessEntry[]
   items   ProcessOrderItem[]
 
+  @@index([workOrderNo])
   @@index([manuOrderNo])
   @@index([status])
+  @@index([machineNo, plannedDate, seqNo])   // 計畫表:選機台 + 日期,依生產順序列出
   @@index([plannedDate])
   @@index([dispatchDate])
   @@index([dueDate])

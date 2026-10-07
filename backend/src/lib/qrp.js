@@ -300,6 +300,13 @@ export function parseQrp(buf) {
   const items = itemLines.filter(l => l.isSpec);
   const notes = [...materialLines, ...itemLines].filter(l => !l.isSpec).map(l => l.spec).filter(Boolean);
 
+  // 領料／明細文字裡引用到的其他單號（製造單常寫「裁切G1150929003」指向加工單）
+  const refs = [...new Set(
+    [...materialLines, ...itemLines]
+      .map(l => l.spec).filter(Boolean).join('\n')
+      .match(/[EFG]\d{10}/g) ?? [],
+  )].filter(n => n !== fields.docNo && n !== fields.workOrderNo);
+
   const warnings = [];
   if (!docType) warnings.push('認不出單別（不是【製造單】也不是【加工單】），請確認檔案');
   if (!fields.docNo) warnings.push('抓不到單號');
@@ -318,6 +325,7 @@ export function parseQrp(buf) {
     docType,                // 'manufacture'（F）| 'process'（G）
     fields,
     params,
+    refs,           // 文字裡引用到的其他單號
     materials,      // 看起來是品項的行
     items,
     materialLines,  // 全部原樣的行（含備註），確認畫面用

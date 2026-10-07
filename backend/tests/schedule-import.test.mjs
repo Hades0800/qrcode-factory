@@ -90,14 +90,14 @@ test('缺欄位的列不會爆——編織網那幾列沒有型號／材質／�
 
 test('沒有工令欄位時要提醒', () => {
   const r = mapScheduleRows(ROWS);
-  assert.ok(r.orders.every(o => o.manuOrderNo === null));
+  assert.ok(r.orders.every(o => o.workOrderNo === null));
   assert.ok(r.warnings.some(w => /工令/.test(w)), `warnings: ${r.warnings}`);
 });
 
 test('ERP 之後加了工令欄位就自動吃得到', () => {
   const rows = ROWS.slice(0, 2).map(r => ({ ...r, 工令單號: 'E1150803001' }));
   const r = mapScheduleRows(rows);
-  assert.equal(r.orders[0].manuOrderNo, 'E1150803001');
+  assert.equal(r.orders[0].workOrderNo, 'E1150803001');
   assert.ok(!r.warnings.some(w => /工令/.test(w)));
 });
 

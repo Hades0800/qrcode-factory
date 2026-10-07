@@ -94,7 +94,7 @@ export function mapScheduleRows(rows) {
     const { code, name } = splitCustomer(g('customerCode'));
     const header = {
       processNo,
-      manuOrderNo: g('workOrderNo') ? String(g('workOrderNo')).trim() : null, // 目前 ERP 不出這欄
+      workOrderNo: g('workOrderNo') ? String(g('workOrderNo')).trim() : null, // 目前 ERP 不出這欄
       customer: name,
       customerCode: code,
       area: g('area') ? String(g('area')).trim() : null,
@@ -103,7 +103,7 @@ export function mapScheduleRows(rows) {
       dueDate: parseRocDate(g('dueDate')),
       erpClosed: toBool(g('closed')),
       oddCutting: toBool(g('oddCutting')),
-      waiting: toBool(g('waiting')),
+      waitingMaterial: toBool(g('waiting')),
       source: 'excel',
     };
 
@@ -165,7 +165,7 @@ export function mapScheduleRows(rows) {
   });
 
   if (!orders.length) warnings.push('這份檔案裡找不到任何加工單（請確認是「加工單-入庫型號日期-明細表」）');
-  if (orders.every(o => !o.manuOrderNo)) {
+  if (orders.every(o => !o.workOrderNo)) {
     warnings.push('這份報表沒有「工令單號」欄——製造單與加工單的關聯要另外由 QRP 補，或請 ERP 在報表加這一欄');
   }
   return { orders, warnings, skipped };

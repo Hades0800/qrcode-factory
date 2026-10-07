@@ -127,7 +127,8 @@ async function main() {
       update: {},
       create: {
         processNo: docNo,
-        manuOrderNo: workOrderNo,        // 工令 E：同工令的加工單靠它成組
+        workOrderNo,                     // 工令 E：同工令的加工單靠它成組
+        manuOrderNo: r.refs?.find(x => x.startsWith('F')) ?? null,
         labelId: label?.id ?? null,
         customer,
         spec,
