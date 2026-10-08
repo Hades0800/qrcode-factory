@@ -935,9 +935,21 @@ export default async function orderRoutes(fastify) {
           plannedMachineNo: rawRow.machineNo, // Excel 排定的機台永遠保留
         };
 
+        // 已軟刪除（被自動取消抽單、或手動刪除）的同號工單：重新上傳＝生管明確要再排這張單 → 從回收桶救回。
+        // 不救回的話，下方查詢會略過已刪除的單而走「新建」，撞上單號唯一鍵而上傳失敗；
+        // 現場掃碼也會看到「此單已被刪除」。
+        const deletedSame = await fastify.prisma.order.findFirst({ where: { orderNo, deletedAt: { not: null } } });
+        if (deletedSame) {
+          await fastify.prisma.order.update({ where: { id: deletedSame.id }, data: { deletedAt: null } });
+          await audit(fastify.prisma, request, 'bulk_upload_revive_order', orderNo, { batchId: batch.id });
+          rawRow.errorMsg = '已從回收桶救回';
+        }
+
         const existing = await fastify.prisma.order.findUnique({ where: { orderNo } });
         if (existing) {
-          const specMatch = !existing.productSpec || !data.productSpec || existing.productSpec === data.productSpec;
+          // 剛救回的未開工單＝重新排單，規格以本次上傳為準（不因規格不同而跳過）
+          const revivedFresh = !!deletedSame && !existing.actualStartDate && !existing.step11At;
+          const specMatch = revivedFresh || !existing.productSpec || !data.productSpec || existing.productSpec === data.productSpec;
           if (specMatch) {
             // 上傳有值就覆蓋；上傳沒值才保留舊值
             // 包含 machineNo — 生管要能隨時換機台（即使工單已開工）
