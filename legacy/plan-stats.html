@@ -443,6 +443,13 @@ function getActualStartYmd(o) {
 }
 
 // 該工單是否屬於指定機台（machineNo 為現場記錄；plannedMachineNo 為原計畫）
+// 是否有任何生產紀錄（掃碼工序、暫停/異常、完成）
+function hasProductionRecord(o) {
+  return !!(o.actualStartDate || o.step11At ||
+    (o.stepEntries && o.stepEntries.length) ||
+    (o.pause12 && o.pause12.history && o.pause12.history.length) ||
+    (o.pause13 && o.pause13.history && o.pause13.history.length));
+}
 function orderMatchesMachine(o, machine) {
   return o.machineNo === machine || o.plannedMachineNo === machine;
 }
@@ -534,8 +541,9 @@ function render() {
   const orderQ = ($('filterOrder').value || '').trim().toUpperCase();
   const crossMachine = !!(orderQ || custQ);   // 跨機台檢視（每列標機台）
 
-  // 過濾網多機台：凡是有 @N 變體的基礎單號，實際生產在 @1/@2/@3，
-  // 其「裸單號」不列入統計（只顯示各機台 @N）。裸單號通常是現場漏打 @ 後綴而生。
+  // 過濾網多機台：同一規格多台生產時，第一台用原單號、第二台起用 @2/@3…（2026-10 起的輸入規則）。
+  // 舊規則（全部用 @1/@2/@3）時，原單號只是生管上傳的計畫殼、沒有生產紀錄 → 才隱藏；
+  // 有生產紀錄的原單號＝第一台機的實際生產，必須列出並計入完成數量。
   const baseNosWithAt = new Set();
   allOrders.forEach(o => {
     const at = (o.orderNo || '').indexOf('@');
@@ -544,8 +552,8 @@ function render() {
 
   // 篩選：計畫日期落在此月份 +（工單號 / 客戶 / 機台，優先序：工單號 > 客戶 > 機台）
   const rows = allOrders.filter(o => {
-    // 裸單號但已有 @N 變體 → 隱藏（實際生產在 @1/@2/@3）
-    if ((o.orderNo || '').indexOf('@') === -1 && baseNosWithAt.has(o.orderNo)) return false;
+    // 原單號已有 @N 變體、且自己沒有任何生產紀錄 → 舊規則的計畫殼，隱藏
+    if ((o.orderNo || '').indexOf('@') === -1 && baseNosWithAt.has(o.orderNo) && !hasProductionRecord(o)) return false;
     if (orderQ) {
       // 工單號查詢：帶出該單與其各機台 @N 紀錄（F1150622001 → 含 @1/@2/@3）
       if (!(o.orderNo === orderQ || o.orderNo.startsWith(orderQ + '@'))) return false;
