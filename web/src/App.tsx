@@ -4,6 +4,7 @@ import { ToastProvider } from './components/Toast'
 import InventoryPage from './pages/InventoryPage'
 import ProductionPage from './pages/ProductionPage'
 import CuttingPage from './pages/CuttingPage'
+import CuttingPlanPage from './pages/CuttingPlanPage'
 import ShippingPage from './pages/ShippingPage'
 import type { Me } from './api/types'
 
@@ -12,6 +13,7 @@ import type { Me } from './api/types'
 const MODULES = [
   { key: 'inventory', name: '原料管理(入出庫)', page: InventoryPage },
   { key: 'production', name: '生產 MES', page: ProductionPage },
+  { key: 'cutting-plan', name: '現場工單', page: CuttingPlanPage },
   { key: 'cutting', name: '裁切 MES', page: CuttingPage },
   { key: 'shipping', name: '出貨管理', page: ShippingPage },
 ] as const

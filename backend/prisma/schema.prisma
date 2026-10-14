@@ -459,6 +459,40 @@ model ProcessOrder {
 
 // 加工單明細。一張加工單可以有多個項次,數量各自不同
 // (實例:G1150811002 有 11 個項次)。原本只用 ProcessOrder.spec 一個文字欄存不下。
+// 當日計畫鎖定(機台 × 日期)。現場調整完順序按「確認計畫」就鎖住,之後照順序做;
+// 要再動得由生管解鎖並填原因——「完成生產準備,系統鎖住計畫」(系統運作工作項目摘要表)。
+model CuttingPlanLock {
+  id           Int       @id @default(autoincrement())
+  machineNo    String
+  planDate     DateTime  @db.Date
+  lockedAt     DateTime  @default(now())
+  lockedBy     Int?
+  lockedByName String?
+  unlockedAt   DateTime?
+  unlockedBy   Int?
+  unlockReason String?
+
+  @@unique([machineNo, planDate])
+  @@index([planDate])
+}
+
+// 現場調整順序的紀錄:可以調就要追得到誰調的
+model CuttingPlanChange {
+  id          Int      @id @default(autoincrement())
+  machineNo   String
+  planDate    DateTime @db.Date
+  processNo   String
+  oldSeq      Int?
+  newSeq      Int?
+  action      String   // reorder / lock / unlock / wait / resume
+  reason      String?
+  changedBy   Int?
+  changedName String?
+  changedAt   DateTime @default(now())
+
+  @@index([machineNo, planDate])
+}
+
 model ProcessOrderItem {
   id             Int          @id @default(autoincrement())
   processOrderId Int
