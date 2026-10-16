@@ -344,7 +344,10 @@ function render() {
     const loss = prodMin - stdMin;
     // 未到日期：達成度留空白（null → 圖上不畫柱、不顯示 %）
     const eff = isFuture ? null : (target.workMinutes > 0 ? (prodMin / target.workMinutes * 100) : null);
-    const hasActivity = !isFuture && (dayOrders.length > 0 || stdMin > 0);
+    // 有生產活動＝當天實際記錄到準備／實績／異常時間，或分攤到標準工時。
+    // 不能只看「有工單」：跨週末的單（週五下班暫停、週一恢復）期間涵蓋週六日，
+    // 但那兩天什麼都沒做，算進分母會以 0% 拉低月平均。
+    const hasActivity = !isFuture && (prepSec > 0 || prodSec > 0 || abnSec > 0 || (stdByDay[ds] || 0) > 0);
     days.push({ d, ds, prepMin, prodMin, abnMin, stdMin, loss, eff, hasActivity, isFuture });
   }
 
