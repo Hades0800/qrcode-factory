@@ -62,23 +62,23 @@
 
 ⚠️ `DATABASE_URL` 必須用「服務間引用」的方式設定（按 + 號選 PostgreSQL），不能手填，否則內網連不到。
 
-## 六、初始化資料庫
+## 六、初始化資料庫與結構更新
 
-第一次部署後資料表還沒建立。在後端 service 點 **「Settings」** → **Build Command** 改成：
+後端啟動時**不會**自動同步資料庫結構（舊版會在啟動時執行 `prisma db push --accept-data-loss`，可能刪掉欄位，已移除）。
+建立資料表、或 `backend/prisma/schema.prisma` 有修改時，都要**手動**執行一次：
 
-```
-npm install && npx prisma db push
-```
-
-或者更簡單：在 `backend/package.json` 已經有 `postinstall: prisma generate`，你可以在 Zeabur 的 **Pre-deploy Command** 加：
+1. 先備份資料庫
+2. 在本機 `backend/` 目錄，用正式資料庫的連線字串執行：
 
 ```
-npx prisma db push
+DATABASE_URL="postgresql://..." npm run db:push
 ```
 
-讓它每次部署前先把 schema 推到資料庫。
+`db:push` 不帶 `--accept-data-loss`：若這次修改會刪欄位或刪資料，指令會停下來報錯，不會直接執行。確認真的要刪，再另外處理。
 
-✅ 設定完點 **「Redeploy」** 重新部署一次。
+3. 結構更新完成，再 push 程式碼部署
+
+⚠️ Zeabur 後台的 **Pre-deploy Command** 若設過 `npx prisma db push`，請清空，避免部署時自動改結構。
 
 ## 七、產生公開網址
 

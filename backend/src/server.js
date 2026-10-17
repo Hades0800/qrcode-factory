@@ -11,7 +11,6 @@ import equipmentParamRoutes from './routes/equipmentParams.js';
 import maintenanceRoutes from './routes/maintenance.js';
 import idleEventRoutes from './routes/idleEvents.js';
 
-import { runDbPush } from './startup/runDbPush.js';
 import { ensureAdmin } from './startup/ensureAdmin.js';
 import { backfillCustomerNames } from './startup/backfillCustomerNames.js';
 
@@ -40,8 +39,7 @@ await fastify.register(idleEventRoutes);   // /api/idle-events
 const port = Number(process.env.PORT || 8080);
 const host = '0.0.0.0';
 
-// 啟動時自動同步資料表
-runDbPush();
+// 資料庫結構不在啟動時自動同步（會刪欄位的風險）——改為部署前手動執行 npm run db:push
 
 // 不讓 ensureAdmin 失敗導致 server 不啟動 — 改成警告，server 仍要啟動方便除錯
 try {
@@ -66,4 +64,17 @@ try {
   console.error('❌ 無法啟動 server:');
   console.error(err);
   process.exit(1);
+}
+
+// 優雅關機：容器平台（Cloud Run 等）停機或改版時送 SIGTERM，先收完進行中的請求再結束
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.once(sig, async () => {
+    console.log(`收到 ${sig}，關閉中…`);
+    try {
+      await fastify.close();
+      await prisma.$disconnect();
+    } finally {
+      process.exit(0);
+    }
+  });
 }
