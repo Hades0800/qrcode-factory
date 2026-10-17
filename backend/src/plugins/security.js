@@ -3,7 +3,9 @@ import compress from '@fastify/compress';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 
-// CORS：限制白名單 origin
+// CORS：限制白名單 origin（整串完全相符才放行）
+// 公司網域：網域本身與其下所有子網域（限 https）
+const COMPANY_DOMAIN = 'sksteel-mes-sys.com';
 const ALLOWED_ORIGINS = [
   'https://hades0800.github.io',
   'http://localhost:3000',
@@ -35,7 +37,14 @@ export async function registerSecurity(fastify) {
   await fastify.register(cors, {
     origin: (origin, cb) => {
       if (!origin) return cb(null, true); // 允許 curl/Postman 測試
-      if (ALLOWED_ORIGINS.some(o => origin.startsWith(o))) return cb(null, true);
+      // 不可用 startsWith：'https://hades0800.github.io.attacker.com' 也會符合
+      if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+      try {
+        const u = new URL(origin);
+        if (u.protocol === 'https:' && (u.hostname === COMPANY_DOMAIN || u.hostname.endsWith('.' + COMPANY_DOMAIN))) {
+          return cb(null, true);
+        }
+      } catch (e) { /* origin 格式不正確 → 拒絕 */ }
       cb(new Error('不允許的來源'), false);
     },
     credentials: true,
