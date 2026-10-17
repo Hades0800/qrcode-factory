@@ -38,9 +38,9 @@ jobs:
       - name: Assemble site (legacy 頁面鋪回根 + React App)
         run: |
           mkdir -p _site
-          # legacy/ 內的舊版頁面與資源鋪到站台根目錄（網址維持 /qrcode-factory/index.html…）
+          # legacy/ 內的舊版頁面與資源鋪到站台根目錄
           cp -r legacy/. _site/
-          # React App 掛到 /app/（對應 vite base: /qrcode-factory/app/）
+          # React App 掛到 /app/（vite base 為相對路徑，任何站台路徑皆可）
           mkdir -p _site/app
           cp -r web/dist/. _site/app/
 
