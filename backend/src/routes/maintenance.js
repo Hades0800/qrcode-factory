@@ -7,7 +7,7 @@ export default async function maintenanceRoutes(fastify) {
   // 診斷端點（僅管理員）
   fastify.get('/diag', { onRequest: [fastify.authenticate, fastify.requireAdmin] }, async () => {
     const env = {
-      DATABASE_URL: process.env.DATABASE_URL ? '已設定 (' + process.env.DATABASE_URL.slice(0, 25) + '...)' : '❌ 未設定',
+      DATABASE_URL: process.env.DATABASE_URL ? '已設定 (' + process.env.DATABASE_URL.replace(/:\/\/([^:@/]+):[^@]*@/, '://$1:***@') + ')' : '❌ 未設定',
       JWT_SECRET: process.env.JWT_SECRET ? '已設定' : '❌ 未設定',
       ADMIN_USERNAME: process.env.ADMIN_USERNAME || '❌ 未設定',
       ADMIN_PASSWORD: process.env.ADMIN_PASSWORD ? '已設定' : '❌ 未設定',

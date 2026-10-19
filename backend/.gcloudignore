@@ -1,0 +1,9 @@
+# 上傳到 Google Cloud Build 時排除的檔案（存在此檔時，gcloud 不再參考 .gitignore）
+.gcloudignore
+.git
+node_modules/
+.env
+.env.*
+*.log
+tests/
+backup-*.json

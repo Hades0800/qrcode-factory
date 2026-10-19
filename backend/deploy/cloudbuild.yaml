@@ -1,0 +1,22 @@
+# Google Cloud Build：建置後端容器映像並推到 Artifact Registry
+# 在 backend/ 目錄執行：
+#   gcloud builds submit --config=deploy/cloudbuild.yaml --substitutions=_TAG=$(git rev-parse --short HEAD) .
+substitutions:
+  _REGION: asia-east1
+  _REPO: sk-mes
+  _IMAGE: backend
+  _TAG: manual
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - deploy/Dockerfile
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_IMAGE}:${_TAG}
+      - .
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_IMAGE}:${_TAG}
+serviceAccount: projects/${PROJECT_ID}/serviceAccounts/sk-mes-build@${PROJECT_ID}.iam.gserviceaccount.com
+options:
+  logging: CLOUD_LOGGING_ONLY
