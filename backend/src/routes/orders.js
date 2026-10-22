@@ -1393,6 +1393,19 @@ export default async function orderRoutes(fastify) {
     return { rows };
   });
 
+  // 製造參數 → [{ spec, spm, blades }]：多規格陣列（baseSpecRows）優先，舊資料退用單值欄位組一列
+  // （與即時頁 rtParseSpecRows 同規則）；SPM、刀數都沒填的列略過
+  function parseMfgSpecRows(ep) {
+    const num = v => (v != null && v !== '' && Number.isFinite(Number(v)) && Number(v) > 0) ? Number(v) : null;
+    let arr = [];
+    if (ep.baseSpecRows) { try { arr = JSON.parse(ep.baseSpecRows) || []; } catch (e) { arr = []; } }
+    if (!Array.isArray(arr)) arr = [];
+    if (arr.length === 0) arr = [{ spec: ep.baseProductSpecAttr, spm: ep.baseMachineSPM, blades: ep.baseBladeCount }];
+    return arr
+      .map(r => ({ spec: r && r.spec ? String(r.spec) : '', spm: num(r && r.spm), blades: num(r && r.blades) }))
+      .filter(r => r.spm != null || r.blades != null);
+  }
+
   // 多規格單的派工總數：Order.dispatchQty 只存第一列規格的量（上傳規則：不同規格的列
   // 不覆寫工單欄位），整張單的派工要用上傳明細加總——同規格取最新批次，仿 upload-rows 去重。
   // 回傳序列化後附上 dispatchQtyTotal 的清單（所有 GET / 分支共用）。
@@ -1418,11 +1431,24 @@ export default async function orderRoutes(fastify) {
       const firstSpec = [...m.keys()].find(k => k);
       if (firstSpec) uploadSpecs[no] = firstSpec;
     }
+    // 現場填的「製造參數」SPM／刀數（多規格各一列）：生管上傳沒填刀數／SPM 時，
+    // 目標達成統計的標準工時改用這裡補（兩邊都有填以生管為準，由前端決定）
+    const eps = orders.length === 0 ? [] : await prisma.equipmentParam.findMany({
+      where: { orderId: { in: orders.map(o => o.id) }, deletedAt: null },
+      select: { orderId: true, baseSpecRows: true, baseProductSpecAttr: true, baseMachineSPM: true, baseBladeCount: true },
+    });
+    const mfgRowsByOrder = new Map();
+    for (const ep of eps) {
+      const rows = parseMfgSpecRows(ep);
+      if (rows.length) mfgRowsByOrder.set(ep.orderId, rows);
+    }
     return orders.map(o => {
       const s = serializeOrder(o);
       const base = o.orderNo.split('@')[0];
       const total = dispatchTotals[base];
       if (total != null) s.dispatchQtyTotal = total;
+      const mfg = mfgRowsByOrder.get(o.id);
+      if (mfg) s.mfgSpecRows = mfg;
       // 主檔規格缺漏時附上上傳明細的規格：bulk-upload 對「規格不一致的列」
       // 會整列跳過（防蓋錯單），副作用是主檔規格可能一直是空的，
       // 看板只讀主檔就會顯示「生產規格尚未上傳」，但規格卡（讀明細）有資料。
