@@ -515,7 +515,7 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260902a"></script>
+<script src="utils.js?v=20261022a"></script>
 <script>
 const me = getMe();
 let allOrders = [];
@@ -866,6 +866,7 @@ function render() {
             <span class="rc-no">${escapeHtml(o.orderNo)}</span>
             <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
               ${badge}
+              ${isAdmin && isComplete ? `<button class="btn-secondary" data-reopen="${escapeHtml(o.orderNo)}" style="padding:4px 10px;font-size:11px;min-height:24px;" onclick="event.stopPropagation()" title="已完成的單現場不能再記錄；要繼續生產請先重新開啟">重新開啟</button>` : ''}
               ${isAdmin ? `<button class="btn-danger" data-del="${escapeHtml(o.orderNo)}" style="padding:4px 10px;font-size:11px;min-height:24px;" onclick="event.stopPropagation()">刪除</button>` : ''}
             </div>
           </div>
@@ -892,6 +893,9 @@ function render() {
     `;
   }).join('');
 
+  $('ordersArea').querySelectorAll('[data-reopen]').forEach(b => {
+    b.onclick = () => reopenOrder(b.getAttribute('data-reopen'));
+  });
   $('ordersArea').querySelectorAll('[data-del]').forEach(b => {
     b.onclick = () => deleteOrder(b.getAttribute('data-del'));
   });
@@ -1059,6 +1063,17 @@ async function toggleDetail(idx) {
   }
 }
 
+// 重新開啟已完成的工單（管理員）：取消「完成」，現場才能繼續記錄生產；會留下操作紀錄
+async function reopenOrder(orderNo) {
+  if (!confirm('確定重新開啟工單「' + orderNo + '」？\n\n會取消這張單的「完成」，現場可以繼續記錄生產，做完後要再按一次完成。')) return;
+  const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '/steps/11', { method: 'DELETE' });
+  if (!r.ok) { toast(r.error || '重新開啟失敗', 'error'); return; }
+  const i = allOrders.findIndex(o => o.orderNo === orderNo);
+  if (i >= 0 && r.data.order) allOrders[i] = Object.assign({}, allOrders[i], r.data.order);
+  render();
+  toast('已重新開啟 ' + orderNo + '，現場可以繼續生產', 'success');
+}
+
 async function deleteOrder(orderNo) {
   if (!confirm('確定刪除工單「' + orderNo + '」？\n\n會連同所有生產紀錄一起軟刪除，可從 admin 回收桶救回完整狀態。')) return;
   const r = await api('/api/orders/' + encodeURIComponent(orderNo) + '?force=true', { method: 'DELETE' });
@@ -1185,8 +1200,9 @@ $('exportBtn').onclick = () => {
     '規格類型','原料類型',
     '小組長',
     '21.設備啓動','22.準備完成','23.無工令',
-    '01.原料準備','02.模刀具','03.試模確認','04.穩定生產-無中斷','05.穩定生產-中斷調整','06.穩定生產-中斷多次','07.後工程','08.其他作業','11.完成',
-    '完成數量','規格切換明細','下班明細',
+    '01.原料準備','02.模刀具','03.試模確認','04.穩定生產-無中斷','05.穩定生產-中斷調整','06.穩定生產-中斷多次','07.後工程','08.其他作業',
+    '生產準備','生產開始','生產規格完成','11.完成',
+    '完成數量','規格完成明細','中途回報明細（暫停／下班／異常）',
     '暫停次數','暫停秒數','異常次數','異常秒數','最後更新',
   ];
   // 從 stepEntries 取各步驟第一次紀錄時間（優先），fallback 到舊格式 stepXAt
@@ -1206,7 +1222,8 @@ $('exportBtn').onclick = () => {
   const rows = filtered.map(o => [
     o.orderNo, o.productionDate ? String(o.productionDate).slice(0,10) : '',
     o.machineNo, o.productSpec || '', o.manuSpec || '', o.customerName || '', o.moldSpec || '', o.material || '',
-    o.dispatchQty || '', o.machineSPM || '', o.unitWeight || '', o.totalWeight || '', o.bladeCount || '',
+    // 派工數：多規格單用全部規格加總（dispatchQty 只存第一個規格）；@N 分機單只列自己的
+    ((o.orderNo || '').indexOf('@') > 0 ? o.dispatchQty : (o.dispatchQtyTotal != null ? o.dispatchQtyTotal : o.dispatchQty)) || '', o.machineSPM || '', o.unitWeight || '', o.totalWeight || '', o.bladeCount || '',
     (o.specType === 'new'
       ? formatNewSpecLabel(o.newSpecAspects)
       : (o.specType === 'mass' ? '量產規格' : '')),
@@ -1214,11 +1231,14 @@ $('exportBtn').onclick = () => {
     o.leaderName,
     getAllStepTimes(o, '21', 'step21At'), getAllStepTimes(o, '22', 'step22At'), getAllStepTimes(o, '23', 'step23At'),
     getAllStepTimes(o, '1', 'step1At'), getAllStepTimes(o, '2', 'step2At'), getAllStepTimes(o, '3', 'step3At'), getAllStepTimes(o, '4', 'step4At'),
-    getAllStepTimes(o, '5', 'step5At'), getAllStepTimes(o, '8', null), getAllStepTimes(o, '6', 'step6At'), getAllStepTimes(o, '7', 'step7At'), fmtTime(o.step11At),
-    o.step11QcActualQty != null ? o.step11QcActualQty : '',
+    getAllStepTimes(o, '5', 'step5At'), getAllStepTimes(o, '8', null), getAllStepTimes(o, '6', 'step6At'), getAllStepTimes(o, '7', 'step7At'),
+    getAllStepTimes(o, '40', null), getAllStepTimes(o, '41', null), getAllStepTimes(o, '30', null), fmtTime(o.step11At),
+    // 完成數量＝所有回報加總（見 utils.js doneQtyOf；新流程完成終止不帶數量，不能只讀 step11QcActualQty）
+    doneQtyOf(o) != null ? doneQtyOf(o) : '',
     (o.stepEntries || []).filter(e => e.stepNo === '30' && e.qcActualQty != null)
       .map(e => `${e.note || ''}=${e.qcActualQty}`).join(' / '),
-    ((o.pause12 && o.pause12.history) || []).filter(e => e.qcActualQty != null)
+    [...((o.pause12 && o.pause12.history) || []), ...((o.pause13 && o.pause13.history) || [])].filter(e => e.qcActualQty != null)
+      .sort((a, b) => new Date(a.startAt) - new Date(b.startAt))
       .map(e => `${fmtTime(e.startAt)}=${e.qcActualQty}`).join(' / '),
     ((o.pause12 && o.pause12.history) || []).filter(e => !isExcludedPause(e)).length,
     ((o.pause12 && o.pause12.history) || []).filter(e => !isExcludedPause(e)).reduce((s, e) => s + (e.duration || 0), 0),

@@ -905,7 +905,7 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260902a"></script>
+<script src="utils.js?v=20261022a"></script>
 <script>
 // 作業準備（21/22）已停用；保留空陣列給歷史資料 fallback lookup
 const PRE_STEPS = [];
@@ -1218,14 +1218,23 @@ async function setOrder(no) {
       return;
     }
   }
-  orderNo = no;
-  order = r.data.order;
+  // 已經在別台開工的單：換機台前跳提醒（這張單的生產紀錄會整張改算到新機台）
+  const ex = r.data.order;
+  const exStarted = ex && (ex.actualStartDate || (ex.stepEntries && ex.stepEntries.length) ||
+    (ex.pause12 && ex.pause12.history && ex.pause12.history.length) || (ex.pause13 && ex.pause13.history && ex.pause13.history.length));
+  if (!r.data.wasCreated && exStarted && ex.machineNo && ex.machineNo !== selectedMachine && !ex.step11At) {
+    const meshHint = (FILTER_MESH_MACHINES.has(selectedMachine) && !hasMachineSuffix)
+      ? '\n\n過濾網兩台同時生產同一張單：第二台請輸入「' + no + '@2」，不要直接輸入原單號。' : '';
+    if (!confirm('這張單已經在 ' + ex.machineNo + ' 開工了。\n\n確定要改到 ' + selectedMachine + ' 繼續生產嗎？\n這張單（包含之前的生產紀錄）都會改算在 ' + selectedMachine + '。' + meshHint + '\n\n確定要改按「確定」；不是要換機台按「取消」。')) return;
+  }
   // 設定機台到 DB
   const mr = await api('/api/orders/' + encodeURIComponent(no) + '/machine', {
     method: 'POST',
     body: { machineNo: selectedMachine },
   });
-  if (mr.ok) order = mr.data.order;
+  if (!mr.ok) { toast(mr.error || '設定機台失敗', 'error'); return; }
+  orderNo = no;
+  order = mr.data.order;
   currentSpecRows = await loadOrderSpecRows(no);   // 載入規格清單供「生產規格完成」選單
   $('orderEmpty').style.display = 'none';
   $('orderShow').style.display = 'block';
@@ -1961,7 +1970,7 @@ function renderSteps() {
         <option value="下班時間／隔日生產|12">下班時間／隔日生產</option>
       </select>
       <input type="text" id="ibf-note" placeholder="補充說明（選填）" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-size:14px;box-sizing:border-box;">
-      <input type="number" id="ibf-qc" min="0" step="1" placeholder="生產完成數量（必填，整數）" style="display:none;width:100%;padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">
+      <input type="number" id="ibf-qc" min="0" step="1" placeholder="這次新做了幾個（上次回報後新做的，必填）" style="display:none;width:100%;padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">
       <div style="display:flex;gap:6px;">
         <div style="flex:1;"><label style="font-size:11px;color:var(--muted);">開始時間</label><input type="datetime-local" id="ibf-start" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></div>
         <div style="flex:1;"><label style="font-size:11px;color:var(--muted);" id="ibf-end-label">結束時間</label><input type="datetime-local" id="ibf-end" style="width:100%;padding:8px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box;"></div>
@@ -1977,12 +1986,12 @@ function renderSteps() {
   intBody += `<div style="margin-top:14px;padding-top:14px;border-top:1.5px dashed #f0ad4e;">`;
   intBody += '<div style="font-size:13px;font-weight:700;color:#b8860b;display:flex;align-items:center;gap:6px;">' + icon('clipboard', 14) + ' 生產規格完成' +
     (specChangeEntries.length ? `<span class="badge ok" style="background:#f0ad4e;">×${specChangeEntries.length}</span>` : '') + '</div>';
-  intBody += '<div class="hint" style="margin-top:2px;">每個規格生產完成就記錄＋數量（單一規格也要記）；多規格依序填 規格1、規格2、規格3。全部完成後再按「生產完成終止」</div>';
+  intBody += '<div class="hint" style="margin-top:2px;">每個規格生產完成就記錄，數量填「上次回報後這次新做了幾個」（單一規格也要記）；多規格依序填 規格1、規格2、規格3。全部完成後再按「生產完成終止」</div>';
   specChangeEntries.forEach(e => {
     const elapsed = now - new Date(e.recordedAt).getTime();
     const canCancel = elapsed < 5 * 60 * 1000;
     const manualTag = e.isManual ? '<span class="manual-tag">補登</span>' : '';
-    const qcTag = (e.qcActualQty != null) ? `<span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">生產完成數量：${e.qcActualQty}</span>` : '';
+    const qcTag = (e.qcActualQty != null) ? `<span style="background:#1f6feb;color:#fff;font-size:10px;padding:1px 6px;border-radius:6px;font-weight:700;">這次新做：${e.qcActualQty}</span>` : '';
     intBody += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;padding:6px 10px;background:${canCancel ? '#fff4d6' : '#fff8e8'};border-radius:8px;border-left:3px solid #f0ad4e;">`;
     intBody += `<span style="font-size:12px;color:#b8860b;font-weight:600;flex:1;display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;">${icon('clipboard', 14)}${escapeHtml(e.note || '')} — ${fmtTime(e.recordedAt)}${qcTag}${manualTag}</span>`;
     if (canCancel && !isPaused) {
@@ -2009,7 +2018,7 @@ function renderSteps() {
       // 無上傳規格 → 後備手填
       intBody += `<input type="text" id="specChangeInput" placeholder="規格描述（單一規格填工單規格；多規格填 規格2、規格3）" maxlength="200" style="padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">`;
     }
-    intBody += `<input type="number" id="specChangeQcInput" min="0" step="1" placeholder="此規格實際生產數量（必填）" style="padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">`;
+    intBody += `<input type="number" id="specChangeQcInput" min="0" step="1" placeholder="這次新做了幾個（上次回報後新做的，必填）" style="padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;">`;
     intBody += `<button id="specChangeBtn" style="padding:10px 18px;background:#f0ad4e;color:#fff;border:none;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;">${icon('clipboard', 14)} 記錄規格完成</button>`;
     intBody += `</div>`;
   }
@@ -2098,11 +2107,11 @@ function renderSteps() {
       const text = (sel ? sel.value : (input?.value || '')).trim();
       if (!text) { toast(sel ? '請選擇完成的規格' : '請填入規格描述', 'error'); (sel || input)?.focus(); return; }
       const qc = Number(qcInput?.value);
-      if (!Number.isInteger(qc) || qc < 0) { toast('請填入此規格實際生產數量（非負整數）', 'error'); qcInput?.focus(); return; }
+      if (!Number.isInteger(qc) || qc < 0) { toast('請填這次新做了幾個（非負整數）', 'error'); qcInput?.focus(); return; }
       // 派工數：多規格單優先用「該規格那一列」的派工數，找不到才用整張單的
       const specRow = (currentSpecRows || []).find(r => (r.productSpec || '').trim() === text);
       const specDispatch = (specRow && specRow.dispatchQty != null) ? specRow.dispatchQty : (order && order.dispatchQty);
-      if (!confirmQtyBeforeSave(qc, '生產規格完成：' + text, specDispatch)) { qcInput?.focus(); qcInput?.select(); return; }
+      if (!confirmQtyBeforeSave(qc, '生產規格完成：' + text, specDispatch, qtySinceLastSpecDone(order))) { qcInput?.focus(); qcInput?.select(); return; }
       recordSpecChange(text, qc);
     };
   }
@@ -2266,7 +2275,7 @@ function showInterruptModal() {
         <button class="btn-secondary int-opt" data-opt="offwork" style="padding:14px;font-size:15px;text-align:left;border-radius:10px;display:flex;align-items:center;gap:10px;">${icon('coffee', 18)}<span>下班時間／隔日生產</span></button>
       </div>
       <div id="intNoteWrap" style="display:none;margin-top:10px;">
-        <input type="number" id="intQcInput" min="0" step="1" placeholder="生產完成數量（必填，整數）" style="width:100%;padding:12px;border:1.5px solid #f0ad4e;border-radius:10px;font-size:15px;box-sizing:border-box;margin-bottom:8px;">
+        <input type="number" id="intQcInput" min="0" step="1" placeholder="這次新做了幾個（上次回報後新做的，必填）" style="width:100%;padding:12px;border:1.5px solid #f0ad4e;border-radius:10px;font-size:15px;box-sizing:border-box;margin-bottom:8px;">
         <input type="text" id="intNoteInput" placeholder="" style="display:none;width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;box-sizing:border-box;">
         <div id="intTimeWrap" style="display:none;margin-top:8px;">
           <label style="font-size:11px;color:var(--muted);">生產紀錄時間（不填用現在）</label>
@@ -2314,7 +2323,7 @@ function showInterruptModal() {
       if (cfg.time) timeInput.value = '';
       confirmBtn.onclick = () => {
         const qc = Number(qcInput.value);
-        if (!Number.isInteger(qc) || qc < 0) { toast('請填生產完成數量（非負整數）', 'error'); qcInput.focus(); return; }
+        if (!Number.isInteger(qc) || qc < 0) { toast('請填這次新做了幾個（非負整數）', 'error'); qcInput.focus(); return; }
         let detail = '';
         if (cfg.note !== 'none') {
           detail = noteInput.value.trim();
@@ -2330,7 +2339,7 @@ function showInterruptModal() {
           startAt = dt.toISOString();
         }
         // 入庫前確認數量（派工數 vs QC 完成數）：按取消回到輸入框修改（視窗不關）
-        if (!confirmQtyBeforeSave(qc, cfg.title, order && order.dispatchQty)) { qcInput.focus(); qcInput.select(); return; }
+        if (!confirmQtyBeforeSave(qc, cfg.title, order && order.dispatchQty, qtySinceLastSpecDone(order))) { qcInput.focus(); qcInput.select(); return; }
         modal.remove();
         executePause({ type: cfg.type, title: cfg.title, opt: btn.dataset.opt }, fullNote, qc, startAt);
       };
@@ -2363,7 +2372,7 @@ async function submitInterruptBackfill() {
   if (!isOff && !endAt) { toast('請填寫結束時間', 'error'); return; }   // 下班可不填結束時間
   // 任何原因都要填生產完成數量
   const qcVal = Number(document.getElementById('ibf-qc').value);
-  if (!Number.isInteger(qcVal) || qcVal < 0) { toast('請填生產完成數量（非負整數）', 'error'); return; }
+  if (!Number.isInteger(qcVal) || qcVal < 0) { toast('請填這次新做了幾個（非負整數）', 'error'); return; }
   const qcActualQty = qcVal;
   const body = { type, note, startAt: new Date(startAt).toISOString(), qcActualQty };
   if (endAt) body.endAt = new Date(endAt).toISOString();
@@ -2463,15 +2472,26 @@ async function submitStepWithBody(stepId, body) {
   return true;
 }
 
-// 生產完成數量的入庫確認：並列「派工數 vs QC 完成數量」供 QC 最後比對。
+// 這個規格「上次生產規格完成之後」已經回報了幾個（暫停／下班／異常時填的，見 utils.js qtyReportsOf）
+function qtySinceLastSpecDone(o) {
+  let q = 0;
+  qtyReportsOf(o || {}).forEach(r => { q = r.kind === '30' ? 0 : q + r.qty; });
+  return q;
+}
+
+// 數量的入庫確認：每次填的是「這次新做了幾個」，所以要並列「之前已回報＋這次＝累計」再和派工數比對。
 // 按「確定」才送出入庫；按「取消」回到輸入框修改後可再次確認。
-function confirmQtyBeforeSave(qty, contextTitle, dispatchQty) {
+function confirmQtyBeforeSave(qty, contextTitle, dispatchQty, priorQty) {
   const fmt = n => Number(n).toLocaleString('zh-TW');
+  const prior = Number(priorQty) || 0;
+  const total = prior + Number(qty);
   let msg = '【QC 入庫確認】\n\n' + (contextTitle ? contextTitle + '\n\n' : '');
   msg += '派工數：' + (dispatchQty != null ? fmt(dispatchQty) : '—（無上傳資料）') + '\n';
-  msg += 'QC 完成數量：' + fmt(qty) + '\n';
-  if (dispatchQty != null && Number(qty) > Number(dispatchQty)) {
-    msg += '\n⚠ 完成數量大於派工數，請再次確認！\n';
+  if (prior > 0) msg += '之前已回報：' + fmt(prior) + '\n';
+  msg += '這次新做：' + fmt(qty) + '\n';
+  if (prior > 0) msg += '累計：' + fmt(total) + '\n';
+  if (dispatchQty != null && total > Number(dispatchQty)) {
+    msg += '\n⚠ 累計數量大於派工數，請再次確認！\n';
   }
   msg += '\n數量正確 → 按「確定」完成入庫\n發現錯誤 → 按「取消」回去修改';
   return confirm(msg);

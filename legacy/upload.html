@@ -297,7 +297,7 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260902a"></script>
+<script src="utils.js?v=20261022a"></script>
 <script>
 const me = getMe();
 let parsedRows = [];
@@ -556,6 +556,9 @@ $('uploadBtn').onclick = async () => {
   if (d.autoCancelled && d.autoCancelled.length > 0) {
     html += `<div class="result" style="margin-top:8px;background:#fff8e8;color:#b8860b;">已自動取消 ${d.autoCancelled.length} 張被抽掉的計畫單（同日同機台、未開工、不在本次清單）：<br>${d.autoCancelled.map(n => escapeHtml(n)).join('、')}<br>誤刪可請管理員從回收桶救回</div>`;
   }
+  if (d.machineKept && d.machineKept.length > 0) {
+    html += `<div class="result" style="margin-top:8px;background:#fff8e8;color:#b8860b;">⚠ 提醒：${d.machineKept.length} 張單已經在現場開工，機台維持現場實際生產的機台，沒有改成 Excel 上的機台：<br>${d.machineKept.map(k => escapeHtml(k.orderNo) + '：現場 ' + escapeHtml(k.actual) + '（Excel 寫 ' + escapeHtml(k.upload) + '）').join('<br>')}<br>如果真的要換機台，請現場在新機台開單。</div>`;
+  }
   if (d.errors && d.errors.length > 0) {
     html += `<div class="result fail" style="margin-top:8px;">錯誤 ${d.errors.length} 筆：<br>${d.errors.map(e => escapeHtml(e)).join('<br>')}</div>`;
   }
@@ -572,7 +575,10 @@ $('uploadBtn').onclick = async () => {
 
 // 今日已上傳
 async function loadTodayOrders() {
-  const r = await api('/api/orders?limit=200');
+  // 依日期向後端要今天的工單（不能用「最近更新前 200 筆」，單一多就會漏）；limit 是給舊後端的後備
+  const t0 = new Date();
+  const ymd0 = t0.getFullYear() + '-' + String(t0.getMonth()+1).padStart(2,'0') + '-' + String(t0.getDate()).padStart(2,'0');
+  const r = await api('/api/orders?from=' + ymd0 + '&to=' + ymd0 + '&limit=200');
   if (!r.ok) return;
   const all = r.data.orders || [];
   // @N（過濾網多機台）工單的規格／數量／重量掛在「@ 之前的基礎單號」；自己空白時從基礎單號帶
@@ -595,7 +601,10 @@ async function loadTodayOrders() {
   });
   if (rows.length === 0) { $('todayCard').style.display = 'none'; return; }
   $('todayCard').style.display = 'block';
-  const hasActivity = o => !!(o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At || o.step11At);
+  // 已開始生產：有任何生產紀錄（新流程的 40/41/30 在 stepEntries、暫停在 pause12/13）或舊欄位
+  const hasActivity = o => !!(o.actualStartDate || o.step11At || (o.stepEntries && o.stepEntries.length) ||
+    (o.pause12 && o.pause12.history && o.pause12.history.length) || (o.pause13 && o.pause13.history && o.pause13.history.length) ||
+    o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At);
   const active = rows.filter(hasActivity).length;
   $('todayStats').textContent = `今日上傳 ${rows.length} 筆（${active} 筆已開始生產，${rows.length - active} 筆可取消）`;
   const isAdmin = me && me.isAdmin;
@@ -655,9 +664,18 @@ let overviewOrders = [];
 async function loadOverview() {
   const content = $('overviewContent');
   content.innerHTML = '<div style="color:var(--muted);padding:30px;text-align:center;">載入中...</div>';
-  const r = await api('/api/orders?limit=500');
+  // 近 30 天～未來 14 天，依期間向後端要（不能用「最近更新前 N 筆」，舊日期的張數會變少）；limit 是給舊後端的後備
+  const fmtD = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  const fromD = new Date(); fromD.setDate(fromD.getDate() - 30);
+  const toD = new Date(); toD.setDate(toD.getDate() + 14);
+  const from = fmtD(fromD), to = fmtD(toD);
+  const r = await api('/api/orders?from=' + from + '&to=' + to + '&limit=500');
   if (!r.ok) { content.innerHTML = '<div style="color:var(--brand);padding:30px;text-align:center;">' + (r.error || '載入失敗') + '</div>'; return; }
-  overviewOrders = (r.data.orders || []);
+  // 期間查詢也會帶回「更早開工、還沒完工」的單，概覽只列這段期間內的日期
+  overviewOrders = (r.data.orders || []).filter(o => {
+    const k = o.productionDate ? String(o.productionDate).slice(0, 10) : '';
+    return !k || (k >= from && k <= to);
+  });
   if (overviewOrders.length === 0) {
     content.innerHTML = '<div style="color:var(--muted);padding:30px;text-align:center;">目前沒有工單</div>';
     return;
@@ -671,7 +689,8 @@ async function loadOverview() {
     groups[key].push(o);
   });
   const sortedDays = Object.keys(groups).sort((a, b) => b.localeCompare(a));
-  const hasActivity = o => !!(o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At || o.step11At || (o.stepEntries && o.stepEntries.length > 0));
+  const hasActivity = o => !!(o.actualStartDate || o.step1At || o.step2At || o.step3At || o.step4At || o.step5At || o.step6At || o.step7At || o.step11At || (o.stepEntries && o.stepEntries.length > 0) ||
+    (o.pause12 && o.pause12.history && o.pause12.history.length) || (o.pause13 && o.pause13.history && o.pause13.history.length));
 
   content.innerHTML = sortedDays.map(day => {
     const orders = groups[day];

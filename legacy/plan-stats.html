@@ -330,7 +330,7 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260902a"></script>
+<script src="utils.js?v=20261022a"></script>
 <script>
 const me = getMe();
 if (!me) location.href = 'index.html';
@@ -461,76 +461,48 @@ function hasProductionRecord(o) {
     (o.pause12 && o.pause12.history && o.pause12.history.length) ||
     (o.pause13 && o.pause13.history && o.pause13.history.length));
 }
+// 機台歸屬：算在「實際生產的機台」（machineNo；還沒開工的計畫單 machineNo＝上傳的計畫機台）。
+// 不能再用「machineNo 或 plannedMachineNo」——換機台的單會兩台都算。
 function orderMatchesMachine(o, machine) {
-  return o.machineNo === machine || o.plannedMachineNo === machine;
+  return (o.machineNo || o.plannedMachineNo) === machine;
 }
 
-// 一張工單的「實際生產數量」（QC 回報）
-//   已完成(step11)：Σ 各段更換規格 QC + 完成 QC
-//   未完成但有下班回報（隔日生產）：Σ 各段更換規格 QC + 最後一次下班 QC
-//   兩者都沒有：只算已結束規格段（step30）的量
+// 實際生產數量＝所有回報加總（見 utils.js doneQtyOf；每次回報都是「這次新做了幾個」）
 function actualQtyOf(o) {
-  const step30Sum = (o.stepEntries || [])
-    .filter(e => e.stepNo === '30' && e.qcActualQty != null)
-    .reduce((s, e) => s + (Number(e.qcActualQty) || 0), 0);
-  if (o.step11At && o.step11QcActualQty != null) {
-    return step30Sum + (Number(o.step11QcActualQty) || 0);
-  }
-  const offWork = ((o.pause12 && o.pause12.history) || []).filter(e => e.qcActualQty != null);
-  if (offWork.length > 0) {
-    return step30Sum + (Number(offWork[offWork.length - 1].qcActualQty) || 0);
-  }
-  return step30Sum;
+  return doneQtyOf(o) || 0;
 }
-// 計畫數量 = 派工數
+// 計畫數量＝派工數：多規格單用全部規格加總（dispatchQtyTotal）；dispatchQty 只存第一個規格。
+// @N 分機單的 dispatchQtyTotal 是母單整張的總數（每張子單都帶一份）→ 只算它自己上傳的派工，避免重複
 function plannedQtyOf(o) {
-  return Number(o.dispatchQty) || 0;
+  if ((o.orderNo || '').indexOf('@') > 0) return Number(o.dispatchQty) || 0;
+  return Number(o.dispatchQtyTotal != null ? o.dispatchQtyTotal : o.dispatchQty) || 0;
 }
 
-// 每日實際生產數量（QC 回報）→ { 'yyyy-mm-dd': 數量 }
-//   依各 QC 回報的時間點歸於當天：更換規格(30)、下班回報(pause12)、完成(11)
+// 每日實際生產數量 → { 'yyyy-mm-dd': 數量 }（依各次回報時間歸到當天，見 utils.js doneQtyByDayOf）
 function qtyByDayOf(o) {
-  const map = {};
-  const add = (t, q) => {
-    const k = ymd(t);
-    const n = Number(q);
-    if (!k || !Number.isFinite(n) || n === 0) return;
-    map[k] = (map[k] || 0) + n;
-  };
-  (o.stepEntries || []).forEach(e => {
-    if (e.stepNo === '30' && e.qcActualQty != null) add(e.recordedAt, e.qcActualQty);
-  });
-  if (o.step11At && o.step11QcActualQty != null) add(o.step11At, o.step11QcActualQty);
-  ((o.pause12 && o.pause12.history) || []).forEach(e => {
-    if (e.qcActualQty != null) add(e.startAt || e.endAt, e.qcActualQty);
-  });
-  return map;
+  return doneQtyByDayOf(o);
 }
 
-// 多規格工單拆段：每筆「生產規格完成(30)」＝一段規格
-//   回傳 [{ymd, qty, closed}]；單規格（≤1 段）回傳 null（以單列顯示）
-//   相容新舊：
-//     新流程「生產完成終止(11)」無數量 → 不算一段（規格段就是各筆生產規格完成）
-//     舊資料「完成(11)」帶數量 → 它本身是最後一個規格，補一段
+// 多規格工單拆段：每筆「生產規格完成(30)」收掉一段規格
+//   每段的量＝上一段收掉之後到本段收掉之間的所有回報（暫停／下班／異常＋本段的生產規格完成）
+//   回傳 [{ymd, qty, byDay, closed}]；單規格（≤1 段）回傳 null（以單列顯示）
+//   舊資料「完成(11)」帶數量＝最後一個規格，也收一段
 function specSegmentsOf(o) {
-  const step30s = (o.stepEntries || [])
-    .filter(e => e.stepNo === '30')
-    .sort((a, b) => new Date(a.recordedAt) - new Date(b.recordedAt));
-  const segs = step30s.map(e => ({
-    ymd: ymd(e.recordedAt),
-    qty: e.qcActualQty != null ? Number(e.qcActualQty) : null,
-    closed: true,
-  }));
-  if (o.step11At) {
-    // step11 有數量＝舊資料的「最後規格」，補一段；無數量＝純終止，不補段
-    if (o.step11QcActualQty != null) {
-      segs.push({ ymd: ymd(o.step11At), qty: Number(o.step11QcActualQty), closed: true });
+  const segs = [];
+  let cur = { qty: 0, byDay: {} };
+  qtyReportsOf(o).forEach(r => {
+    const k = ymd(r.at);
+    if (k && r.qty) { cur.byDay[k] = (cur.byDay[k] || 0) + r.qty; cur.qty += r.qty; }
+    if (r.kind === '30' || r.kind === '11') {
+      segs.push({ ...cur, ymd: k, closed: true });
+      cur = { qty: 0, byDay: {} };
     }
-  } else {
-    // 進行中：補一段「目前生產中」（最近一次下班回報量，沒有就掛今天）
-    const off = ((o.pause12 && o.pause12.history) || []).filter(e => e.qcActualQty != null);
-    const last = off[off.length - 1];
-    segs.push({ ymd: last ? ymd(last.startAt || last.endAt) : null, qty: last ? Number(last.qcActualQty) : null, closed: false });
+  });
+  if (!o.step11At) {
+    segs.push({ ...cur, ymd: null, closed: false }); // 進行中的這一段
+  } else if (cur.qty > 0) {
+    // 已完成、但最後一次生產規格完成之後還有回報：歸成收在完成日的一段
+    segs.push({ ...cur, ymd: ymd(o.step11At), closed: true });
   }
   // 單規格（0 或 1 段）→ 單列顯示
   if (segs.length <= 1) return null;
@@ -746,17 +718,9 @@ function render() {
 
     // 多規格工單：每個規格段一列（工號-1、-2…）
     //   軌跡：上一段收掉那天（第一段=工單實際開始日）→ 本段收掉那天
-    //   中途天=黃點（有下班回報附數量）；收掉那天=綠點+段數量；未收掉的最後一段畫黃到今天
+    //   中途天=黃點、收掉那天=綠點，旁邊都標「本段當天新做的數量」；未收掉的最後一段畫黃到今天
     const segs = specSegmentsOf(o);
     if (segs && segs.length > 1) {
-      // 下班回報的每日數量（標在中途天的黃點旁）
-      const offQtyByDay = {};
-      ((o.pause12 && o.pause12.history) || []).forEach(e => {
-        if (e.qcActualQty != null) {
-          const k = ymd(e.startAt || e.endAt);
-          if (k) offQtyByDay[k] = (offQtyByDay[k] || 0) + Number(e.qcActualQty);
-        }
-      });
       const orderStart = getActualStartYmd(o);
       segs.forEach((seg, i) => {
         const segStart = i === 0 ? (orderStart || seg.ymd) : segs[i - 1].ymd;
@@ -767,16 +731,12 @@ function render() {
           const isToday = dYmd === todayYmd;
           let inner = '';
           if (segStart && segEnd && dYmd >= segStart && dYmd <= segEnd) {
-            if (seg.closed && dYmd === seg.ymd) {
-              const qtyHtml = (seg.qty != null) ? `<span class="ps-qty">${seg.qty}</span>` : '';
-              if (seg.qty != null) rowSum += Number(seg.qty) || 0;
-              inner = `<span class="ps-cellwrap"><span class="ps-dot green" title="已完成"></span>${qtyHtml}</span>`;
-            } else {
-              const q = offQtyByDay[dYmd];
-              const qtyHtml = (q != null) ? `<span class="ps-qty">${q}</span>` : '';
-              if (q != null) rowSum += Number(q) || 0;
-              inner = `<span class="ps-cellwrap"><span class="ps-dot yellow" title="生產中"></span>${qtyHtml}</span>`;
-            }
+            const q = seg.byDay[dYmd];
+            const qtyHtml = (q != null) ? `<span class="ps-qty">${q}</span>` : '';
+            if (q != null) rowSum += Number(q) || 0;
+            inner = (seg.closed && dYmd === seg.ymd)
+              ? `<span class="ps-cellwrap"><span class="ps-dot green" title="已完成"></span>${qtyHtml}</span>`
+              : `<span class="ps-cellwrap"><span class="ps-dot yellow" title="生產中"></span>${qtyHtml}</span>`;
           }
           html += `<td class="ps-cell ${isToday ? 'today' : ''}">${inner}</td>`;
         }

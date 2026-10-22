@@ -121,6 +121,37 @@ function scheduleCmp(a, b) {
   return (a.orderNo || '').localeCompare(b.orderNo || '');
 }
 
+// ── 完成數量（全系統唯一定義，各頁都呼叫這裡，不要再各寫一份）──────────────
+// 現場每次回報數量（暫停／下班／異常帶的數量、生產規格完成 step 30）填的都是
+// 「上次回報之後，這次新做了幾個」→ 完成數量＝所有回報加總；舊流程完成終止（step 11）帶的量也算。
+// 2026-10 用實際資料驗證過：全部加總才與派工數吻合；只算 step 30、或只加最後一筆暫停都會錯。
+// 回傳依時間排序的回報清單 [{ at, qty, kind:'30'|'pause'|'11', note }]
+function qtyReportsOf(o) {
+  const out = [];
+  (o.stepEntries || []).forEach(e => {
+    if (e.stepNo === '30' && e.qcActualQty != null) out.push({ at: e.recordedAt, qty: Number(e.qcActualQty) || 0, kind: '30', note: e.note || '' });
+  });
+  [o.pause12, o.pause13].forEach(p => ((p && p.history) || []).forEach(e => {
+    if (e.qcActualQty != null) out.push({ at: e.startAt || e.endAt, qty: Number(e.qcActualQty) || 0, kind: 'pause', note: e.note || '' });
+  }));
+  if (o.step11QcActualQty != null) out.push({ at: o.step11At || o.updatedAt, qty: Number(o.step11QcActualQty) || 0, kind: '11', note: '' });
+  return out.sort((a, b) => new Date(a.at) - new Date(b.at));
+}
+// 整張單的完成數量；完全沒有回報過 → null（畫面顯示「—」）
+function doneQtyOf(o) {
+  const r = qtyReportsOf(o);
+  return r.length ? r.reduce((s, x) => s + x.qty, 0) : null;
+}
+// 每天新做的數量（依回報時間歸到台灣日期）→ { 'YYYY-MM-DD': 數量 }
+function doneQtyByDayOf(o) {
+  const map = {};
+  qtyReportsOf(o).forEach(x => {
+    const k = plannedYmdLocal(x.at);
+    if (k && x.qty) map[k] = (map[k] || 0) + x.qty;
+  });
+  return map;
+}
+
 // 各機台每日工時目標（分鐘）— 本日匯總用
 // workMinutes = 穩定生產目標、prepMinutes = 生產準備目標、capacityKg = 產能目標
 const MACHINE_TARGETS = {

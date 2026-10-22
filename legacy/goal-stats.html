@@ -190,7 +190,7 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260902a"></script>
+<script src="utils.js?v=20261022a"></script>
 <script>
 const me = getMe();
 if (!me) location.href = 'index.html';
@@ -260,18 +260,8 @@ function ymd(d) {
   return dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
 }
 function getCompletionYmd(o) { return ymd(o.step11At); }
-function orderMatchesMachine(o, m) { return o.machineNo === m || o.plannedMachineNo === m; }
-
-// 一張工單的實際生產數量（QC 回報）— 與即時頁 / 計畫頁同邏輯
-function actualQtyOf(o) {
-  const step30Sum = (o.stepEntries || [])
-    .filter(e => e.stepNo === '30' && e.qcActualQty != null)
-    .reduce((s, e) => s + (Number(e.qcActualQty) || 0), 0);
-  if (o.step11At && o.step11QcActualQty != null) return step30Sum + (Number(o.step11QcActualQty) || 0);
-  const offWork = ((o.pause12 && o.pause12.history) || []).filter(e => e.qcActualQty != null);
-  if (offWork.length > 0) return step30Sum + (Number(offWork[offWork.length - 1].qcActualQty) || 0);
-  return step30Sum;
-}
+// 機台工時只算在「實際生產的機台」（換機台的單不能兩台都算）
+function orderMatchesMachine(o, m) { return (o.machineNo || o.plannedMachineNo) === m; }
 
 // 一張工單橫跨的所有日期（YYYY-MM-DD）：第一筆活動 → 最後一筆活動
 function orderActiveDates(o) {
@@ -292,17 +282,23 @@ function orderActiveDates(o) {
 }
 
 // 一張工單的理論時間（標準工時，分鐘）＝ Σ 各段規格「刀數 ÷ SPM × 該段實際數量」
-// 刀數／SPM 以生管上傳為準；生管沒填的欄位改用現場「製造參數」（mfgSpecRows）補
-// 多規格：每次「生產規格完成」(step 30) 是一段（note＝該段規格），最後一段＝完工／下班回報的量；
-//   各段對應製造參數的哪一列：規格裡 3 位數以上的尺寸（如 1890）唯一對上某列就用該列，否則依順序（第 i 段 → 第 i 列）
+// 分段：每次「生產規格完成」(step 30) 收掉一段（note＝該段規格）；每段數量＝上一段收掉之後到這次之間
+//   所有回報的加總（每次回報都是「這次新做了幾個」，見 utils.js qtyReportsOf）；最後還沒收的量另成一段
+// 刀數／SPM 以生管上傳為準：多規格單用該段規格自己的上傳值（uploadSpecRows，依規格文字對應），
+//   對不上才用工單主檔的值（只存第一個規格）；生管沒填的改用現場「製造參數」（mfgSpecRows）補
+//   製造參數對應哪一列：規格裡 3 位數以上的尺寸（如 1890）唯一對上某列就用該列，否則依順序（第 i 段 → 第 i 列）
 function stdMinutesOf(o) {
   const upBlades = Number(o.bladeCount) || 0, upSpm = Number(o.machineSPM) || 0;
+  const up = o.uploadSpecRows || [];
   const mfg = o.mfgSpecRows || [];
-  const segs = (o.stepEntries || [])
-    .filter(e => e.stepNo === '30' && e.qcActualQty != null)
-    .map(e => ({ spec: e.note || '', qty: Number(e.qcActualQty) || 0 }));
-  const lastQty = actualQtyOf(o) - segs.reduce((s, x) => s + x.qty, 0);
-  if (lastQty > 0) segs.push({ spec: '', qty: lastQty });
+  const segs = [];
+  let qty = 0;
+  qtyReportsOf(o).forEach(r => {
+    qty += r.qty;
+    if (r.kind === '30') { segs.push({ spec: r.note, qty }); qty = 0; }
+  });
+  if (qty > 0) segs.push({ spec: '', qty });
+  const upFor = seg => (seg.spec && up.find(r => r.spec && r.spec.trim() === seg.spec.trim())) || null;
   const rowFor = (seg, i) => {
     if (mfg.length <= 1) return mfg[0] || null;
     const hit = mfg.filter(r => (String(r.spec).match(/\d{3,}/g) || [])
@@ -310,9 +306,12 @@ function stdMinutesOf(o) {
     return hit.length === 1 ? hit[0] : mfg[Math.min(i, mfg.length - 1)];
   };
   return segs.reduce((sum, seg, i) => {
+    const u = upFor(seg);
     const row = rowFor(seg, i);
-    const blades = upBlades > 0 ? upBlades : (row && row.blades) || 0;
-    const spm = upSpm > 0 ? upSpm : (row && row.spm) || 0;
+    // 多規格單對不上規格時，主檔的值是「第一個規格」的，不能套到別的規格 → 先用現場製造參數
+    const orderLevelOk = up.length <= 1;
+    const blades = (u && u.blades) || (orderLevelOk && upBlades) || (row && row.blades) || upBlades || 0;
+    const spm = (u && u.spm) || (orderLevelOk && upSpm) || (row && row.spm) || upSpm || 0;
     return sum + ((blades > 0 && spm > 0 && seg.qty > 0) ? blades / spm * seg.qty : 0);
   }, 0);
 }

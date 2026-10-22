@@ -191,6 +191,14 @@ export default async function orderRoutes(fastify) {
   });
 
   // 記錄工序（可重複，日誌式；支援補登自訂時間）
+  // 已完成的工單不能再記錄生產（工序、暫停、換機台）：要繼續做請管理員「重新開啟」。
+  // 例外：補登「完成時間之前」的紀錄（事後補記漏掉的）；管理員不受限（修正資料用）。
+  const DONE_LOCK_MSG = '此工單已完成，不能再記錄生產。如需繼續生產，請管理員到「生產實態紀錄」把這張單重新開啟';
+  function lockedAfterDone(order, user, eventTime) {
+    if (!order.step11At || (user && user.isAdmin)) return false;
+    return !eventTime || eventTime > order.step11At;
+  }
+
   fastify.post('/:orderNo/step-entries', async (request, reply) => {
     const orderNo = String(request.params.orderNo || '').toUpperCase();
     const { stepNo, recordedAt: manualTime, note: rawNote, qcActualQty: rawQc } = request.body || {};
@@ -208,12 +216,15 @@ export default async function orderRoutes(fastify) {
     if (stepNo === '30') {
       const n = Number(rawQc);
       if (!Number.isInteger(n) || n < 0) {
-        return reply.code(400).send({ error: '請填入此規格實際生產數量（非負整數）' });
+        return reply.code(400).send({ error: '請填這次新做了幾個（非負整數）' });
       }
       qcActualQty = n;
     }
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) return reply.code(404).send({ error: '找不到工單' });
+    if (lockedAfterDone(order, request.user, manualTime ? new Date(manualTime) : new Date())) {
+      return reply.code(409).send({ error: DONE_LOCK_MSG });
+    }
     // 防呆：生產規格完成（更換規格）前，設備「製造參數」必須已填（僅 No1–No6）
     if (stepNo === '30' && MFG_PARAM_REQUIRED_MACHINES.has(order.machineNo)) {
       const missing = await getMissingManufacturingParams(fastify.prisma, order);
@@ -367,6 +378,9 @@ export default async function orderRoutes(fastify) {
       order = await fastify.prisma.order.create({
         data: { orderNo, leaderId: request.user.id },
       });
+    }
+    if (order.machineNo && order.machineNo !== String(machineNo).trim() && lockedAfterDone(order, request.user, new Date())) {
+      return reply.code(409).send({ error: DONE_LOCK_MSG });
     }
     const updated = await fastify.prisma.order.update({
       where: { orderNo },
@@ -661,6 +675,9 @@ export default async function orderRoutes(fastify) {
       });
     }
 
+    if (step !== '11' && lockedAfterDone(order, request.user, manualTime ? new Date(manualTime) : new Date())) {
+      return reply.code(409).send({ error: DONE_LOCK_MSG });
+    }
     // 防呆：生產完成終止前，設備「製造參數」必須已填（僅 No1–No6）
     if (step === '11' && MFG_PARAM_REQUIRED_MACHINES.has(order.machineNo)) {
       const missing = await getMissingManufacturingParams(fastify.prisma, order);
@@ -725,6 +742,12 @@ export default async function orderRoutes(fastify) {
 
     const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
     if (!order) return reply.code(404).send({ error: '找不到工單' });
+    // 取消「完成」＝重新開啟工單：只有管理員可以（現場要繼續做，請管理員開）
+    if (step === '11') {
+      if (!request.user.isAdmin) return reply.code(403).send({ error: '只有管理員可以重新開啟已完成的工單' });
+      if (!order.step11At) return reply.code(400).send({ error: '這張單還沒完成，不需要重新開啟' });
+      await audit(fastify.prisma, request, 'reopen_order', orderNo, `原完成時間=${order.step11At.toISOString()}`);
+    }
 
     const updateData = { [cols.time]: null };
     if (cols.note) updateData[cols.note] = null;
@@ -754,13 +777,13 @@ export default async function orderRoutes(fastify) {
     if (rawQc !== undefined && rawQc !== null && rawQc !== '') {
       const n = Number(rawQc);
       if (!Number.isInteger(n) || n < 0) {
-        return reply.code(400).send({ error: '生產完成數量必須是非負整數' });
+        return reply.code(400).send({ error: '這次新做了幾個必須是非負整數' });
       }
       qcActualQty = n;
     }
     const isOffWork = type === '12' && typeof note === 'string' && note.includes('下班');
     if (isOffWork && qcActualQty === null) {
-      return reply.code(400).send({ error: '請填入此規格實際生產數量（非負整數）' });
+      return reply.code(400).send({ error: '請填這次新做了幾個（非負整數）' });
     }
     // 可指定暫停（生產紀錄）時間；不帶則用現在
     let pauseStart = new Date();
@@ -772,6 +795,7 @@ export default async function orderRoutes(fastify) {
       if (parsed > new Date()) return reply.code(400).send({ error: '時間不能超過現在' });
       pauseStart = parsed;
     }
+    if (lockedAfterDone(order, request.user, pauseStart)) return reply.code(409).send({ error: DONE_LOCK_MSG });
     await setActualStartDate(fastify, order, pauseStart);
     await fastify.prisma.pauseEvent.create({
       data: { orderId: order.id, type, note: clipStr(note, 500), activeStep: clipStr(activeStep, 100), qcActualQty, startAt: pauseStart },
@@ -830,6 +854,7 @@ export default async function orderRoutes(fastify) {
       const activeSame = await fastify.prisma.pauseEvent.findFirst({ where: { orderId: order.id, type, endAt: null } });
       if (activeSame) return reply.code(409).send({ error: '已有進行中的暫停，請先恢復或填結束時間' });
     }
+    if (lockedAfterDone(order, request.user, endAt || startAt)) return reply.code(409).send({ error: DONE_LOCK_MSG });
     const backfillNote = '【補登】' + (note || '');
     // 補登暫停的 QC 實際生產數量：選填（事後補登可能已不知道）
     let qcActualQty = null;
@@ -882,6 +907,7 @@ export default async function orderRoutes(fastify) {
 
     let created = 0, updated = 0, skipped = 0, errors = [];
     const processedOrderNos = [];
+    const machineKept = []; // 已開工、Excel 機台不同 → 機台維持現場的（回給生管提醒）
     const rawRows = []; // 收集原始資料
 
     for (const [rowIndex, row] of rows.entries()) {
@@ -952,10 +978,20 @@ export default async function orderRoutes(fastify) {
           const specMatch = revivedFresh || !existing.productSpec || !data.productSpec || existing.productSpec === data.productSpec;
           if (specMatch) {
             // 上傳有值就覆蓋；上傳沒值才保留舊值
-            // 包含 machineNo — 生管要能隨時換機台（即使工單已開工）
             const merged = {};
             for (const key of Object.keys(data)) {
               merged[key] = (data[key] != null && data[key] !== '') ? data[key] : existing[key];
+            }
+            // 已開工的單：機台以現場實際生產的為準，不被 Excel 改走（否則已做的工時會整批算到別台）；
+            // 計畫機台 plannedMachineNo 照 Excel 更新，並回報給生管提醒
+            const started = existing.machineNo && merged.machineNo && merged.machineNo !== existing.machineNo && (
+              existing.actualStartDate || existing.step11At ||
+              (await fastify.prisma.stepEntry.count({ where: { orderId: existing.id, deletedAt: null } })) > 0 ||
+              (await fastify.prisma.pauseEvent.count({ where: { orderId: existing.id, deletedAt: null } })) > 0);
+            if (started) {
+              machineKept.push({ orderNo, actual: existing.machineNo, upload: merged.machineNo });
+              rawRow.errorMsg = `已在 ${existing.machineNo} 開工，機台維持不變（Excel 為 ${merged.machineNo}）`;
+              merged.machineNo = existing.machineNo;
             }
             await fastify.prisma.order.update({ where: { orderNo }, data: merged });
             rawRow.status = 'updated';
@@ -1024,7 +1060,7 @@ export default async function orderRoutes(fastify) {
       }
     }
 
-    return { ok: true, created, updated, skipped, errors, total: rows.length, batchId: batch.id, autoCancelled };
+    return { ok: true, created, updated, skipped, errors, total: rows.length, batchId: batch.id, autoCancelled, machineKept };
   });
 
   // 客戶名稱補登（管理員）：簡表（工單號＋客戶名稱）一次補齊
@@ -1414,13 +1450,20 @@ export default async function orderRoutes(fastify) {
     const uploadRows = baseNos.length === 0 ? [] : await prisma.uploadRow.findMany({
       where: { orderNo: { in: baseNos }, status: { not: 'error' }, batch: { cancelledAt: null } },
       orderBy: [{ batchId: 'asc' }, { id: 'asc' }], // 舊→新，讓較新批次覆蓋
-      select: { orderNo: true, productSpec: true, dispatchQty: true },
+      select: { orderNo: true, productSpec: true, dispatchQty: true, bladeCount: true, machineSPM: true },
     });
     const specQtyByOrder = new Map(); // orderNo → Map(productSpec → dispatchQty)
+    const specParamsByOrder = new Map(); // orderNo → Map(productSpec → { blades, spm })：多規格單各規格自己的刀數／SPM
     for (const r of uploadRows) {
+      const spec = (r.productSpec || '').trim();
       let m = specQtyByOrder.get(r.orderNo);
       if (!m) specQtyByOrder.set(r.orderNo, (m = new Map()));
-      m.set((r.productSpec || '').trim(), r.dispatchQty);
+      m.set(spec, r.dispatchQty);
+      if (spec && (r.bladeCount || r.machineSPM)) {
+        let pm = specParamsByOrder.get(r.orderNo);
+        if (!pm) specParamsByOrder.set(r.orderNo, (pm = new Map()));
+        pm.set(spec, { spec, blades: r.bladeCount || null, spm: r.machineSPM || null });
+      }
     }
     const dispatchTotals = {};
     const uploadSpecs = {};  // 母單號 → 上傳明細第一列的規格（主檔規格缺漏時前端退用）
@@ -1449,6 +1492,8 @@ export default async function orderRoutes(fastify) {
       if (total != null) s.dispatchQtyTotal = total;
       const mfg = mfgRowsByOrder.get(o.id);
       if (mfg) s.mfgSpecRows = mfg;
+      const ups = specParamsByOrder.get(base);
+      if (ups) s.uploadSpecRows = [...ups.values()];
       // 主檔規格缺漏時附上上傳明細的規格：bulk-upload 對「規格不一致的列」
       // 會整列跳過（防蓋錯單），副作用是主檔規格可能一直是空的，
       // 看板只讀主檔就會顯示「生產規格尚未上傳」，但規格卡（讀明細）有資料。

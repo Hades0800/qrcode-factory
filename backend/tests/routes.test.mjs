@@ -411,9 +411,9 @@ await test('bulk-cancel-upload：沒紀錄的工單也只清欄位、不軟刪�
   assert.equal(stored.productSpec, null, 'productSpec 應被清空');
 });
 
-await test('bulk-upload：已有活動的工單，上傳覆蓋 machineNo（生管要能換機台）', async () => {
+await test('bulk-upload：已開工的工單，上傳不改 machineNo、回報提醒（2026-10 起）', async () => {
   // 情境：班長已在 No3-60 記錄工單 C1，生管重新上傳同一工單但 Excel 寫 No5-40
-  // 期望：machineNo 跟著 Excel 改成 No5-40（生管的資料庫換機台），plannedMachineNo 同步
+  // 期望：machineNo 維持現場的 No3-60（已做的工時不能被搬到別台），plannedMachineNo 照 Excel，回傳 machineKept 提醒
   const { fastify, state } = await buildApp(PLANNER);
   const order = await fastify.prisma.order.create({
     data: { orderNo: 'C0000000001', machineNo: 'No3-60', productSpec: 'SPEC-A', dispatchQty: 100 },
@@ -429,9 +429,64 @@ await test('bulk-upload：已有活動的工單，上傳覆蓋 machineNo（生�
   });
   assert.equal(res.statusCode, 200);
   const stored = state.orders.get('C0000000001');
-  assert.equal(stored.machineNo, 'No5-40', 'machineNo 應跟著 Excel 換成 No5-40');
-  assert.equal(stored.plannedMachineNo, 'No5-40', 'plannedMachineNo 同步改 No5-40');
+  assert.equal(stored.machineNo, 'No3-60', '已開工：machineNo 維持現場的 No3-60');
+  assert.equal(stored.plannedMachineNo, 'No5-40', 'plannedMachineNo 照 Excel 改 No5-40');
   assert.equal(stored.dispatchQty, 200, '其他欄位應正常更新');
+  assert.deepEqual(JSON.parse(res.body).machineKept, [{ orderNo: 'C0000000001', actual: 'No3-60', upload: 'No5-40' }], '要回報提醒');
+});
+
+// ── 已完成的工單：現場不能再記錄；只有管理員能重新開啟（2026-10 起）──
+const LEADER = { id: 3, username: 'leader', displayName: '班長', isAdmin: false, isPlanner: false };
+const doneAt = new Date(Date.now() - 3600 * 1000);
+
+await test('已完成的單：現場再記錄工序 → 409（請管理員重新開啟）', async () => {
+  const { fastify } = await buildApp(LEADER);
+  await fastify.prisma.order.create({ data: { orderNo: 'D0000000001', machineNo: 'No1-350', step11At: doneAt } });
+  const res = await fastify.inject({ method: 'POST', url: '/api/orders/D0000000001/step-entries', payload: { stepNo: '41' } });
+  assert.equal(res.statusCode, 409);
+  assert.match(JSON.parse(res.body).error, /重新開啟/);
+  await fastify.close();
+});
+
+await test('已完成的單：現場再按暫停 → 409', async () => {
+  const { fastify } = await buildApp(LEADER);
+  await fastify.prisma.order.create({ data: { orderNo: 'D0000000002', machineNo: 'No1-350', step11At: doneAt } });
+  const res = await fastify.inject({ method: 'POST', url: '/api/orders/D0000000002/pause', payload: { type: '12', note: '中午休息', qcActualQty: 5 } });
+  assert.equal(res.statusCode, 409);
+  await fastify.close();
+});
+
+await test('已完成的單：換到別台機台 → 409；同一台照常開', async () => {
+  const { fastify } = await buildApp(LEADER);
+  await fastify.prisma.order.create({ data: { orderNo: 'D0000000003', machineNo: 'No1-350', step11At: doneAt } });
+  const other = await fastify.inject({ method: 'POST', url: '/api/orders/D0000000003/machine', payload: { machineNo: 'No2-250' } });
+  assert.equal(other.statusCode, 409);
+  await fastify.close();
+});
+
+await test('已完成的單：補登完成之前的暫停不受限', async () => {
+  const { fastify, state } = await buildApp(LEADER);
+  await fastify.prisma.order.create({ data: { orderNo: 'D0000000004', machineNo: 'No1-350', step11At: doneAt } });
+  const res = await fastify.inject({ method: 'POST', url: '/api/orders/D0000000004/pause-backfill', payload: {
+    type: '12', note: '中午休息', startAt: new Date(doneAt - 3 * 3600e3).toISOString(), endAt: new Date(doneAt - 2 * 3600e3).toISOString(), qcActualQty: 3 } });
+  assert.notEqual(res.statusCode, 409, '完成前的補登應允許');
+  assert.equal([...state.pauseEvents.values()].length, 1);
+  await fastify.close();
+});
+
+await test('重新開啟（取消完成）：現場 → 403；管理員 → 成功並留操作紀錄', async () => {
+  const leader = await buildApp(LEADER);
+  await leader.fastify.prisma.order.create({ data: { orderNo: 'D0000000005', machineNo: 'No1-350', step11At: doneAt } });
+  const r1 = await leader.fastify.inject({ method: 'DELETE', url: '/api/orders/D0000000005/steps/11' });
+  assert.equal(r1.statusCode, 403);
+  await leader.fastify.close();
+  const admin = await buildApp(ADMIN);
+  await admin.fastify.prisma.order.create({ data: { orderNo: 'D0000000006', machineNo: 'No1-350', step11At: doneAt } });
+  const r2 = await admin.fastify.inject({ method: 'DELETE', url: '/api/orders/D0000000006/steps/11' });
+  assert.equal(r2.statusCode, 200);
+  assert.equal(admin.state.orders.get('D0000000006').step11At, null, '完成時間應清掉');
+  assert.equal(admin.state.auditLogs[0].action, 'reopen_order');
+  await admin.fastify.close();
 });
 
 await test('bulk-upload：新工單上傳，machineNo 與 plannedMachineNo 同步寫入', async () => {

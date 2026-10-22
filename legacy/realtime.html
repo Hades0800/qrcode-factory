@@ -670,7 +670,7 @@
 <button id="backTopBtn" class="back-top" aria-label="回到頁面頂部">▲ 至頂</button>
 
 <script src="config.js"></script>
-<script src="utils.js?v=20260902a"></script>
+<script src="utils.js?v=20261022a"></script>
 <script>
 const MACHINES = [
   { id: 'No1-350', num: 'No1', spec: '350' },
@@ -793,15 +793,9 @@ function mbOrdersFor(machineId) {
     .sort(scheduleCmp);
 }
 
-// 完成數 =「各規格完成生產的總數」：
-//   加總每筆「生產規格完成」(step 30) 回報的數量；
-//   多規格單最後一段規格的量記在完成終止（step11QcActualQty），一併計入。
-//   下班／中斷回報的當日數量「不計」——那是同批貨的中途回報，規格完成時會整段再報一次，加了會重複。
+// 完成數＝所有回報加總（暫停／下班／異常／生產規格完成，每次填的都是「這次新做了幾個」），見 utils.js doneQtyOf
 function mbDoneQty(o) {
-  let sum = 0, has = false;
-  (o.stepEntries || []).forEach(e => { if (e.stepNo === '30' && e.qcActualQty != null) { sum += e.qcActualQty; has = true; } });
-  if (o.step11QcActualQty != null) { sum += o.step11QcActualQty; has = true; }
-  return has ? sum : null;
+  return doneQtyOf(o);
 }
 
 function mbStateFor(machineId) {
@@ -1112,23 +1106,10 @@ function renderContent() {
   const totalOrders = machineOrders.length;
   const completedOrders = machineOrders.filter(o => o.step11At).length;
 
-  // 一張工單的「實際生產數量」
-  //   已完成(step11)：Σ 各段更換規格 QC + 完成 QC（單一規格時 step30Sum=0，等於完成量）
-  //   未完成但有下班回報（隔日生產）：Σ 各段更換規格 QC + 最後一次下班 QC
-  //   兩者都沒有：只算已結束規格段（step30）的量
+  // 一張工單「今天」新做的數量（產能／效率是每日目標，不能拿整張單的累計數；見 utils.js doneQtyByDayOf）
+  const todayKey = todayYmd();
   function actualQtyOf(o) {
-    const step30Sum = (o.stepEntries || [])
-      .filter(e => e.stepNo === '30' && e.qcActualQty != null)
-      .reduce((s, e) => s + (Number(e.qcActualQty) || 0), 0);
-    if (o.step11At && o.step11QcActualQty != null) {
-      return step30Sum + (Number(o.step11QcActualQty) || 0);
-    }
-    // 下班回報：pause12 history 中帶 qcActualQty 的就是「下班」事件
-    const offWork = ((o.pause12 && o.pause12.history) || []).filter(e => e.qcActualQty != null);
-    if (offWork.length > 0) {
-      return step30Sum + (Number(offWork[offWork.length - 1].qcActualQty) || 0);
-    }
-    return step30Sum;
+    return doneQtyByDayOf(o)[todayKey] || 0;
   }
 
   // 生產產能 / 達成度
