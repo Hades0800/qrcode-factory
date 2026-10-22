@@ -952,7 +952,7 @@ async function loadOrderSpecRows(no) {
     const rows = (r.ok && r.data.rows) ? r.data.rows : [];
     const seen = new Set();
     return rows.filter(rw => {
-      const k = (rw.productSpec || '').trim();
+      const k = specKey(rw.productSpec);
       if (!k || seen.has(k)) return false;
       seen.add(k); return true;
     });
@@ -2005,10 +2005,10 @@ function renderSteps() {
     intBody += `<div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">`;
     if (currentSpecRows.length > 0) {
       // 有上傳規格 → 下拉選單（已記錄過的規格標示「已完成」）
-      const doneSpecs = new Set(specChangeEntries.map(e => (e.note || '').trim()));
+      const doneSpecs = new Set(specChangeEntries.map(e => specKey(e.note)));
       const opts = currentSpecRows.map((rw, i) => {
         const spec = (rw.productSpec || '').trim();
-        const done = doneSpecs.has(spec);
+        const done = doneSpecs.has(specKey(spec));
         return `<option value="${escapeHtml(spec)}"${done ? ' disabled' : ''}>規格${i + 1}：${escapeHtml(spec)}${done ? '（已完成）' : ''}</option>`;
       }).join('');
       intBody += `<select id="specChangeSelect" style="padding:10px;border:1.5px solid #f0ad4e;border-radius:8px;font-size:14px;box-sizing:border-box;background:#fff;">
@@ -2109,7 +2109,7 @@ function renderSteps() {
       const qc = Number(qcInput?.value);
       if (!Number.isInteger(qc) || qc < 0) { toast('請填這次新做了幾個（非負整數）', 'error'); qcInput?.focus(); return; }
       // 派工數：多規格單優先用「該規格那一列」的派工數，找不到才用整張單的
-      const specRow = (currentSpecRows || []).find(r => (r.productSpec || '').trim() === text);
+      const specRow = (currentSpecRows || []).find(r => specKey(r.productSpec) === specKey(text));
       const specDispatch = (specRow && specRow.dispatchQty != null) ? specRow.dispatchQty : (order && order.dispatchQty);
       if (!confirmQtyBeforeSave(qc, '生產規格完成：' + text, specDispatch, qtySinceLastSpecDone(order))) { qcInput?.focus(); qcInput?.select(); return; }
       recordSpecChange(text, qc);

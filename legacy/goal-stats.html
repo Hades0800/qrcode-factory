@@ -298,7 +298,7 @@ function stdMinutesOf(o) {
     if (r.kind === '30') { segs.push({ spec: r.note, qty }); qty = 0; }
   });
   if (qty > 0) segs.push({ spec: '', qty });
-  const upFor = seg => (seg.spec && up.find(r => r.spec && r.spec.trim() === seg.spec.trim())) || null;
+  const upFor = seg => (seg.spec && up.find(r => r.spec && specKey(r.spec) === specKey(seg.spec))) || null;
   const rowFor = (seg, i) => {
     if (mfg.length <= 1) return mfg[0] || null;
     const hit = mfg.filter(r => (String(r.spec).match(/\d{3,}/g) || [])

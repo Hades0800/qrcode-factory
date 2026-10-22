@@ -121,6 +121,11 @@ function scheduleCmp(a, b) {
   return (a.orderNo || '').localeCompare(b.orderNo || '');
 }
 
+// 規格比對用的鍵：去掉所有空白（生管 Excel 的規格常多空白，多一個空白不能算成另一個規格）
+function specKey(s) {
+  return String(s == null ? '' : s).replace(/\s+/g, '');
+}
+
 // ── 完成數量（全系統唯一定義，各頁都呼叫這裡，不要再各寫一份）──────────────
 // 現場每次回報數量（暫停／下班／異常帶的數量、生產規格完成 step 30）填的都是
 // 「上次回報之後，這次新做了幾個」→ 完成數量＝所有回報加總；舊流程完成終止（step 11）帶的量也算。

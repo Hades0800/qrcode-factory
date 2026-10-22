@@ -191,6 +191,9 @@ export default async function orderRoutes(fastify) {
   });
 
   // 記錄工序（可重複，日誌式；支援補登自訂時間）
+  // 規格比對用的鍵：去掉所有空白（生管 Excel 的規格常多空白，多一個空白不能算成另一個規格）
+  const specKey = s => String(s == null ? '' : s).replace(/\s+/g, '');
+
   // 已完成的工單不能再記錄生產（工序、暫停、換機台）：要繼續做請管理員「重新開啟」。
   // 例外：補登「完成時間之前」的紀錄（事後補記漏掉的）；管理員不受限（修正資料用）。
   const DONE_LOCK_MSG = '此工單已完成，不能再記錄生產。如需繼續生產，請管理員到「生產實態紀錄」把這張單重新開啟';
@@ -975,7 +978,7 @@ export default async function orderRoutes(fastify) {
         if (existing) {
           // 剛救回的未開工單＝重新排單，規格以本次上傳為準（不因規格不同而跳過）
           const revivedFresh = !!deletedSame && !existing.actualStartDate && !existing.step11At;
-          const specMatch = revivedFresh || !existing.productSpec || !data.productSpec || existing.productSpec === data.productSpec;
+          const specMatch = revivedFresh || !existing.productSpec || !data.productSpec || specKey(existing.productSpec) === specKey(data.productSpec);
           if (specMatch) {
             // 上傳有值就覆蓋；上傳沒值才保留舊值
             const merged = {};
@@ -1423,7 +1426,7 @@ export default async function orderRoutes(fastify) {
     // 依 productSpec 去重：Map.set 會更新值但保留首次出現的排列位置 → 舊規格在前、新規格接續在後
     const bySpec = new Map();
     for (const r of allRows) {
-      bySpec.set((r.productSpec || '').trim(), r);
+      bySpec.set(specKey(r.productSpec), r);
     }
     const rows = [...bySpec.values()];
     return { rows };
@@ -1456,13 +1459,14 @@ export default async function orderRoutes(fastify) {
     const specParamsByOrder = new Map(); // orderNo → Map(productSpec → { blades, spm })：多規格單各規格自己的刀數／SPM
     for (const r of uploadRows) {
       const spec = (r.productSpec || '').trim();
+      const key = specKey(spec);
       let m = specQtyByOrder.get(r.orderNo);
       if (!m) specQtyByOrder.set(r.orderNo, (m = new Map()));
-      m.set(spec, r.dispatchQty);
-      if (spec && (r.bladeCount || r.machineSPM)) {
+      m.set(key, r.dispatchQty);
+      if (key && (r.bladeCount || r.machineSPM)) {
         let pm = specParamsByOrder.get(r.orderNo);
         if (!pm) specParamsByOrder.set(r.orderNo, (pm = new Map()));
-        pm.set(spec, { spec, blades: r.bladeCount || null, spm: r.machineSPM || null });
+        pm.set(key, { spec, blades: r.bladeCount || null, spm: r.machineSPM || null });
       }
     }
     const dispatchTotals = {};

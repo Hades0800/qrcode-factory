@@ -572,34 +572,35 @@ function render() {
     return c === refYmd && p && p < refYmd;
   }).length;
 
-  // === 數量基準達成率（以實際生產數量計算）===
+  // === 數量基準達成率（2026-10 起）===
   // 計畫數量：依「計畫日期」歸到該日（Σ 派工數）
-  // 完成數量：依「完成日期」歸到該日（Σ 實際生產數量 QC）
+  // 實際生產數量：依每次回報的時間歸到「實際做的那天」（跨日、跨月的單只算當天做的量）
+  // 不能用「完成那天整張單的量」：做了好幾天的單會全部擠在完成那天，那天的達成率衝到上萬 %
   const machineOrders = allOrders.filter(o => orderMatchesMachine(o, machine));
   const plannedByDay = {};
-  const completedByDay = {};
+  const producedByDay = {};
   machineOrders.forEach(o => {
     const p = getPlannedYmd(o);
     if (p && p.startsWith(monthStr)) plannedByDay[p] = (plannedByDay[p] || 0) + plannedQtyOf(o);
-    const c = getCompletionYmd(o);
-    if (c && c.startsWith(monthStr)) completedByDay[c] = (completedByDay[c] || 0) + actualQtyOf(o);
+    const m = qtyByDayOf(o);
+    Object.keys(m).forEach(k => { if (k.startsWith(monthStr)) producedByDay[k] = (producedByDay[k] || 0) + m[k]; });
   });
 
-  // 日達成率 = 當日完成數量 / 當日計畫數量
+  // 本日達成率 = 今天實際做了幾個 ÷ 今天計畫做幾個
   const dayPlannedQty = plannedByDay[refYmd] || 0;
-  const dayCompletedQty = completedByDay[refYmd] || 0;
-  const dayRate = dayPlannedQty > 0 ? (dayCompletedQty / dayPlannedQty * 100).toFixed(1) : null;
+  const dayProducedQty = producedByDay[refYmd] || 0;
+  const dayRate = dayPlannedQty > 0 ? (dayProducedQty / dayPlannedQty * 100).toFixed(1) : null;
 
-  // 月達成率 = Σ(每日達成率) / 當月日曆天數（本月只算到今天）
+  // 月達成率 = 這個月實際做了幾個 ÷ 這個月計畫做幾個（本月只算到今天）
+  //   不再用「每日達成率的平均」：週末沒排計畫也算 0%、單日極端值會把整個月拉歪
   const lastDay = todayInThisMonth ? refDay : daysInMonth;
-  let rateSum = 0;
+  let monthPlannedQty = 0, monthProducedQty = 0;
   for (let d = 1; d <= lastDay; d++) {
     const key = monthStr + '-' + String(d).padStart(2, '0');
-    const pq = plannedByDay[key] || 0;
-    const cq = completedByDay[key] || 0;
-    rateSum += pq > 0 ? (cq / pq) : 0;
+    monthPlannedQty += plannedByDay[key] || 0;
+    monthProducedQty += producedByDay[key] || 0;
   }
-  const monthRate = lastDay > 0 ? (rateSum / lastDay * 100).toFixed(1) : null;
+  const monthRate = monthPlannedQty > 0 ? (monthProducedQty / monthPlannedQty * 100).toFixed(1) : null;
 
   // 標題
   $('psTitle').textContent = orderQ
@@ -914,7 +915,7 @@ document.addEventListener('click', async (e) => {
     const isMultiUpload = rows.length > 1;
     let segRow = null;
     if (segIdx && isMultiUpload) {
-      segRow = (segNote ? rows.find(r => (r.productSpec || '').trim() === segNote) : null) || rows[segIdx - 1] || null;
+      segRow = (segNote ? rows.find(r => specKey(r.productSpec) === specKey(segNote)) : null) || rows[segIdx - 1] || null;
     }
     const baseRow = rows[0] || null;
     const pick = key => {

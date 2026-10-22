@@ -435,6 +435,22 @@ await test('bulk-upload：已開工的工單，上傳不改 machineNo、回報�
   assert.deepEqual(JSON.parse(res.body).machineKept, [{ orderNo: 'C0000000001', actual: 'No3-60', upload: 'No5-40' }], '要回報提醒');
 });
 
+await test('bulk-upload：規格只差空白 → 視為同一規格，照常更新（不再「規格不同，跳過」）', async () => {
+  // 情境（F1150904001 實例）：9/24 上傳的規格尾巴多兩個空白，之後每天的計畫都沒有空白 → 以前全部被跳過
+  const { fastify, state } = await buildApp(PLANNER);
+  await fastify.prisma.order.create({ data: { orderNo: 'C0000000009', machineNo: 'No1-350', productSpec: "擴張網 黑鐵 6.0T*4'*8'  ", dispatchQty: 1300 } });
+  const res = await fastify.inject({
+    method: 'POST', url: '/api/orders/bulk-upload',
+    headers: { 'content-type': 'application/json' },
+    payload: JSON.stringify({ orders: [{ orderNo: 'C0000000009', machineNo: 'No1-350', productSpec: "擴張網 黑鐵 6.0T*4'*8'", dispatchQty: 1400 }], filename: 'test.xlsx' }),
+  });
+  assert.equal(res.statusCode, 200);
+  const body = JSON.parse(res.body);
+  assert.equal(body.updated, 1, '應該更新');
+  assert.equal(body.skipped, 0, '不能被跳過');
+  assert.equal(state.orders.get('C0000000009').dispatchQty, 1400);
+});
+
 // ── 已完成的工單：現場不能再記錄；只有管理員能重新開啟（2026-10 起）──
 const LEADER = { id: 3, username: 'leader', displayName: '班長', isAdmin: false, isPlanner: false };
 const doneAt = new Date(Date.now() - 3600 * 1000);
