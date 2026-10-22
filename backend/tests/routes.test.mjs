@@ -451,6 +451,39 @@ await test('bulk-upload：規格只差空白 → 視為同一規格，照常更�
   assert.equal(state.orders.get('C0000000009').dispatchQty, 1400);
 });
 
+await test('bulk-upload：已完成的單重新上傳 → 計畫日不改、其他欄位照常更新、回報提醒', async () => {
+  // 情境（F1150930001 實例）：10/5 排計畫、10/5 做完；10/6 生管清單上還有它
+  const { fastify, state } = await buildApp(PLANNER);
+  await fastify.prisma.order.create({ data: { orderNo: 'C0000000010', machineNo: 'No1-350', productSpec: 'SPEC-E', dispatchQty: 5,
+    plannedDate: new Date('2026-10-05'), planSeq: 3, actualStartDate: new Date('2026-10-05'), step11At: new Date('2026-10-05T02:50:00Z') } });
+  const res = await fastify.inject({
+    method: 'POST', url: '/api/orders/bulk-upload',
+    headers: { 'content-type': 'application/json' },
+    payload: JSON.stringify({ orders: [{ orderNo: 'C0000000010', machineNo: 'No1-350', productSpec: 'SPEC-E', dispatchQty: 6 }], filename: 'test.xlsx', uploadDate: '2026-10-06' }),
+  });
+  assert.equal(res.statusCode, 200);
+  const stored = state.orders.get('C0000000010');
+  assert.equal(stored.plannedDate.toISOString().slice(0, 10), '2026-10-05', '計畫日維持 10/5');
+  assert.equal(stored.planSeq, 3, '計畫序號也維持');
+  assert.equal(stored.dispatchQty, 6, '其他欄位照常更新');
+  assert.deepEqual(JSON.parse(res.body).doneKept, ['C0000000010']);
+});
+
+await test('bulk-upload：還在做（隔日生產）的單重新上傳 → 計畫日照舊跟著改', async () => {
+  const { fastify, state } = await buildApp(PLANNER);
+  const o = await fastify.prisma.order.create({ data: { orderNo: 'C0000000011', machineNo: 'No1-350', productSpec: 'SPEC-F',
+    plannedDate: new Date('2026-10-07'), actualStartDate: new Date('2026-10-07') } });
+  await fastify.prisma.stepEntry.create({ data: { orderId: o.id, stepNo: '41', seq: 1, recordedAt: new Date('2026-10-07T01:00:00Z') } });
+  const res = await fastify.inject({
+    method: 'POST', url: '/api/orders/bulk-upload',
+    headers: { 'content-type': 'application/json' },
+    payload: JSON.stringify({ orders: [{ orderNo: 'C0000000011', machineNo: 'No1-350', productSpec: 'SPEC-F' }], filename: 'test.xlsx', uploadDate: '2026-10-08' }),
+  });
+  assert.equal(res.statusCode, 200);
+  assert.equal(state.orders.get('C0000000011').plannedDate.toISOString().slice(0, 10), '2026-10-08', '隔日生產照舊改到 10/8');
+  assert.deepEqual(JSON.parse(res.body).doneKept, []);
+});
+
 // ── 已完成的工單：現場不能再記錄；只有管理員能重新開啟（2026-10 起）──
 const LEADER = { id: 3, username: 'leader', displayName: '班長', isAdmin: false, isPlanner: false };
 const doneAt = new Date(Date.now() - 3600 * 1000);

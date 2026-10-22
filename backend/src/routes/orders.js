@@ -911,6 +911,7 @@ export default async function orderRoutes(fastify) {
     let created = 0, updated = 0, skipped = 0, errors = [];
     const processedOrderNos = [];
     const machineKept = []; // 已開工、Excel 機台不同 → 機台維持現場的（回給生管提醒）
+    const doneKept = [];    // 已完成的單又出現在清單上 → 計畫日維持不變（回給生管提醒）
     const rawRows = []; // 收集原始資料
 
     for (const [rowIndex, row] of rows.entries()) {
@@ -996,6 +997,16 @@ export default async function orderRoutes(fastify) {
               rawRow.errorMsg = `已在 ${existing.machineNo} 開工，機台維持不變（Excel 為 ${merged.machineNo}）`;
               merged.machineNo = existing.machineNo;
             }
+            // 已完成的單：計畫日不跟著重新上傳改。生管清單上常留著做完的單，改了會變成
+            // 「做完那天沒計畫、隔天有計畫沒生產」（例：F1150930001 10/5 做完，10/6 上傳被改成 10/6）。
+            // 還沒做完的單（含隔日生產、跳著生產）照舊跟著最新上傳走。
+            if (existing.step11At && existing.plannedDate && batchProductionDate &&
+                existing.plannedDate.getTime() !== batchProductionDate.getTime()) {
+              merged.plannedDate = existing.plannedDate;
+              merged.planSeq = existing.planSeq;
+              doneKept.push(orderNo);
+              rawRow.errorMsg = (rawRow.errorMsg ? rawRow.errorMsg + '；' : '') + '已完成，計畫日維持不變';
+            }
             await fastify.prisma.order.update({ where: { orderNo }, data: merged });
             rawRow.status = 'updated';
             updated++;
@@ -1063,7 +1074,7 @@ export default async function orderRoutes(fastify) {
       }
     }
 
-    return { ok: true, created, updated, skipped, errors, total: rows.length, batchId: batch.id, autoCancelled, machineKept };
+    return { ok: true, created, updated, skipped, errors, total: rows.length, batchId: batch.id, autoCancelled, machineKept, doneKept };
   });
 
   // 客戶名稱補登（管理員）：簡表（工單號＋客戶名稱）一次補齊

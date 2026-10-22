@@ -559,6 +559,9 @@ $('uploadBtn').onclick = async () => {
   if (d.machineKept && d.machineKept.length > 0) {
     html += `<div class="result" style="margin-top:8px;background:#fff8e8;color:#b8860b;">⚠ 提醒：${d.machineKept.length} 張單已經在現場開工，機台維持現場實際生產的機台，沒有改成 Excel 上的機台：<br>${d.machineKept.map(k => escapeHtml(k.orderNo) + '：現場 ' + escapeHtml(k.actual) + '（Excel 寫 ' + escapeHtml(k.upload) + '）').join('<br>')}<br>如果真的要換機台，請現場在新機台開單。</div>`;
   }
+  if (d.doneKept && d.doneKept.length > 0) {
+    html += `<div class="result" style="margin-top:8px;background:#fff8e8;color:#b8860b;">⚠ 提醒：${d.doneKept.length} 張單已經做完了，計畫日維持原本的日期，沒有改成這次上傳的日期：<br>${d.doneKept.map(n => escapeHtml(n)).join('、')}<br>下次排計畫時可以把這些單從清單拿掉。</div>`;
+  }
   if (d.errors && d.errors.length > 0) {
     html += `<div class="result fail" style="margin-top:8px;">錯誤 ${d.errors.length} 筆：<br>${d.errors.map(e => escapeHtml(e)).join('<br>')}</div>`;
   }
