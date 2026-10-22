@@ -1494,6 +1494,35 @@ export default async function orderRoutes(fastify) {
       });
       return { orders: await serializeWithDispatchTotals(fastify.prisma, orders) };
     }
+    // from/to（台灣日期 YYYY-MM-DD）：統計／紀錄頁依期間查——回傳該期間「有生產紀錄或計畫」的全部工單。
+    // 不能用下方「最近更新前 200 筆」：舊月份的單早被新單擠出前 200 筆，回頭看上個月會少算。
+    const from = String(request.query.from || ''), to = String(request.query.to || '');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      const DAY = 86400000;
+      const lo = Date.parse(from + 'T00:00:00+08:00'), hi = Date.parse(to + 'T23:59:59.999+08:00');
+      if (Number.isFinite(lo) && Number.isFinite(hi) && lo <= hi && hi - lo <= 400 * DAY) {
+        // 前後各放寬一天（計畫日等日期欄存 UTC 午夜）；精確到台灣日期的篩選由前端做
+        const range = { gte: new Date(lo - DAY), lte: new Date(hi + DAY) };
+        const orders = await fastify.prisma.order.findMany({
+          where: {
+            OR: [
+              { plannedDate: range },
+              { productionDate: range },
+              { actualStartDate: range },
+              { step11At: range },
+              { stepEntries: { some: { deletedAt: null, recordedAt: range } } },
+              { pauseEvents: { some: { deletedAt: null, OR: [{ startAt: range }, { endAt: range }] } } },
+              // 期間前開工、期間後才完工（或還沒完工）：期間內可能沒有任何紀錄，但前端算它「當天在線上」
+              { AND: [{ actualStartDate: { lt: range.gte } }, { OR: [{ step11At: null }, { step11At: { gt: range.lte } }] }] },
+            ],
+          },
+          orderBy: { updatedAt: 'desc' },
+          take: 3000,
+          include: ORDER_INCLUDE,
+        });
+        return { orders: await serializeWithDispatchTotals(fastify.prisma, orders) };
+      }
+    }
     const limit = Math.min(Number(request.query.limit) || 50, 200);
     const orders = await fastify.prisma.order.findMany({
       orderBy: { updatedAt: 'desc' },

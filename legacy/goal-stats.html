@@ -237,9 +237,17 @@ MACHINES.forEach(m => {
 
 let allOrders = [];
 
+// 依所選月份向後端要「該月有生產紀錄的全部工單」（不能用「最近更新前 N 筆」：舊月份的單會被擠掉而少算）。
+// limit 是給舊後端的後備（不認 from/to 時至少拿到最近 200 筆）；loadSeq 防止快速切月份時舊回應蓋掉新的
+let loadSeq = 0;
 async function loadOrders() {
+  const monthStr = $('filterMonth').value;
+  if (!monthStr) return;
+  const seq = ++loadSeq;
   $('tableArea').innerHTML = '<div class="empty">載入中...</div>';
-  const r = await api('/api/orders?limit=500');
+  const [yy, mm] = monthStr.split('-').map(Number);
+  const r = await api(`/api/orders?from=${monthStr}-01&to=${monthStr}-${new Date(yy, mm, 0).getDate()}&limit=500`);
+  if (seq !== loadSeq) return;
   if (!r.ok) { $('tableArea').innerHTML = '<div class="empty">' + (r.error || '載入失敗') + '</div>'; return; }
   allOrders = r.data.orders || [];
   render();
@@ -499,7 +507,7 @@ function render() {
 }
 
 machineSel.onchange = render;
-$('filterMonth').onchange = render;
+$('filterMonth').onchange = loadOrders; // 換月份要重抓該月工單
 $('refreshBtn').onclick = loadOrders;
 
 loadOrders();

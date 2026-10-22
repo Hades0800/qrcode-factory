@@ -393,14 +393,25 @@ function resolveCustomerName(o) {
 // 目前檢視的篩選結果（供匯出用）
 let currentView = { rows: [], custQ: '', machine: '', monthStr: '' };
 
+// 依所選月份向後端要「該月有計畫或生產紀錄的全部工單」（不能用「最近更新前 N 筆」：舊月份的單會被擠掉而少算）。
+// limit 是給舊後端的後備（不認 from/to 時至少拿到最近 200 筆）；loadSeq 防止快速切月份時舊回應蓋掉新的
+let loadSeq = 0;
 async function loadOrders() {
+  const monthStr = $('filterMonth').value;
+  if (!monthStr) return;
+  const seq = ++loadSeq;
   $('gridArea').innerHTML = '<div class="empty">載入中...</div>';
-  const r = await api('/api/orders?limit=500');
+  const [yy, mm] = monthStr.split('-').map(Number);
+  const r = await api(`/api/orders?from=${monthStr}-01&to=${monthStr}-${new Date(yy, mm, 0).getDate()}&limit=500`);
+  if (seq !== loadSeq) return;
   if (!r.ok) {
     $('gridArea').innerHTML = '<div class="empty">' + (r.error || '載入失敗') + '</div>';
     return;
   }
   allOrders = r.data.orders || [];
+  // 換月份重抓後，工單號查詢（跨月、直查資料庫）的結果要重新合併進來
+  psLastSearchQ = '';
+  if ($('filterOrder').value.trim()) $('filterOrder').dispatchEvent(new Event('input'));
   // 客戶自動建議清單（去重、排序；輸入時瀏覽器只顯示符合的）
   const names = [...new Set(allOrders.map(o => (o.customerName || '').trim()).filter(Boolean))].sort();
   $('customerList').innerHTML = names.map(n => `<option value="${escapeHtml(n)}">`).join('');
@@ -834,9 +845,8 @@ function render() {
   $('gridArea').innerHTML = html;
 }
 
-['filterMonth','filterMachine'].forEach(id => {
-  $(id).addEventListener('change', render);
-});
+$('filterMachine').addEventListener('change', render);
+$('filterMonth').addEventListener('change', loadOrders); // 換月份要重抓該月工單
 $('filterCustomer').addEventListener('input', render);   // 邊打邊篩，清空即回到機台檢視
 $('filterOrder').addEventListener('input', render);      // 工單號查詢（含 @N），優先於客戶／機台
 

@@ -24,6 +24,19 @@ export default async function idleEventRoutes(fastify) {
   });
 
   fastify.get('/api/idle-events', { onRequest: [fastify.authenticate] }, async (request) => {
+    // from/to（台灣日期 YYYY-MM-DD）：紀錄頁往前翻舊日期時，回傳該期間全部無工令（不受下方「最近 N 筆」限制）
+    const from = String(request.query.from || ''), to = String(request.query.to || '');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      const lo = Date.parse(from + 'T00:00:00+08:00'), hi = Date.parse(to + 'T23:59:59.999+08:00');
+      if (Number.isFinite(lo) && Number.isFinite(hi) && lo <= hi && hi - lo <= 400 * 86400000) {
+        const events = await fastify.prisma.idleEvent.findMany({
+          where: { createdAt: { gte: new Date(lo), lte: new Date(hi) } },
+          orderBy: { createdAt: 'desc' },
+          take: 3000,
+        });
+        return { events };
+      }
+    }
     const limit = Math.min(Number(request.query.limit) || 100, 500);
     const events = await fastify.prisma.idleEvent.findMany({
       orderBy: { createdAt: 'desc' },

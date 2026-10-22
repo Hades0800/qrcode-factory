@@ -563,6 +563,25 @@ function loadFromCache() {
   } catch (e) { return false; }
 }
 
+// 有指定日期時，另外向後端要「該期間有紀錄的全部工單／無工令」合併進來：
+// 只靠「最近更新前 200 筆」，往前翻較早的日期時，舊單早被新單擠出而看不到
+async function fetchRange() {
+  const from = $('filterFrom').value;
+  if (!from) return null;
+  const now = new Date();
+  const to = $('filterTo').value || (now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0'));
+  const qs = 'from=' + from + '&to=' + to + '&limit=200'; // limit 是給舊後端的後備
+  const [o, e] = await Promise.all([api('/api/orders?' + qs), api('/api/idle-events?' + qs)]);
+  return { orders: (o.ok && o.data.orders) || [], events: (e.ok && e.data.events) || [] };
+}
+// 把 extra 裡 list 還沒有的項目補進 list，回傳補了幾筆
+function mergeNew(list, extra, key) {
+  const known = new Set(list.map(x => x[key]));
+  let n = 0;
+  extra.forEach(x => { if (!known.has(x[key])) { list.push(x); n++; } });
+  return n;
+}
+
 async function loadOrders() {
   // 先用快取立即顯示
   const hasCache = loadFromCache();
@@ -570,9 +589,10 @@ async function loadOrders() {
   else { $('ordersArea').innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px;">載入中...</div>'; }
 
   // 背景更新
-  const [ordersRes, idleRes] = await Promise.all([
+  const [ordersRes, idleRes, range] = await Promise.all([
     api('/api/orders?limit=200'),
     api('/api/idle-events?limit=200'),
+    fetchRange(),
   ]);
   if (!ordersRes.ok) {
     if (!hasCache) $('ordersArea').innerHTML = '<div style="text-align:center;color:var(--brand);padding:40px;">' + (ordersRes.error || '載入失敗') + '</div>';
@@ -580,6 +600,10 @@ async function loadOrders() {
   }
   allOrders = ordersRes.data.orders || [];
   allIdleEvents = (idleRes.ok ? idleRes.data.events : []) || [];
+  if (range) {
+    mergeNew(allOrders, range.orders, 'orderNo');
+    mergeNew(allIdleEvents, range.events, 'id');
+  }
   // 寫入快取
   try {
     localStorage.setItem(CACHE_ORDERS, JSON.stringify(allOrders));
@@ -1109,6 +1133,20 @@ function applyFilters(list) {
 ['filterText','filterFrom','filterTo','filterStatus'].forEach(id => {
   $(id).addEventListener('input', () => { render(); renderIdleEvents(); });
   $(id).addEventListener('change', () => { render(); renderIdleEvents(); });
+});
+
+// 改日期範圍：向後端補抓該期間的工單／無工令（合併進來再重畫）
+let rangeTimer = null;
+['filterFrom','filterTo'].forEach(id => {
+  $(id).addEventListener('change', () => {
+    clearTimeout(rangeTimer);
+    rangeTimer = setTimeout(async () => {
+      const range = await fetchRange();
+      if (!range) return;
+      const n = mergeNew(allOrders, range.orders, 'orderNo') + mergeNew(allIdleEvents, range.events, 'id');
+      if (n > 0) { render(); renderIdleEvents(); }
+    }, 300);
+  });
 });
 
 // 關鍵字同步打後端搜尋（直接查資料庫，舊單也找得到），結果合併進 allOrders 再走原本的前端篩選
