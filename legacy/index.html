@@ -1032,7 +1032,8 @@ async function doLogin() {
   me = r.data.leader;
   localStorage.setItem('token', token);
   localStorage.setItem('me', JSON.stringify(me));
-  // 登入後直接前往「即時生產」頁（多數使用者的主要畫面）
+  // 登入後直接前往「即時生產」頁（多數使用者的主要畫面），從「機台看板＋全機台」開始
+  try { sessionStorage.removeItem('rt_active_machine'); } catch (e) {}
   location.href = 'realtime.html';
 }
 
