@@ -75,10 +75,6 @@
   .mb-chev { font-size: 11px; color: var(--muted); font-weight: 600; }
   /* 平均分成上下兩行：欄數 = ceil(機台數/2)，由 JS 塞進 --mb-cols */
   .mb-grid { display: grid; grid-template-columns: repeat(var(--mb-cols, 7), minmax(0, 1fr)); gap: 8px; }
-  @media (min-width: 768px) and (max-width: 1023px) {
-    .mb-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } /* 平板：改四欄自動換行 */
-  }
-  .mb-grid.mb-collapsed { display: none; }
   .mb-cell {
     background: var(--card); border: 1px solid var(--border); border-radius: 10px;
     overflow: hidden; display: flex; flex-direction: column; cursor: pointer; min-height: 118px;
@@ -107,9 +103,10 @@
   .mb-cell.wait .mb-order { color: var(--muted); }
   .mb-spec { font-size: 13px; font-weight: 800; line-height: 1.25; color: var(--ink); }
   .mb-spec.mb-nospec { color: var(--muted); font-weight: 500; font-size: 12px; }
-  /* 規格尺寸（沒有空格的長字串）超出卡片寬度時，可在卡片內左右滑動看完整內容 */
-  @media (min-width: 768px) {
-    .mb-spec { overflow-x: auto; scrollbar-width: thin; overscroll-behavior-x: contain; }
+  /* 規格尺寸（沒有空格的長字串）超出卡片寬度時，可在卡片內左右滑動看完整內容（不顯示捲軸） */
+  @media (min-width: 1024px) {
+    .mb-spec { overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+    .mb-spec::-webkit-scrollbar { display: none; }
   }
   .mb-mold { font-size: 11px; color: var(--muted); }
   .mb-note { font-size: 10.5px; font-weight: 700; }
@@ -134,15 +131,14 @@
   .mb-dot-abn { background: #c0392b; }
   .mb-dot-off { background: #9b968d; }
   .mb-spacer { visibility: hidden; border: none; }
-  /* 手機：與電腦相同的卡片，固定兩行、橫向滑動、頭尾相接（JS 複製三份實現無縫循環） */
-  @media (max-width: 767px) {
+  /* 手機、平板：與電腦相同的卡片與排法（上排 全機台＋No1～No6、下排 No12～No20，由左到右），
+     卡片固定寬度、整排左右滑動 */
+  @media (max-width: 1023px) {
     .machine-board { padding: 6px 0 8px; }
     .mb-bar { padding: 2px 12px 6px; }
     .mb-grid {
-      grid-template-columns: none;
-      grid-auto-flow: column;
-      grid-template-rows: repeat(2, 1fr);
-      grid-auto-columns: 152px;
+      grid-template-columns: repeat(var(--mb-cols, 7), 152px);
+      grid-auto-flow: row;
       gap: 6px;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
@@ -150,7 +146,6 @@
       padding: 0 10px;
     }
     .mb-grid::-webkit-scrollbar { display: none; }
-    .mb-grid.mb-collapsed { display: none; }
     .mb-cell { min-height: 108px; contain: content; } /* 每張卡獨立繪製，滑動時不互相牽動重繪 */
     .mb-spec, .mb-mold, .mb-note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   }
@@ -830,7 +825,7 @@ function mbStateFor(machineId) {
 function renderMachineBoard() {
   const el = $('machineBoard');
   if (!el) return;
-  const isMobile = window.matchMedia('(max-width: 767px)').matches;
+  const isMobile = window.matchMedia('(max-width: 1023px)').matches; // 手機、平板：看板整排左右滑
   // 重畫前保留滑動位置（自動更新時畫面不跳）
   const prevGrid = el.querySelector('.mb-grid');
   const prevScroll = prevGrid ? prevGrid.scrollLeft : null;
