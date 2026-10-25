@@ -382,6 +382,40 @@ export default async function adminRoutes(fastify) {
     return { logs, days };
   });
 
+  // 一次性資料修正（2026-10 統計大檢查，使用者確認的 7 張）：已完成工單的計畫日改回「做完當時的計畫日」
+  // 舊版在單子做完後，生管再上傳的清單裡還有它，就把計畫日改成那次上傳的日期（b285c5d 起已不會再發生）。
+  // 只改「已完成、目前計畫日正好等於被改掉的日期」的單；重複執行不會改第二次。dryRun=1 只列出會怎麼改。
+  const PLANNED_DATE_FIX_2026_10 = [
+    ['F1150505004', '2026-05-13', '2026-05-07'],
+    ['F1150507005', '2026-05-25', '2026-05-18'],
+    ['F1150805006', '2026-09-08', '2026-08-28'],
+    ['F1150803017', '2026-10-01', '2026-09-02'],
+    ['F1150826005', '2026-09-21', '2026-09-18'],
+    ['F1150930001', '2026-10-06', '2026-10-05'],
+    ['F1150930002', '2026-10-06', '2026-10-05'],
+  ];
+  fastify.post('/fix-planned-dates-2026-10', async (request) => {
+    const dryRun = !!(request.body && request.body.dryRun);
+    const ymd = d => (d ? new Date(d).toISOString().slice(0, 10) : null); // 計畫日存 UTC 午夜，直接取日期部分
+    const results = [];
+    for (const [orderNo, wrong, correct] of PLANNED_DATE_FIX_2026_10) {
+      const o = await fastify.prisma.order.findFirst({ where: { orderNo } });
+      const now = o ? ymd(o.plannedDate) : null;
+      let status;
+      if (!o) status = '找不到這張單';
+      else if (!o.step11At) status = '這張單已經不是完成狀態，不改';
+      else if (now === correct) status = '已經是正確日期';
+      else if (now !== wrong) status = `計畫日已被改成 ${now}，跟預期的 ${wrong} 不同，不改`;
+      else status = dryRun ? '會改' : '已改';
+      if (status === '已改') {
+        await fastify.prisma.order.update({ where: { id: o.id }, data: { plannedDate: new Date(correct + 'T00:00:00Z') } });
+        await audit(fastify.prisma, request, 'fix_planned_date', orderNo, `已完成工單計畫日改回做完當時的計畫日：${wrong} → ${correct}`);
+      }
+      results.push({ orderNo, from: now, to: correct, status });
+    }
+    return { ok: true, dryRun, results, changed: results.filter(r => r.status === '已改').length };
+  });
+
   // 一次性 migration：把舊 productionDate 拆成 plannedDate + actualStartDate
   // - actualStartDate：用第一筆活動的台灣日期
   // - plannedDate：找最早未取消批次的 productionDate；找不到就用舊 productionDate
