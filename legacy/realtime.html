@@ -936,7 +936,7 @@ async function loadOrders() {
   // 先用快取立即顯示（減少等待感）
   try {
     const cached = JSON.parse(localStorage.getItem(CACHE_RT) || 'null');
-    if (cached && cached.orders) {
+    if (cached && cached.orders && plannedYmdLocal(cached.savedAt) === todayYmd()) {
       allOrders = cached.orders;
       idleMachinesToday = new Set(cached.idleMachines || []);
       idleEventIdByMachine = cached.idleEventIds || {};
@@ -952,6 +952,7 @@ async function loadOrders() {
     api('/api/idle-events?limit=50'),
   ]);
   if (ordersRes.ok) allOrders = ordersRes.data.orders || [];
+  else toast('連線失敗，畫面上是之前載入的資料，請稍後按重新整理', 'error');
   if (idleRes.ok) {
     const now = new Date();
     const todayEvents = (idleRes.data.events || []).filter(e => {
@@ -965,8 +966,8 @@ async function loadOrders() {
     idleEventIdByMachine = {};
     todayEvents.forEach(e => { idleEventIdByMachine[e.machineNo] = e.id; });
   }
-  // 寫入快取
-  try {
+  // 寫入快取（讀取成功才寫）
+  if (ordersRes.ok) try {
     localStorage.setItem(CACHE_RT, JSON.stringify({
       orders: allOrders,
       idleMachines: Array.from(idleMachinesToday),
@@ -1056,6 +1057,8 @@ function renderContent() {
     ':' + ((o.stepEntries || []).length) +
     ':' + (o.pause12 && o.pause12.active ? 'p12' : '') +
     ':' + (o.pause13 && o.pause13.active ? 'p13' : '') +
+    ':' + [o.pause12, o.pause13].map(p => ((p && p.history) || []).map(e => (e.startAt || '') + '~' + (e.endAt || '') + '#' + (e.qcActualQty ?? '')).join(',')).join('/') +
+    ':' + (doneQtyOf(o) ?? '') +
     ':' + (o.plannedMachineNo || '') +
     ':' + (o.specType || '') + ':' + (o.difficultyFactor || '') +
     ':' + (o.changeScope || '') + ':' + (o.materialType || '')
@@ -1904,17 +1907,20 @@ updBanner.onclick = () => {
   if (!pendingData) { updBanner.style.display = 'none'; return; }
   allOrders = pendingData.orders;
   idleMachinesToday = new Set(pendingData.idle);
+  idleEventIdByMachine = pendingData.idleIds || idleEventIdByMachine;
   currentFp = pendingData.fp;
   pendingData = null;
   try {
     localStorage.setItem(CACHE_RT, JSON.stringify({
       orders: allOrders,
       idleMachines: Array.from(idleMachinesToday),
+      idleEventIds: idleEventIdByMachine,
       savedAt: Date.now(),
     }));
   } catch (e) {}
   updBanner.style.display = 'none';
   renderMachineTabs();
+  lastRenderHash = ''; // 點了「有新資料」就一定重畫機台內容
   renderContent();
 };
 
@@ -1926,9 +1932,11 @@ async function checkForUpdates() {
   if (!ordersRes.ok) return;
   const orders = ordersRes.data.orders || [];
   const idle = idleRes.ok ? idleSetFromEvents(idleRes.data.events) : Array.from(idleMachinesToday);
+  const idleIds = {};
+  if (idleRes.ok) (idleRes.data.events || []).forEach(e => { if (idle.includes(e.machineNo) && !(e.machineNo in idleIds)) idleIds[e.machineNo] = e.id; });
   const fp = dataFingerprint(orders, idle);
   if (fp === currentFp) { pendingData = null; updBanner.style.display = 'none'; return; }
-  pendingData = { orders, idle, fp };
+  pendingData = { orders, idle, idleIds: idleRes.ok ? idleIds : idleEventIdByMachine, fp };
   updBanner.style.display = 'block';
 }
 

@@ -686,12 +686,20 @@ function render() {
   const filtered = sortByProductionOrder(applyFilters(allOrders));
 
   // 統計（已完成 = 按過「工單完成與結束」）
+  //   有選日期範圍：已完成＝這段期間內按完成的；其餘有生產紀錄的算進行中
+  //   （原本看的是「現在」的狀態：查 10/20 會把 10/22 才完成的單算成 10/20 已完成，逐日加總還會重複）
   const total = filtered.length;
-  const completed = filtered.filter(o => !!o.step11At).length;
-  const ongoing = filtered.filter(o => !o.step11At && countDone(o) > 0).length;
+  const rFrom = $('filterFrom').value, rTo = $('filterTo').value;
+  const doneInRange = o => {
+    if (!o.step11At) return false;
+    const d = plannedYmdLocal(o.step11At);
+    return (!rFrom || d >= rFrom) && (!rTo || d <= rTo);
+  };
+  const completed = filtered.filter(doneInRange).length;
+  const ongoing = filtered.filter(o => !doneInRange(o) && countDone(o) > 0).length;
   $('stats').innerHTML = `
     <div class="stat-card"><div class="label">總工單數</div><div class="value">${total}</div></div>
-    <div class="stat-card"><div class="label">已完成</div><div class="value">${completed}</div></div>
+    <div class="stat-card"><div class="label">${rFrom || rTo ? '期間內完成' : '已完成'}</div><div class="value">${completed}</div></div>
     <div class="stat-card"><div class="label">進行中</div><div class="value">${ongoing}</div></div>
   `;
 
@@ -1097,6 +1105,12 @@ function countDone(o) {
   return oldCount + newCount;
 }
 function applyFilters(list) {
+  // 舊規則過濾網：原單號只是生管上傳的計畫殼（實際生產記在 @1/@2…），自己沒有任何生產紀錄 → 不列入、不算張數
+  const basesWithAt = new Set(list.filter(o => (o.orderNo || '').indexOf('@') > 0).map(o => o.orderNo.split('@')[0]));
+  const isPlanShell = o => (o.orderNo || '').indexOf('@') === -1 && basesWithAt.has(o.orderNo) && !o.step11At &&
+    !(o.stepEntries && o.stepEntries.length) && !(o.pause12 && o.pause12.history && o.pause12.history.length) &&
+    !(o.pause13 && o.pause13.history && o.pause13.history.length);
+  list = list.filter(o => !isPlanShell(o));
   const text = $('filterText').value.trim().toLowerCase();
   const from = $('filterFrom').value;
   const to = $('filterTo').value;
@@ -1260,7 +1274,7 @@ $('exportBtn').onclick = () => {
   if (from && to) stamp = `${from}_至_${to}`;
   else if (from) stamp = `${from}_起`;
   else if (to) stamp = `至_${to}`;
-  else stamp = new Date().toISOString().slice(0,10);
+  else stamp = todayYmd();
   a.href = url; a.download = `工單紀錄_${stamp}.csv`;
   a.click();
   URL.revokeObjectURL(url);

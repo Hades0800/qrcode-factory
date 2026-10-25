@@ -332,16 +332,6 @@
     <div id="qtyFixResult" style="margin-top:12px;"></div>
   </div>
 
-  <div class="card">
-    <h2>系統工具</h2>
-    <button class="btn-primary btn-block" id="migrateDatesBtn" style="margin-bottom:6px;">遷移：拆分計畫日期 / 實際開始日期</button>
-    <p style="font-size:12px;color:var(--muted);margin:0 0 14px;">把舊 productionDate 拆成「計畫日期 (plannedDate)」與「實際開始日期 (actualStartDate)」。執行後即時頁、紀錄頁、製造概覽會以實際日期為準，並標出計畫日期不同處。建議只跑一次。</p>
-    <div id="migrateDatesResult" style="margin:0 0 14px;"></div>
-
-    <button class="btn-secondary btn-block" id="fixDatesBtn" style="margin-bottom:6px;">舊版：修正所有工單生產日期</button>
-    <p style="font-size:12px;color:var(--muted);margin:0;">舊功能（依第一筆活動重設 productionDate）。新流程已用「遷移」取代，平常不需要按。</p>
-    <div id="fixDatesResult" style="margin-top:8px;"></div>
-  </div>
 
 </div>
 
@@ -496,13 +486,13 @@ function renderRecovery() {
   const slice = items.slice(start, start + RECOVERY_PAGE_SIZE);
 
   // 按操作日期分組（YYYY-MM-DD）
-  const dateOf = (it) => String(
+  const dateOf = (it) => (
     tab === 'deleted' ? it.deletedAt :
     tab === 'reset' ? it.lastDeletedAt :
     it.cancelledAt
-  ).slice(0, 10);
+  );
   const groups = {};
-  slice.forEach(it => { (groups[dateOf(it)] = groups[dateOf(it)] || []).push(it); });
+  slice.forEach(it => { const d = localDay(dateOf(it)); (groups[d] = groups[d] || []).push(it); });
   const html = Object.keys(groups).sort().reverse().map(day => {
     const rowsHtml = groups[day].map(it => recoveryRowHtml(tab, it)).join('');
     return '<div class="rec-day-header">' + escapeHtml(day) + '（' + groups[day].length + ' 筆）</div>' + rowsHtml;
@@ -533,10 +523,17 @@ function renderRecovery() {
   }
 }
 
+// 資料庫時間是 UTC：一律換成台灣本地時間顯示（直接切 ISO 字串會少 8 小時、清晨的紀錄會被分到前一天）
+function localDay(iso) { return plannedYmdLocal(iso) || ''; }
+function localHM(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? '—' : String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
 function recoveryRowHtml(tab, it) {
   if (tab === 'deleted') {
     const spec = [it.productSpec, it.moldSpec].filter(Boolean).join(' / ') || '—';
-    const time = String(it.deletedAt).slice(11, 16);
+    const time = localHM(it.deletedAt);
     return '<div style="display:flex;align-items:center;gap:6px;padding:8px 6px;border-bottom:1px solid var(--border);font-size:13px;flex-wrap:wrap;">'
       + '<span style="color:#666;min-width:48px;">' + time + '</span>'
       + '<div style="flex:1;min-width:160px;"><strong>' + escapeHtml(it.orderNo) + '</strong>'
@@ -547,7 +544,7 @@ function recoveryRowHtml(tab, it) {
   }
   if (tab === 'reset') {
     const spec = [it.productSpec, it.moldSpec].filter(Boolean).join(' / ') || '—';
-    const time = it.lastDeletedAt ? String(it.lastDeletedAt).slice(11, 16) : '—';
+    const time = it.lastDeletedAt ? localHM(it.lastDeletedAt) : '—';
     const detail = '工序 ' + (it.softDeletedEntries || 0) + ' 筆' + (it.softDeletedPauses ? '、暫停 ' + it.softDeletedPauses + ' 筆' : '');
     return '<div style="display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--border);font-size:13px;flex-wrap:wrap;">'
       + '<span style="color:#666;min-width:48px;">' + time + '</span>'
@@ -558,7 +555,7 @@ function recoveryRowHtml(tab, it) {
       + '</div>';
   }
   // cancelled
-  const time = String(it.cancelledAt).slice(11, 16);
+  const time = localHM(it.cancelledAt);
   return '<div style="display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--border);font-size:13px;flex-wrap:wrap;">'
     + '<span style="color:#666;min-width:48px;">' + time + '</span>'
     + '<div style="flex:1;min-width:160px;"><strong>' + escapeHtml(it.filename) + '</strong>'
@@ -627,14 +624,14 @@ function renderAuditLog() {
 
   const groups = {};
   slice.forEach(l => {
-    const day = String(l.createdAt).slice(0, 10);
+    const day = localDay(l.createdAt);
     (groups[day] = groups[day] || []).push(l);
   });
   const itemsHtml = Object.keys(groups).sort().reverse().map(day => {
     const items = groups[day].map(l => {
       const action = ACTION_LABELS[l.action] || l.action;
       const color = ACTION_COLORS[l.action] || 'var(--muted)';
-      const time = String(l.createdAt).slice(11, 16);
+      const time = localHM(l.createdAt);
       const target = l.target ? ' <strong>' + escapeHtml(l.target) + '</strong>' : '';
       const detail = l.detail ? '<span style="color:var(--muted);font-size:11px;margin-left:6px;">（' + escapeHtml(l.detail) + '）</span>' : '';
       return '<div style="padding:6px 8px;border-bottom:1px solid var(--border);font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
@@ -808,29 +805,6 @@ async function deleteOrderFromFind(orderNo) {
 $('findOrderBtn').onclick = findOrderNo;
 $('findOrderInput').addEventListener('keydown', e => { if (e.key === 'Enter') findOrderNo(); });
 
-$('migrateDatesBtn').onclick = async () => {
-  if (!confirm('遷移 productionDate → plannedDate + actualStartDate？\n\n會掃所有工單，依第一筆活動算實際日期、依最早未取消批次算計畫日期。\n建議備份 DB 後再執行。')) return;
-  $('migrateDatesBtn').disabled = true;
-  $('migrateDatesBtn').textContent = '遷移中...';
-  const r = await api('/api/admin/migrate-dates', { method: 'POST', body: {} });
-  $('migrateDatesBtn').disabled = false;
-  $('migrateDatesBtn').textContent = '遷移：拆分計畫日期 / 實際開始日期';
-  if (!r.ok) { toast(r.error || '遷移失敗', 'error'); return; }
-  $('migrateDatesResult').innerHTML = '<span style="color:var(--success);font-weight:600;">✓ 完成：共 ' + r.data.total + ' 張工單，更新 ' + r.data.updated + ' 張</span>';
-  toast('遷移完成', 'success');
-};
-
-$('fixDatesBtn').onclick = async () => {
-  if (!confirm('確定修正所有工單的生產日期？\n\n將根據第一筆實際活動時間重新設定。')) return;
-  $('fixDatesBtn').disabled = true;
-  $('fixDatesBtn').textContent = '修正中...';
-  const r = await api('/api/fix-dates', { method: 'POST', body: {} });
-  $('fixDatesBtn').disabled = false;
-  $('fixDatesBtn').textContent = '修正所有工單生產日期';
-  if (!r.ok) { toast(r.error || '修正失敗', 'error'); return; }
-  $('fixDatesResult').innerHTML = `<span style="color:var(--success);font-weight:600;">✓ 完成：共 ${r.data.total} 筆工單，修正了 ${r.data.fixed} 筆</span>`;
-  toast('修正完成', 'success');
-};
 
 $('auditDays').onchange = () => loadAuditLog();
 

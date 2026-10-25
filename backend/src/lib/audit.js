@@ -7,7 +7,7 @@ export async function audit(prisma, request, action, target, detail) {
         actorName: request.user?.displayName || null,
         action,
         target: target ? String(target).slice(0, 200) : null,
-        detail: detail ? String(detail).slice(0, 500) : null,
+        detail: detail ? (typeof detail === 'object' ? JSON.stringify(detail) : String(detail)).slice(0, 500) : null,
         ip: request.ip || null,
       },
     });

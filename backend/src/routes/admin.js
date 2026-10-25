@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { audit } from '../lib/audit.js';
+import { recomputeActualStartDate } from '../domain/orders/helpers.js';
 
 export default async function adminRoutes(fastify) {
   fastify.addHook('onRequest', fastify.authenticate);
@@ -253,6 +254,7 @@ export default async function adminRoutes(fastify) {
     if (!ev) return reply.code(404).send({ error: '找不到這筆暫停紀錄' });
     const order = await fastify.prisma.order.findFirst({ where: { id: ev.orderId, deletedAt: undefined }, select: { orderNo: true } });
     await fastify.prisma.pauseEvent.delete({ where: { id } }); // 中介層 → deletedAt
+    await recomputeActualStartDate(fastify.prisma, ev.orderId);
     await audit(fastify.prisma, request, 'delete_pause_event', order?.orderNo || String(ev.orderId),
       `刪除暫停#${id}（${ev.note || '-'}）數量 ${qtyText(ev.qcActualQty)}`);
     return { ok: true };
@@ -283,6 +285,7 @@ export default async function adminRoutes(fastify) {
     if (en.stepNo !== '30') return reply.code(400).send({ error: '這裡只能刪除「生產規格完成」紀錄' });
     const order = await fastify.prisma.order.findFirst({ where: { id: en.orderId, deletedAt: undefined }, select: { orderNo: true } });
     await fastify.prisma.stepEntry.delete({ where: { id } }); // 中介層 → deletedAt
+    await recomputeActualStartDate(fastify.prisma, en.orderId);
     await audit(fastify.prisma, request, 'delete_step_entry', order?.orderNo || String(en.orderId),
       `刪除生產規格完成#${id}（${en.note || '-'}）數量 ${qtyText(en.qcActualQty)}`);
     return { ok: true };

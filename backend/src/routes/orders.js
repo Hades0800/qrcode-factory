@@ -17,6 +17,7 @@ import {
   hasManufacturingParams,
   getMissingManufacturingParams,
   hasEquipmentParamFile,
+  recomputeActualStartDate,
   autoInterleave,
   hasRunningSibling,
 } from '../domain/orders/helpers.js';
@@ -63,11 +64,16 @@ export default async function orderRoutes(fastify) {
     // 取消上傳只動「上傳資料」：把工單的上傳欄位清空 + 標記批次取消
     // 工單本身（含 productionDate、機台、所有生產紀錄）都不動
     // 如要刪空殼工單請另行用 admin 的「徹底刪除」
-    let cleared = 0;
-    for (const orderNo of (batch.orderNos || [])) {
+    let cleared = 0, kept = 0;
+    for (const orderNo of [...new Set(batch.orderNos || [])]) {
       try {
         const order = await fastify.prisma.order.findUnique({ where: { orderNo } });
         if (!order) continue;
+        // 之後還有別的有效批次上傳過這張單 → 現在的欄位是那批寫的，不能清掉
+        const later = await fastify.prisma.uploadRow.findFirst({
+          where: { orderNo, batchId: { gt: id }, status: { in: ['created', 'updated'] }, batch: { cancelledAt: null } },
+        });
+        if (later) { kept++; continue; }
         await fastify.prisma.order.update({
           where: { orderNo },
           data: {
@@ -84,8 +90,8 @@ export default async function orderRoutes(fastify) {
       data: { cancelledAt: new Date() },
     });
     await audit(fastify.prisma, request, 'cancel_batch', batch.id,
-      `filename=${batch.filename} cleared=${cleared}`);
-    return { ok: true, cleared };
+      `filename=${batch.filename} cleared=${cleared} kept=${kept}`);
+    return { ok: true, cleared, kept };
   });
 
   // 救回已取消的上傳批次：把批次標記取消移除 + 回填工單上傳欄位
@@ -101,7 +107,7 @@ export default async function orderRoutes(fastify) {
     if (!batch) return reply.code(404).send({ error: '找不到上傳批次' });
     if (!batch.cancelledAt) return reply.code(400).send({ error: '此批次未取消，無需救回' });
 
-    const fields = ['productSpec', 'moldSpec', 'material', 'dispatchQty', 'bladeCount', 'machineSPM', 'unitWeight', 'totalWeight'];
+    const fields = ['productSpec', 'customerName', 'moldSpec', 'material', 'dispatchQty', 'bladeCount', 'machineSPM', 'unitWeight', 'totalWeight'];
     let restored = 0, skipped = 0;
     for (const orderNo of (batch.orderNos || [])) {
       try {
@@ -202,6 +208,22 @@ export default async function orderRoutes(fastify) {
     return !eventTime || eventTime > order.step11At;
   }
 
+  // 暫停／異常不可重疊：重疊會讓生產時間被重複扣（2026-10 資料裡有 36 組）
+  // [start, end) 跟這張單既有的任何一筆暫停／異常（含進行中）有交集 → 回傳說明文字；沒有 → null
+  async function pauseClash(prisma, orderId, start, end) {
+    const list = await prisma.pauseEvent.findMany({ where: { orderId, deletedAt: null } });
+    const s = start.getTime(), e = end ? end.getTime() : Infinity; // 沒有結束時間＝進行中，往後都算
+    const tw = t => new Date(new Date(t).getTime() + 8 * 3600e3).toISOString().slice(5, 16).replace('T', ' ');
+    for (const p of list) {
+      const ps = new Date(p.startAt).getTime(), pe = p.endAt ? new Date(p.endAt).getTime() : Infinity;
+      if (s < pe && ps < e) {
+        const what = String(p.note || (p.type === '13' ? '異常停線' : '暫停')).replace('【補登】', '').split(' - ')[0];
+        return `這段時間已經有「${what}」的紀錄（${tw(p.startAt)} ～ ${p.endAt ? tw(p.endAt) : '還沒恢復'}），暫停／異常不能重疊`;
+      }
+    }
+    return null;
+  }
+
   fastify.post('/:orderNo/step-entries', async (request, reply) => {
     const orderNo = String(request.params.orderNo || '').toUpperCase();
     const { stepNo, recordedAt: manualTime, note: rawNote, qcActualQty: rawQc } = request.body || {};
@@ -227,6 +249,15 @@ export default async function orderRoutes(fastify) {
     if (!order) return reply.code(404).send({ error: '找不到工單' });
     if (lockedAfterDone(order, request.user, manualTime ? new Date(manualTime) : new Date())) {
       return reply.code(409).send({ error: DONE_LOCK_MSG });
+    }
+    // 防重複送出：網路慢時現場常按兩次，同規格、同數量 1 分鐘內再送一次 → 擋（重複會讓完成數量多算一份）
+    if (stepNo === '30' && !manualTime) {
+      const dup = await fastify.prisma.stepEntry.findFirst({
+        where: { orderId: order.id, stepNo: '30', note, qcActualQty, deletedAt: null, recordedAt: { gte: new Date(Date.now() - 60 * 1000) } },
+      });
+      if (dup && dup.note === note && dup.qcActualQty === qcActualQty) {
+        return reply.code(409).send({ error: '剛剛已經記錄過同一個規格、同樣的數量了，請確認是不是按了兩次' });
+      }
     }
     // 防呆：生產規格完成（更換規格）前，設備「製造參數」必須已填（僅 No1–No6）
     if (stepNo === '30' && MFG_PARAM_REQUIRED_MACHINES.has(order.machineNo)) {
@@ -360,6 +391,7 @@ export default async function orderRoutes(fastify) {
       return reply.code(403).send({ error: '已超過 5 分鐘，無法取消（管理員不受此限制）' });
     }
     await fastify.prisma.stepEntry.delete({ where: { id } });
+    await recomputeActualStartDate(fastify.prisma, entry.orderId);
     const orderNo = String(request.params.orderNo || '').toUpperCase();
     const updated = await fastify.prisma.order.findUnique({ where: { orderNo }, include: ORDER_INCLUDE });
     return { ok: true, order: updated ? await serializeWithPrev(fastify.prisma, updated) : null };
@@ -681,6 +713,14 @@ export default async function orderRoutes(fastify) {
     if (step !== '11' && lockedAfterDone(order, request.user, manualTime ? new Date(manualTime) : new Date())) {
       return reply.code(409).send({ error: DONE_LOCK_MSG });
     }
+    // 還在暫停／異常中就按完成 → 擋：完成後這筆暫停永遠不會結束，統計會一直把它算到現在
+    if (step === '11' && !order.step11At) {
+      const open = await fastify.prisma.pauseEvent.findFirst({ where: { orderId: order.id, endAt: null, deletedAt: null } });
+      if (open) {
+        const what = String(open.note || (open.type === '13' ? '異常停線' : '暫停')).replace('【補登】', '').split(' - ')[0];
+        return reply.code(409).send({ error: `這張單還在「${what}」中，請先按「恢復」再按完成` });
+      }
+    }
     // 防呆：生產完成終止前，設備「製造參數」必須已填（僅 No1–No6）
     if (step === '11' && MFG_PARAM_REQUIRED_MACHINES.has(order.machineNo)) {
       const missing = await getMissingManufacturingParams(fastify.prisma, order);
@@ -799,6 +839,8 @@ export default async function orderRoutes(fastify) {
       pauseStart = parsed;
     }
     if (lockedAfterDone(order, request.user, pauseStart)) return reply.code(409).send({ error: DONE_LOCK_MSG });
+    const clash = await pauseClash(fastify.prisma, order.id, pauseStart, null);
+    if (clash) return reply.code(409).send({ error: clash });
     await setActualStartDate(fastify, order, pauseStart);
     await fastify.prisma.pauseEvent.create({
       data: { orderId: order.id, type, note: clipStr(note, 500), activeStep: clipStr(activeStep, 100), qcActualQty, startAt: pauseStart },
@@ -858,6 +900,8 @@ export default async function orderRoutes(fastify) {
       if (activeSame) return reply.code(409).send({ error: '已有進行中的暫停，請先恢復或填結束時間' });
     }
     if (lockedAfterDone(order, request.user, endAt || startAt)) return reply.code(409).send({ error: DONE_LOCK_MSG });
+    const clash = await pauseClash(fastify.prisma, order.id, startAt, endAt);
+    if (clash) return reply.code(409).send({ error: clash });
     const backfillNote = '【補登】' + (note || '');
     // 補登暫停的 QC 實際生產數量：選填（事後補登可能已不知道）
     let qcActualQty = null;
@@ -969,6 +1013,16 @@ export default async function orderRoutes(fastify) {
         // 不救回的話，下方查詢會略過已刪除的單而走「新建」，撞上單號唯一鍵而上傳失敗；
         // 現場掃碼也會看到「此單已被刪除」。
         const deletedSame = await fastify.prisma.order.findFirst({ where: { orderNo, deletedAt: { not: null } } });
+        // 被刪除前已經有生產紀錄的單（管理員強制刪除）：不自動救回——救回會變成「已完成、數量 0」的怪單，
+        // 要用請管理員從回收桶「救回」（會連生產紀錄一起回來）
+        if (deletedSame && (deletedSame.actualStartDate || deletedSame.step11At ||
+            (await fastify.prisma.stepEntry.count({ where: { orderId: deletedSame.id, deletedAt: undefined } })) > 0 ||
+            (await fastify.prisma.pauseEvent.count({ where: { orderId: deletedSame.id, deletedAt: undefined } })) > 0)) {
+          rawRow.errorMsg = '此單之前被刪除，而且有生產紀錄，請管理員到回收桶救回';
+          rawRows.push(rawRow);
+          errors.push(orderNo + '：' + rawRow.errorMsg);
+          continue;
+        }
         if (deletedSame) {
           await fastify.prisma.order.update({ where: { id: deletedSame.id }, data: { deletedAt: null } });
           await audit(fastify.prisma, request, 'bulk_upload_revive_order', orderNo, { batchId: batch.id });
@@ -1340,15 +1394,26 @@ export default async function orderRoutes(fastify) {
       });
       orderRestored = true;
     }
-    // 還原所有軟刪除的子紀錄
-    const entryRes = await fastify.prisma.stepEntry.updateMany({
-      where: { orderId: order.id, deletedAt: { not: null } },
+    // 只還原「跟工單一起被刪」（強制刪除）或「最後一次整批清掉」（重設生產紀錄）的子紀錄。
+    // 之前個別撤銷的（現場 5 分鐘內取消、管理員刪掉的重複數量）不救回，否則完成數量會多算。
+    // 同一批刪除的時間都在幾秒內；以工單刪除時間（工單沒刪則用最後一次刪除時間）為準，前後 10 秒內算同一批
+    const [delEntries, delPauses] = await Promise.all([
+      fastify.prisma.stepEntry.findMany({ where: { orderId: order.id, deletedAt: { not: null } } }),
+      fastify.prisma.pauseEvent.findMany({ where: { orderId: order.id, deletedAt: { not: null } } }),
+    ]);
+    const lastDel = [...delEntries, ...delPauses].reduce((m, r) => Math.max(m, new Date(r.deletedAt).getTime()), 0);
+    const ref = order.deletedAt ? new Date(order.deletedAt).getTime() : lastDel;
+    const sameBatch = r => Math.abs(new Date(r.deletedAt).getTime() - ref) <= 10 * 1000;
+    const entryIds = delEntries.filter(sameBatch).map(r => r.id);
+    const pauseIds = delPauses.filter(sameBatch).map(r => r.id);
+    const entryRes = entryIds.length ? await fastify.prisma.stepEntry.updateMany({
+      where: { id: { in: entryIds }, deletedAt: { not: null } },
       data: { deletedAt: null },
-    });
-    const pauseRes = await fastify.prisma.pauseEvent.updateMany({
-      where: { orderId: order.id, deletedAt: { not: null } },
+    }) : { count: 0 };
+    const pauseRes = pauseIds.length ? await fastify.prisma.pauseEvent.updateMany({
+      where: { id: { in: pauseIds }, deletedAt: { not: null } },
       data: { deletedAt: null },
-    });
+    }) : { count: 0 };
 
     if (!orderRestored && entryRes.count === 0 && pauseRes.count === 0) {
       return reply.code(400).send({ error: '此工單沒有任何已刪除的內容可救回' });

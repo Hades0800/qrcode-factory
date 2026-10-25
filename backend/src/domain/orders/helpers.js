@@ -13,15 +13,32 @@ export function hasActivity(o) {
     o.step21At || o.step22At || o.step23At);
 }
 
-// 設定 actualStartDate 為實際開始日期（台灣時間）
-// 規則：actualStartDate 一旦有值就永遠不再覆寫；reset-production 才會清空
+// 設定 actualStartDate 為實際開始日期（台灣時間）＝最早一筆活動的台灣日期
+// 規則：有值之後只會「往前」（補登了更早的紀錄），不會往後；reset-production 才會清空
 // 第一次有活動時（含補登），把那筆活動時間的台灣日期寫入
 export async function setActualStartDate(fastify, order, eventTime) {
-  if (order.actualStartDate) return; // 已有值，鎖死不再變
+  const d = toTaiwanDate(eventTime);
+  if (order.actualStartDate && new Date(order.actualStartDate) <= d) return; // 已有同一天或更早的開始日
   await fastify.prisma.order.update({
     where: { orderNo: order.orderNo },
-    data: { actualStartDate: toTaiwanDate(eventTime) },
+    data: { actualStartDate: d },
   });
+}
+
+// 刪除／撤銷紀錄之後重算實際開始日：取剩下的紀錄裡最早的那筆；全部撤銷了就清空
+// （例：掃錯單、5 分鐘內取消，不能讓這張單一直被當成那天開始生產）
+export async function recomputeActualStartDate(prisma, orderId) {
+  const [e, p, o] = await Promise.all([
+    prisma.stepEntry.findFirst({ where: { orderId, deletedAt: null }, orderBy: { recordedAt: 'asc' }, select: { recordedAt: true } }),
+    prisma.pauseEvent.findFirst({ where: { orderId, deletedAt: null }, orderBy: { startAt: 'asc' }, select: { startAt: true } }),
+    prisma.order.findFirst({ where: { id: orderId, deletedAt: undefined } }),
+  ]);
+  if (!o) return;
+  const ts = [e && e.recordedAt, p && p.startAt, o.step11At,
+    o.step1At, o.step2At, o.step3At, o.step4At, o.step5At, o.step6At, o.step7At, o.step21At, o.step22At, o.step23At]
+    .filter(Boolean).map(t => new Date(t).getTime());
+  const actualStartDate = ts.length ? toTaiwanDate(new Date(Math.min(...ts))) : null;
+  await prisma.order.update({ where: { id: orderId }, data: { actualStartDate } });
 }
 
 // 設備「製造參數」是否填寫完整 —— 生產規格完成／生產完成終止的防呆條件

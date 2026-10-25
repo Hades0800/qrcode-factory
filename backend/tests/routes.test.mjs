@@ -39,6 +39,11 @@ function makeMockPrisma() {
           }
         } else if (k === 'OR' || k === 'AND' || k === 'NOT' || k === 'in') {
           // 不需支援複雜條件
+        } else if (v && typeof v === 'object' && !(v instanceof Date)) {
+          // 只支援測試用到的運算子：in / gt / gte
+          if ('in' in v && !v.in.includes(r[k])) return false;
+          if ('gt' in v && !(r[k] > v.gt)) return false;
+          if ('gte' in v && !(r[k] >= v.gte)) return false;
         } else {
           if (r[k] !== v) return false;
         }
@@ -94,6 +99,7 @@ function makeMockPrisma() {
   };
 
   const makeChildModel = (map, nextIdField) => ({
+    findUnique: async ({ where }) => { const r = map.get(where.id); return r && !r.deletedAt ? r : null; }, // middleware：findUnique→findFirst+deletedAt:null
     findFirst: async ({ where } = {}) => filterDeleted(Array.from(map.values()), injectSoftDelete(where))[0] || null,
     findMany: async ({ where } = {}) => filterDeleted(Array.from(map.values()), injectSoftDelete(where)),
     update: async ({ where, data }) => {
@@ -143,6 +149,7 @@ function makeMockPrisma() {
     },
     uploadRow: {
       createMany: async ({ data }) => ({ count: data.length }),
+      findFirst: async () => null,
     },
   };
 
@@ -820,6 +827,100 @@ await test('刪除後再 DELETE → 404（軟刪除的工單不該被找到）',
   const res = await fastify.inject({ method: 'DELETE', url: '/api/orders/A0000000009' });
   assert.equal(res.statusCode, 404);
   await fastify.close();
+});
+
+
+// ── 第三批防呆（2026-10）──
+const H = 3600 * 1000;
+await test('暫停不可重疊：補登的時段跟既有暫停重疊 → 409', async () => {
+  const { fastify } = await buildApp(LEADER);
+  const o = await fastify.prisma.order.create({ data: { orderNo: 'E0000000001', machineNo: 'No12' } });
+  await fastify.prisma.pauseEvent.create({ data: { orderId: o.id, type: '12', note: '中午休息', startAt: new Date(Date.now() - 5 * H), endAt: new Date(Date.now() - 4 * H) } });
+  const res = await fastify.inject({ method: 'POST', url: '/api/orders/E0000000001/pause-backfill', payload: {
+    type: '12', note: '中午休息', startAt: new Date(Date.now() - 4.5 * H).toISOString(), endAt: new Date(Date.now() - 3.5 * H).toISOString(), qcActualQty: 1 } });
+  assert.equal(res.statusCode, 409);
+  assert.match(JSON.parse(res.body).error, /不能重疊/);
+  await fastify.close();
+});
+
+await test('暫停不可重疊：異常停線進行中，再按暫停 → 409', async () => {
+  const { fastify } = await buildApp(LEADER);
+  const o = await fastify.prisma.order.create({ data: { orderNo: 'E0000000002', machineNo: 'No12' } });
+  await fastify.prisma.pauseEvent.create({ data: { orderId: o.id, type: '13', note: '設備異常', startAt: new Date(Date.now() - H), endAt: null } });
+  const res = await fastify.inject({ method: 'POST', url: '/api/orders/E0000000002/pause', payload: { type: '12', note: '中午休息', qcActualQty: 3 } });
+  assert.equal(res.statusCode, 409);
+  await fastify.close();
+});
+
+await test('還在暫停中就按完成 → 409（請先恢復）', async () => {
+  const { fastify } = await buildApp(LEADER);
+  const o = await fastify.prisma.order.create({ data: { orderNo: 'E0000000003', machineNo: 'No12' } });
+  await fastify.prisma.pauseEvent.create({ data: { orderId: o.id, type: '12', note: '下班時間／隔日生產', startAt: new Date(Date.now() - H), endAt: null } });
+  const res = await fastify.inject({ method: 'POST', url: '/api/orders/E0000000003/steps/11', payload: { note: '' } });
+  assert.equal(res.statusCode, 409);
+  assert.match(JSON.parse(res.body).error, /恢復/);
+  await fastify.close();
+});
+
+await test('生產規格完成 1 分鐘內同規格同數量重送 → 409', async () => {
+  const { fastify } = await buildApp(LEADER);
+  const o = await fastify.prisma.order.create({ data: { orderNo: 'E0000000004', machineNo: 'No12' } });
+  await fastify.prisma.stepEntry.create({ data: { orderId: o.id, stepNo: '30', seq: 1, note: '規格A', qcActualQty: 120, recordedAt: new Date(Date.now() - 20 * 1000) } });
+  const res = await fastify.inject({ method: 'POST', url: '/api/orders/E0000000004/step-entries', payload: { stepNo: '30', note: '規格A', qcActualQty: 120 } });
+  assert.equal(res.statusCode, 409);
+  assert.match(JSON.parse(res.body).error, /按了兩次/);
+  await fastify.close();
+});
+
+await test('現場撤銷唯一一筆紀錄 → 實際開始日清空', async () => {
+  const { fastify, state } = await buildApp(LEADER);
+  const o = await fastify.prisma.order.create({ data: { orderNo: 'E0000000005', machineNo: 'No12', actualStartDate: new Date('2026-10-20') } });
+  const en = await fastify.prisma.stepEntry.create({ data: { orderId: o.id, stepNo: '40', seq: 1, recordedAt: new Date() } });
+  const res = await fastify.inject({ method: 'DELETE', url: `/api/orders/E0000000005/step-entries/${en.id}` });
+  assert.equal(res.statusCode, 200, res.body);
+  assert.equal(state.orders.get('E0000000005').actualStartDate, null, '沒有紀錄了，開始日要清空');
+  await fastify.close();
+});
+
+await test('救回工單：只救回跟工單一起刪的紀錄，之前個別撤銷的不救回', async () => {
+  const { fastify, state } = await buildApp(ADMIN);
+  const delAt = new Date();
+  const o = await fastify.prisma.order.create({ data: { orderNo: 'E0000000006', machineNo: 'No12' } });
+  const a = await fastify.prisma.stepEntry.create({ data: { orderId: o.id, stepNo: '30', seq: 1, note: 'A', qcActualQty: 100, recordedAt: new Date() } });
+  const b = await fastify.prisma.stepEntry.create({ data: { orderId: o.id, stepNo: '30', seq: 2, note: 'A', qcActualQty: 100, recordedAt: new Date() } });
+  state.stepEntries.get(b.id).deletedAt = new Date(delAt.getTime() - 3600 * 1000); // 之前就被撤銷的重複紀錄
+  state.stepEntries.get(a.id).deletedAt = delAt;                                     // 跟工單一起刪
+  state.orders.get('E0000000006').deletedAt = delAt;
+  const res = await fastify.inject({ method: 'POST', url: '/api/orders/E0000000006/restore' });
+  assert.equal(res.statusCode, 200);
+  assert.equal(state.stepEntries.get(a.id).deletedAt, null, '一起刪的要救回');
+  assert.ok(state.stepEntries.get(b.id).deletedAt, '之前撤銷的不能救回');
+  await fastify.close();
+});
+
+await test('重新上傳：被強制刪除、有生產紀錄的單不自動救回', async () => {
+  const { fastify, state } = await buildApp(PLANNER);
+  await fastify.prisma.order.create({ data: { orderNo: 'E0000000007', machineNo: 'No12', step11At: new Date(), actualStartDate: new Date() } });
+  state.orders.get('E0000000007').deletedAt = new Date();
+  const res = await fastify.inject({
+    method: 'POST', url: '/api/orders/bulk-upload', headers: { 'content-type': 'application/json' },
+    payload: JSON.stringify({ orders: [{ orderNo: 'E0000000007', machineNo: 'No12', productSpec: 'X' }], filename: 't.xlsx' }),
+  });
+  assert.equal(res.statusCode, 200);
+  assert.ok(state.orders.get('E0000000007').deletedAt, '要維持刪除狀態');
+  assert.match(JSON.parse(res.body).errors[0], /回收桶/);
+});
+
+await test('操作紀錄：物件內容存成 JSON（不是 [object Object]）', async () => {
+  const { fastify, state } = await buildApp(PLANNER);
+  await fastify.prisma.order.create({ data: { orderNo: 'E0000000008', machineNo: 'No12' } });
+  state.orders.get('E0000000008').deletedAt = new Date();
+  await fastify.inject({
+    method: 'POST', url: '/api/orders/bulk-upload', headers: { 'content-type': 'application/json' },
+    payload: JSON.stringify({ orders: [{ orderNo: 'E0000000008', machineNo: 'No12', productSpec: 'X' }], filename: 't.xlsx' }),
+  });
+  const log = state.auditLogs.find(l => l.action === 'bulk_upload_revive_order');
+  assert.ok(log && log.detail.startsWith('{'), '應為 JSON：' + (log && log.detail));
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

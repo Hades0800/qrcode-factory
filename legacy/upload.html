@@ -447,7 +447,7 @@ function parseRows(json) {
       let val = row[excelKey];
       const field = mapping[excelKey];
       if (field === 'productionDate' && val instanceof Date) {
-        val = val.toISOString().slice(0, 10);
+        val = plannedYmdLocal(val); // Excel 日期是本地午夜，不能用 toISOString（會變成 UTC 的前一天）
       }
       obj[field] = val;
     });
@@ -552,7 +552,7 @@ $('uploadBtn').onclick = async () => {
     return;
   }
   const d = res.data;
-  let html = `<div class="result ok">上傳完成：新增 ${d.created} 筆、更新 ${d.updated} 筆<br>可切到「📋 上傳紀錄」查看明細</div>`;
+  let html = `<div class="result ok">上傳完成：新增 ${d.created} 筆、更新 ${d.updated} 筆${d.skipped ? `<br>另有 ${d.skipped} 列的規格和工單原本的規格不同，記錄為這張單的其他規格（多規格單屬正常；如果是規格改了，請通知管理員）` : ''}<br>可切到「📋 上傳紀錄」查看明細</div>`;
   if (d.autoCancelled && d.autoCancelled.length > 0) {
     html += `<div class="result" style="margin-top:8px;background:#fff8e8;color:#b8860b;">已自動取消 ${d.autoCancelled.length} 張被抽掉的計畫單（同日同機台、未開工、不在本次清單）：<br>${d.autoCancelled.map(n => escapeHtml(n)).join('、')}<br>誤刪可請管理員從回收桶救回</div>`;
   }
