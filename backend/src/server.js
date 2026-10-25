@@ -33,7 +33,7 @@ await fastify.register(authRoutes, { prefix: '/api/auth' });
 await fastify.register(orderRoutes, { prefix: '/api/orders' });
 await fastify.register(adminRoutes, { prefix: '/api/admin' });
 await fastify.register(equipmentParamRoutes, { prefix: '/api/equipment-params' });
-await fastify.register(maintenanceRoutes); // /、/health、/diag、/api/fix-dates
+await fastify.register(maintenanceRoutes); // /、/health、/diag
 await fastify.register(idleEventRoutes);   // /api/idle-events
 
 const port = Number(process.env.PORT || 8080);

@@ -332,13 +332,6 @@
     <div id="qtyFixResult" style="margin-top:12px;"></div>
   </div>
 
-  <div class="card">
-    <h2>資料修正：已完成工單的計畫日（一次性）</h2>
-    <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">2026-10 統計大檢查發現 7 張已完成的工單，做完之後又被重新上傳改掉計畫日。按下按鈕會先列出每張會怎麼改，確認後才修改；已經改好的不會重複修改，每筆都會留下操作紀錄。</p>
-    <button class="btn-primary btn-block" id="pdFixBtn">檢查並修正 7 張工單的計畫日</button>
-    <div id="pdFixResult" style="margin-top:12px;"></div>
-  </div>
-
 
 </div>
 
@@ -814,29 +807,6 @@ async function deleteOrderFromFind(orderNo) {
 $('findOrderBtn').onclick = findOrderNo;
 $('findOrderInput').addEventListener('keydown', e => { if (e.key === 'Enter') findOrderNo(); });
 
-
-// 一次性資料修正：7 張已完成工單的計畫日改回做完當時的計畫日（先預覽、確認後才改）
-function pdFixTable(results) {
-  return '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-    + '<tr style="color:var(--muted);font-size:12px;"><th style="text-align:left;padding:4px;">工單</th><th style="padding:4px;">目前計畫日</th><th style="padding:4px;">改成</th><th style="text-align:left;padding:4px;">結果</th></tr>'
-    + results.map(r => '<tr style="border-top:1px solid var(--border);"><td style="padding:4px;">' + escapeHtml(r.orderNo) + '</td><td style="padding:4px;text-align:center;">' + escapeHtml(r.from || '—')
-      + '</td><td style="padding:4px;text-align:center;">' + escapeHtml(r.to) + '</td><td style="padding:4px;color:' + (r.status === '已改' || r.status === '已經是正確日期' ? 'var(--success)' : 'var(--brand)') + ';">' + escapeHtml(r.status) + '</td></tr>').join('')
-    + '</table>';
-}
-$('pdFixBtn').onclick = async () => {
-  const box = $('pdFixResult');
-  const pre = await api('/api/admin/fix-planned-dates-2026-10', { method: 'POST', body: { dryRun: true } });
-  if (!pre.ok) { toast(pre.error || '讀取失敗', 'error'); return; }
-  const todo = pre.data.results.filter(r => r.status === '會改');
-  box.innerHTML = pdFixTable(pre.data.results);
-  if (todo.length === 0) { toast('沒有需要修改的單', 'success'); return; }
-  const list = todo.map(r => r.orderNo + '：' + r.from + ' → ' + r.to).join('\n');
-  if (!confirm('以下 ' + todo.length + ' 張工單的計畫日，會改回做完當時的日期：\n\n' + list + '\n\n確定要修改？')) return;
-  const r = await api('/api/admin/fix-planned-dates-2026-10', { method: 'POST', body: { dryRun: false } });
-  if (!r.ok) { toast(r.error || '修改失敗', 'error'); return; }
-  box.innerHTML = pdFixTable(r.data.results);
-  toast('已修改 ' + r.data.changed + ' 張', 'success');
-};
 
 $('auditDays').onchange = () => loadAuditLog();
 

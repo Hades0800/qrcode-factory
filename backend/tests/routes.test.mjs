@@ -924,30 +924,5 @@ await test('操作紀錄：物件內容存成 JSON（不是 [object Object]）',
 });
 
 
-await test('一次性修正計畫日：先預覽不改、確認後只改符合的單、重複執行不再改', async () => {
-  const adminRoutes = (await import('../src/routes/admin.js')).default;
-  const fastify = Fastify({ logger: false });
-  const { prisma, state } = makeMockPrisma();
-  fastify.decorate('prisma', prisma);
-  fastify.decorate('authenticate', async (request) => { request.user = ADMIN; });
-  fastify.decorate('requireAdmin', async () => {});
-  await fastify.register(adminRoutes, { prefix: '/api/admin' });
-  await fastify.ready();
-  const done = new Date('2026-10-05T02:50:00Z');
-  await prisma.order.create({ data: { orderNo: 'F1150930001', step11At: done, plannedDate: new Date('2026-10-06T00:00:00Z') } });
-  await prisma.order.create({ data: { orderNo: 'F1150930002', step11At: done, plannedDate: new Date('2026-10-07T00:00:00Z') } }); // 被別人改過 → 不改
-  const pre = JSON.parse((await fastify.inject({ method: 'POST', url: '/api/admin/fix-planned-dates-2026-10', payload: { dryRun: true } })).body);
-  assert.equal(pre.changed, 0);
-  assert.equal(state.orders.get('F1150930001').plannedDate.toISOString().slice(0, 10), '2026-10-06', '預覽不能改');
-  const run = JSON.parse((await fastify.inject({ method: 'POST', url: '/api/admin/fix-planned-dates-2026-10', payload: { dryRun: false } })).body);
-  assert.equal(run.changed, 1);
-  assert.equal(state.orders.get('F1150930001').plannedDate.toISOString().slice(0, 10), '2026-10-05');
-  assert.equal(state.orders.get('F1150930002').plannedDate.toISOString().slice(0, 10), '2026-10-07', '被改過的不動');
-  const again = JSON.parse((await fastify.inject({ method: 'POST', url: '/api/admin/fix-planned-dates-2026-10', payload: { dryRun: false } })).body);
-  assert.equal(again.changed, 0, '重複執行不再改');
-  assert.equal(state.auditLogs.filter(l => l.action === 'fix_planned_date').length, 1);
-  await fastify.close();
-});
-
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
