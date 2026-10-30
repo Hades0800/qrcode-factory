@@ -200,6 +200,27 @@ export default async function orderRoutes(fastify) {
   // 規格比對用的鍵：去掉所有空白（生管 Excel 的規格常多空白，多一個空白不能算成另一個規格）
   const specKey = s => String(s == null ? '' : s).replace(/\s+/g, '');
 
+  // 上傳明細依規格合併（規格卡、派工總數共用同一套規則）：
+  //   同規格 → 較新批次有值就覆蓋、沒值保留舊值（跟工單主檔的上傳規則一樣）
+  //   「生產規格空白」的列不是新規格（例：某次上傳 Excel 的規格欄名系統認不得，整欄被略過）：
+  //     單一規格的單 → 併進那個規格；多規格的單 → 判斷不出屬於哪個規格，略過；全部都空白 → 保留一列
+  //   否則會多出一張只有領料／模具的「規格卡」，派工總數也會重複加一次
+  function mergeUploadRowsBySpec(rows) {
+    const named = [...new Set(rows.map(r => specKey(r.productSpec)).filter(Boolean))];
+    const bySpec = new Map();
+    for (const r of rows) {
+      let key = specKey(r.productSpec);
+      if (!key && named.length > 1) continue;
+      if (!key && named.length === 1) key = named[0];
+      const prev = bySpec.get(key);
+      if (!prev) { bySpec.set(key, r); continue; }
+      const merged = { ...prev };
+      for (const [k, v] of Object.entries(r)) if (v != null && v !== '') merged[k] = v;
+      bySpec.set(key, merged);
+    }
+    return bySpec;
+  }
+
   // 已完成的工單不能再記錄生產（工序、暫停、換機台）：要繼續做請管理員「重新開啟」。
   // 例外：補登「完成時間之前」的紀錄（事後補記漏掉的）；管理員不受限（修正資料用）。
   const DONE_LOCK_MSG = '此工單已完成，不能再記錄生產。如需繼續生產，請管理員到「生產實態紀錄」把這張單重新開啟';
@@ -1499,12 +1520,8 @@ export default async function orderRoutes(fastify) {
       },
       orderBy: [{ batchId: 'asc' }, { id: 'asc' }], // 舊→新，讓較新批次覆蓋
     });
-    // 依 productSpec 去重：Map.set 會更新值但保留首次出現的排列位置 → 舊規格在前、新規格接續在後
-    const bySpec = new Map();
-    for (const r of allRows) {
-      bySpec.set(specKey(r.productSpec), r);
-    }
-    const rows = [...bySpec.values()];
+    // 依規格合併（見 mergeUploadRowsBySpec）：Map 保留首次出現的排列位置 → 舊規格在前、新規格接續在後
+    const rows = [...mergeUploadRowsBySpec(allRows).values()];
     return { rows };
   });
 
@@ -1531,28 +1548,26 @@ export default async function orderRoutes(fastify) {
       orderBy: [{ batchId: 'asc' }, { id: 'asc' }], // 舊→新，讓較新批次覆蓋
       select: { orderNo: true, productSpec: true, dispatchQty: true, bladeCount: true, machineSPM: true },
     });
-    const specQtyByOrder = new Map(); // orderNo → Map(productSpec → dispatchQty)
-    const specParamsByOrder = new Map(); // orderNo → Map(productSpec → { blades, spm })：多規格單各規格自己的刀數／SPM
+    const rowsByOrder = new Map(); // 母單號 → 上傳明細（舊→新）
     for (const r of uploadRows) {
-      const spec = (r.productSpec || '').trim();
-      const key = specKey(spec);
-      let m = specQtyByOrder.get(r.orderNo);
-      if (!m) specQtyByOrder.set(r.orderNo, (m = new Map()));
-      m.set(key, r.dispatchQty);
-      if (key && (r.bladeCount || r.machineSPM)) {
-        let pm = specParamsByOrder.get(r.orderNo);
-        if (!pm) specParamsByOrder.set(r.orderNo, (pm = new Map()));
-        pm.set(key, { spec, blades: r.bladeCount || null, spm: r.machineSPM || null });
-      }
+      if (!rowsByOrder.has(r.orderNo)) rowsByOrder.set(r.orderNo, []);
+      rowsByOrder.get(r.orderNo).push(r);
     }
     const dispatchTotals = {};
-    const uploadSpecs = {};  // 母單號 → 上傳明細第一列的規格（主檔規格缺漏時前端退用）
-    for (const [no, m] of specQtyByOrder) {
+    const uploadSpecs = {};  // 母單號 → 上傳明細第一個規格的原文（主檔規格缺漏時前端退用；不能用去空白的比對鍵）
+    const specParamsByOrder = new Map(); // 母單號 → Map(規格鍵 → { spec, blades, spm })：多規格單各規格自己的刀數／SPM
+    for (const [no, list] of rowsByOrder) {
+      const merged = mergeUploadRowsBySpec(list);
       let sum = 0, has = false;
-      for (const qv of m.values()) { if (qv != null) { sum += qv; has = true; } }
+      const pm = new Map();
+      for (const [key, r] of merged) {
+        if (r.dispatchQty != null) { sum += r.dispatchQty; has = true; }
+        if (key && (r.bladeCount || r.machineSPM)) pm.set(key, { spec: (r.productSpec || '').trim(), blades: r.bladeCount || null, spm: r.machineSPM || null });
+      }
       if (has) dispatchTotals[no] = sum;
-      const firstSpec = [...m.keys()].find(k => k);
-      if (firstSpec) uploadSpecs[no] = firstSpec;
+      if (pm.size) specParamsByOrder.set(no, pm);
+      const first = [...merged.values()].find(r => (r.productSpec || '').trim());
+      if (first) uploadSpecs[no] = first.productSpec.trim();
     }
     // 現場填的「製造參數」SPM／刀數（多規格各一列）：生管上傳沒填刀數／SPM 時，
     // 目標達成統計的標準工時改用這裡補（兩邊都有填以生管為準，由前端決定）

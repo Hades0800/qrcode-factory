@@ -150,6 +150,8 @@ function makeMockPrisma() {
     uploadRow: {
       createMany: async ({ data }) => ({ count: data.length }),
       findFirst: async () => null,
+      findMany: async ({ where } = {}) => (state.uploadRows || []).filter(r =>
+        !where || !where.orderNo || (typeof where.orderNo === 'string' ? r.orderNo === where.orderNo : where.orderNo.in.includes(r.orderNo))),
     },
   };
 
@@ -923,6 +925,26 @@ await test('操作紀錄：物件內容存成 JSON（不是 [object Object]）',
   assert.ok(log && log.detail.startsWith('{'), '應為 JSON：' + (log && log.detail));
 });
 
+
+
+await test('上傳明細：生產規格空白的列不算新規格（單一規格併回、多規格略過）', async () => {
+  const { fastify, state } = await buildApp(LEADER);
+  const base = { moldSpec: '50*135.5--28.5', material: '黑鐵 4.8T*1205*C\'', bladeCount: 132, machineSPM: 190, status: 'updated' };
+  state.uploadRows = [
+    { id: 1, batchId: 1, orderNo: 'G0000000001', productSpec: '黑鐵 5.0T*(45*135)*8W*1200*3000mm', dispatchQty: 250, ...base },
+    { id: 2, batchId: 2, orderNo: 'G0000000001', productSpec: null, dispatchQty: 260, ...base },          // 某次上傳規格欄沒被認得
+    { id: 3, batchId: 1, orderNo: 'G0000000002', productSpec: 'A', dispatchQty: 100, ...base },
+    { id: 4, batchId: 1, orderNo: 'G0000000002', productSpec: 'B', dispatchQty: 200, ...base },
+    { id: 5, batchId: 2, orderNo: 'G0000000002', productSpec: '', dispatchQty: 999, ...base },             // 多規格：不知道是哪個
+  ];
+  const one = JSON.parse((await fastify.inject({ method: 'GET', url: '/api/orders/G0000000001/upload-rows' })).body).rows;
+  assert.equal(one.length, 1, '單一規格只能有 1 張卡');
+  assert.equal(one[0].productSpec, '黑鐵 5.0T*(45*135)*8W*1200*3000mm', '規格文字保留');
+  assert.equal(one[0].dispatchQty, 260, '較新的派工數照樣採用');
+  const multi = JSON.parse((await fastify.inject({ method: 'GET', url: '/api/orders/G0000000002/upload-rows' })).body).rows;
+  assert.deepEqual(multi.map(r => r.productSpec), ['A', 'B'], '多規格略過空白列');
+  await fastify.close();
+});
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
