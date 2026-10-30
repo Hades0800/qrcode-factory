@@ -424,16 +424,26 @@ function parseRows(json) {
   const headers = Object.keys(json[0]);
   const mapping = {};
   const unmatched = [];
-  // 比對不到時，再去掉欄名尾巴的日期／數字試一次（生管常把日期寫進欄名，例：「品名規格 1030」「品名規格10/30」）
-  const stripDate = k => k.replace(/[\d.]+(月[\d.]*日?|號|日)?$/, '');
-  const loose = [];
+  // 第一輪：欄名完全對得上的
   headers.forEach(h => {
     const key = normHeader(h);
     if (normalizedFieldMap[key]) mapping[h] = normalizedFieldMap[key];
-    else if (normalizedFieldMap[stripDate(key)]) { mapping[h] = normalizedFieldMap[stripDate(key)]; loose.push(h); }
-    else if (h.trim()) unmatched.push(h);
   });
-  headerInfo = { unmatched, loose, hasSpec: Object.values(mapping).includes('productSpec') };
+  // 第二輪：對不上的，去掉欄名尾巴的日期／數字再比一次（生管常把日期寫進欄名，例：「品名規格 1012」「品名規格 10/30」）
+  //   只補還沒有欄位對應到的系統欄位；Excel 有重複欄名時 SheetJS 會加「_1」「_2」（例：最後的第二組「總數」「數量」），
+  //   這種不算，否則會蓋掉前面真正的數量
+  const stripDate = k => k.replace(/[\d.]+(月[\d.]*日?|號|日)?$/, '');
+  const IGNORED_HEADERS = new Set(['排序', '交貨日期', '待料']); // 生管計畫表有、系統用不到的欄
+  const loose = [], ignored = [];
+  headers.forEach(h => {
+    if (mapping[h] || !h.trim()) return;
+    const key = normHeader(h);
+    const f = /_\d+$/.test(h) ? null : normalizedFieldMap[stripDate(key)];
+    if (f && !Object.values(mapping).includes(f)) { mapping[h] = f; loose.push(h); }
+    else if (IGNORED_HEADERS.has(key) || /_\d+$/.test(h)) ignored.push(h);
+    else unmatched.push(h);
+  });
+  headerInfo = { unmatched, loose, ignored, hasSpec: Object.values(mapping).includes('productSpec') };
   if (!Object.values(mapping).includes('orderNo')) {
     toast('找不到「製造單號」欄位，請確認 Excel 第一列有此欄位名', 'error');
     return;
@@ -475,6 +485,11 @@ function parseRows(json) {
         obj[k] = (isNaN(n) || n === 0) ? null : n;
       }
     });
+    // 備註列：ERP 把「送鍍鋅」「備庫存 請密封包裝入庫…」這類給現場的指示另起一列、寫在品名規格欄
+    //   （數量 1、單重／總重 0，內容沒有規格的「*」）。不是規格，不上傳——
+    //   否則會多出一個「規格」、派工總數多 1，舊版還會把工單的派工數蓋成 1
+    obj._note = obj._valid && !obj.unitWeight && !obj.totalWeight && (!obj.dispatchQty || obj.dispatchQty <= 1) &&
+      !!String(obj.productSpec || '').trim() && String(obj.productSpec).indexOf('*') === -1;
     // 疑似殘留行：orderNo 看起來合法但其他欄位（規格/領料/機台/數量）全空
     // 通常是 Excel 殘留資料（之前刪除沒清乾淨、隱藏列、白字格式）
     const otherFields = ['productSpec','moldSpec','material','machineNo','dispatchQty','bladeCount','machineSPM','unitWeight','totalWeight'];
@@ -482,7 +497,8 @@ function parseRows(json) {
     return obj;
   });
 
-  parsedRows = allRows;
+  // 夾在表格中間的重複表頭列（例：第 52 列又是「製造單號／品名規格／數量…」）直接略過
+  parsedRows = allRows.filter(r => r.orderNo !== '製造單號' && r.orderNo !== '工單號' && r.orderNo !== '工單編號');
 
   renderPreview();
 }
@@ -490,23 +506,28 @@ function parseRows(json) {
 function renderPreview() {
   $('previewCard').style.display = 'block';
   $('result').innerHTML = '';
-  const valid = parsedRows.filter(r => r._valid && !r._suspicious).length;
+  const valid = parsedRows.filter(r => r._valid && !r._suspicious && !r._note).length;
   const suspicious = parsedRows.filter(r => r._suspicious).length;
-  const invalid = parsedRows.length - valid - suspicious;
-  const noSpec = parsedRows.filter(r => r._valid && !r._suspicious && !String(r.productSpec || '').trim());
+  const notes = parsedRows.filter(r => r._note).length;
+  const invalid = parsedRows.length - valid - suspicious - notes;
+  const noSpec = parsedRows.filter(r => r._valid && !r._suspicious && !r._note && !String(r.productSpec || '').trim());
   const warn = [];
   if (!headerInfo.hasSpec) warn.push('⚠ 找不到「品名規格」（生產規格）欄，這次上傳的生產規格會全部是空的。');
   if (headerInfo.unmatched.length) warn.push('⚠ 這些欄名系統認不得，資料會被略過：' + headerInfo.unmatched.map(h => '「' + escapeHtml(h.trim()) + '」').join('、'));
   if (headerInfo.hasSpec && noSpec.length) warn.push('⚠ 有 ' + noSpec.length + ' 列沒有生產規格：' + noSpec.slice(0, 10).map(r => escapeHtml(r.orderNo)).join('、') + (noSpec.length > 10 ? '…' : ''));
   if (headerInfo.loose.length) warn.push('ℹ 欄名後面帶日期或數字，已自動認成對應欄位：' + headerInfo.loose.map(h => '「' + escapeHtml(h.trim()) + '」').join('、'));
+  if (notes) warn.push('ℹ 有 ' + notes + ' 列是給現場的備註（例：送鍍鋅），不是規格，這些列不會上傳');
   $('statsRow').innerHTML = (warn.length ? `<div style="width:100%;background:#fff8e8;color:#8a5a00;border:1px solid #f0ad4e;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:6px;">${warn.join('<br>')}</div>` : '') + `
     <div class="stat-pill">共 <strong>${parsedRows.length}</strong> 筆</div>
     <div class="stat-pill">有效 <strong>${valid}</strong></div>
     ${invalid ? `<div class="stat-pill" style="color:var(--brand);">格式錯誤 <strong>${invalid}</strong></div>` : ''}
     ${suspicious ? `<div class="stat-pill" style="color:#f0ad4e;">疑似殘留 <strong>${suspicious}</strong></div>` : ''}
+    ${notes ? `<div class="stat-pill" style="color:var(--muted);">備註列 <strong>${notes}</strong>（不上傳）</div>` : ''}
   `;
   $('previewBody').innerHTML = parsedRows.map((r, i) => {
-    const statusCell = r._suspicious
+    const statusCell = r._note
+      ? '<span style="color:var(--muted);">📝 備註（不上傳）</span>'
+      : r._suspicious
       ? '<span style="color:#f0ad4e;">⚠ 疑似殘留</span>'
       : (r._valid ? '&#10003;' : '<span class="err">&#10007;</span>');
     const orderCell = r._suspicious
@@ -543,7 +564,7 @@ $('cancelBtn').onclick = () => {
 };
 
 $('uploadBtn').onclick = async () => {
-  const rows = parsedRows.filter(r => r._valid && !r._suspicious);
+  const rows = parsedRows.filter(r => r._valid && !r._suspicious && !r._note);
   if (rows.length === 0) { toast('沒有有效的工單', 'error'); return; }
   const selectedDate = $('uploadDate').value;
   const today = new Date();
@@ -561,7 +582,7 @@ $('uploadBtn').onclick = async () => {
   $('uploadBtn').textContent = '上傳中...';
   const clean = rows.map(r => {
     const o = Object.assign({}, r);
-    delete o._valid;
+    delete o._valid; delete o._note; delete o._suspicious;
     return o;
   });
   // 原檔一起送（base64），資料庫保留一份，之後查問題用
