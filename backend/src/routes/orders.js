@@ -40,6 +40,33 @@ const NEED_EP_FILE_MSG = '請先上傳設備參數（設備參數檔名）才能
 export default async function orderRoutes(fastify) {
   fastify.addHook('onRequest', fastify.authenticate);
 
+  // 「上傳原檔」表（UploadFile）由這裡在啟動時建立：正式資料庫沒開對外連線，沒辦法在本機手動 db:push。
+  // 只在不存在時建立、不動任何既有資料；語法與 prisma migrate diff 產生的完全一致，之後跑 db:push 也不會衝突。
+  fastify.addHook('onReady', async () => {
+    try {
+      await fastify.prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "UploadFile" (
+          "id" SERIAL NOT NULL,
+          "batchId" INTEGER NOT NULL,
+          "filename" TEXT NOT NULL,
+          "mimeType" TEXT,
+          "size" INTEGER NOT NULL,
+          "data" BYTEA NOT NULL,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "UploadFile_pkey" PRIMARY KEY ("id")
+        )`);
+      await fastify.prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "UploadFile_batchId_key" ON "UploadFile"("batchId")`);
+      await fastify.prisma.$executeRawUnsafe(`
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'UploadFile_batchId_fkey') THEN
+            ALTER TABLE "UploadFile" ADD CONSTRAINT "UploadFile_batchId_fkey" FOREIGN KEY ("batchId") REFERENCES "UploadBatch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+          END IF;
+        END $$`);
+    } catch (e) {
+      fastify.log.error({ err: e }, '建立 UploadFile 表失敗：上傳仍可使用，但不會保留原檔');
+    }
+  });
+
   // 上傳批次列表（必須在 /:orderNo 之前定義避免路由衝突）
   fastify.get('/upload-batches', async (request) => {
     const limit = Math.min(Number(request.query.limit) || 50, 200);
@@ -47,7 +74,27 @@ export default async function orderRoutes(fastify) {
       orderBy: { uploadedAt: 'desc' },
       take: limit,
     });
-    return { batches };
+    // 哪幾批有保留原檔（表還沒建好時當作都沒有）
+    let withFile = new Set();
+    try {
+      const files = await fastify.prisma.uploadFile.findMany({ where: { batchId: { in: batches.map(b => b.id) } }, select: { batchId: true } });
+      withFile = new Set(files.map(f => f.batchId));
+    } catch (e) { /* ignore */ }
+    return { batches: batches.map(b => ({ ...b, hasFile: withFile.has(b.id) })) };
+  });
+
+  // 下載上傳原檔（生管、管理員）
+  fastify.get('/upload-batches/:id/file', async (request, reply) => {
+    if (!request.user.isAdmin && !request.user.isPlanner) {
+      return reply.code(403).send({ error: '需要生管或管理員權限' });
+    }
+    const id = Number(request.params.id);
+    if (!id) return reply.code(400).send({ error: '無效 id' });
+    const f = await fastify.prisma.uploadFile.findFirst({ where: { batchId: id } });
+    if (!f) return reply.code(404).send({ error: '這批上傳沒有保留原檔（保留原檔功能上線前的上傳都沒有）' });
+    reply.header('Content-Type', f.mimeType || 'application/octet-stream');
+    reply.header('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(f.filename)}`);
+    return reply.send(Buffer.from(f.data));
   });
 
   // 取消整個上傳批次
@@ -940,11 +987,12 @@ export default async function orderRoutes(fastify) {
   });
 
   // 批次上傳工單（生管 or 管理員）
-  fastify.post('/bulk-upload', async (request, reply) => {
+  //   body 會帶原始 Excel（base64，最大 5MB → 編碼後約 6.7MB），所以這條路由的大小上限放寬到 8MB
+  fastify.post('/bulk-upload', { bodyLimit: 8 * 1024 * 1024 }, async (request, reply) => {
     if (!request.user.isAdmin && !request.user.isPlanner) {
       return reply.code(403).send({ error: '需要生管或管理員權限' });
     }
-    const { orders: rows, filename, uploadDate } = request.body || {};
+    const { orders: rows, filename, uploadDate, file: rawFile } = request.body || {};
     if (!Array.isArray(rows) || rows.length === 0) {
       return reply.code(400).send({ error: '沒有資料' });
     }
@@ -972,6 +1020,22 @@ export default async function orderRoutes(fastify) {
         orderNos: [],
       },
     });
+
+    // 保留上傳原檔（查問題用：瀏覽器只送認得的欄位，原檔才看得到當時 Excel 的欄名、內容）
+    let fileSaved = false;
+    if (rawFile && typeof rawFile.base64 === 'string' && rawFile.base64) {
+      try {
+        const data = Buffer.from(rawFile.base64, 'base64');
+        if (data.length > 0 && data.length <= 5 * 1024 * 1024) {
+          await fastify.prisma.uploadFile.create({
+            data: { batchId: batch.id, filename: cleanFilename, mimeType: rawFile.type ? String(rawFile.type).slice(0, 100) : null, size: data.length, data },
+          });
+          fileSaved = true;
+        }
+      } catch (e) {
+        fastify.log.error({ err: e }, '保留上傳原檔失敗（上傳本身照常進行）');
+      }
+    }
 
     let created = 0, updated = 0, skipped = 0, errors = [];
     const processedOrderNos = [];
@@ -1149,7 +1213,7 @@ export default async function orderRoutes(fastify) {
       }
     }
 
-    return { ok: true, created, updated, skipped, errors, total: rows.length, batchId: batch.id, autoCancelled, machineKept, doneKept };
+    return { ok: true, created, updated, skipped, errors, total: rows.length, batchId: batch.id, autoCancelled, machineKept, doneKept, fileSaved };
   });
 
   // 客戶名稱補登（管理員）：簡表（工單號＋客戶名稱）一次補齊

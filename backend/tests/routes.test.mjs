@@ -144,8 +144,14 @@ function makeMockPrisma() {
     },
     uploadBatch: {
       _nextId: 1,
-      create: async function({ data }) { return { id: this._nextId++, ...data }; },
+      create: async function({ data }) { const b = { id: this._nextId++, ...data }; (state.uploadBatches = state.uploadBatches || []).push(b); return b; },
+      findMany: async () => [...(state.uploadBatches || [])].reverse(),
       update: async ({ where, data }) => ({ id: where.id, ...data }),
+    },
+    uploadFile: {
+      create: async ({ data }) => { (state.uploadFiles = state.uploadFiles || []).push(data); return data; },
+      findFirst: async ({ where }) => (state.uploadFiles || []).find(f => f.batchId === where.batchId) || null,
+      findMany: async ({ where }) => (state.uploadFiles || []).filter(f => where.batchId.in.includes(f.batchId)),
     },
     uploadRow: {
       createMany: async ({ data }) => ({ count: data.length }),
@@ -944,6 +950,42 @@ await test('上傳明細：生產規格空白的列不算新規格（單一規�
   const multi = JSON.parse((await fastify.inject({ method: 'GET', url: '/api/orders/G0000000002/upload-rows' })).body).rows;
   assert.deepEqual(multi.map(r => r.productSpec), ['A', 'B'], '多規格略過空白列');
   await fastify.close();
+});
+
+
+await test('上傳保留原檔：存進資料庫、上傳紀錄標示有原檔、可以下載回來', async () => {
+  const { fastify, state } = await buildApp(PLANNER);
+  const original = Buffer.from('PK\u0003\u0004 假的 Excel 內容 1030');
+  const res = await fastify.inject({
+    method: 'POST', url: '/api/orders/bulk-upload', headers: { 'content-type': 'application/json' },
+    payload: JSON.stringify({ orders: [{ orderNo: 'H0000000001', machineNo: 'No12', productSpec: 'X' }], filename: '1030.xlsx',
+      file: { base64: original.toString('base64'), type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' } }),
+  });
+  assert.equal(res.statusCode, 200);
+  assert.equal(JSON.parse(res.body).fileSaved, true);
+  assert.equal(state.uploadFiles.length, 1);
+  const list = JSON.parse((await fastify.inject({ method: 'GET', url: '/api/orders/upload-batches' })).body).batches;
+  assert.equal(list[0].hasFile, true);
+  const dl = await fastify.inject({ method: 'GET', url: `/api/orders/upload-batches/${list[0].id}/file` });
+  assert.equal(dl.statusCode, 200);
+  assert.ok(Buffer.compare(dl.rawPayload, original) === 0, '下載回來要跟原檔一模一樣');
+  assert.match(dl.headers['content-disposition'], /1030\.xlsx/);
+  await fastify.close();
+});
+
+await test('上傳沒帶原檔（舊版頁面）照常成功；現場帳號不能下載原檔', async () => {
+  const { fastify } = await buildApp(PLANNER);
+  const res = await fastify.inject({
+    method: 'POST', url: '/api/orders/bulk-upload', headers: { 'content-type': 'application/json' },
+    payload: JSON.stringify({ orders: [{ orderNo: 'H0000000002', machineNo: 'No12', productSpec: 'X' }], filename: 'old.xlsx' }),
+  });
+  assert.equal(res.statusCode, 200);
+  assert.equal(JSON.parse(res.body).fileSaved, false);
+  await fastify.close();
+  const leader = await buildApp(LEADER);
+  const dl = await leader.fastify.inject({ method: 'GET', url: '/api/orders/upload-batches/1/file' });
+  assert.equal(dl.statusCode, 403);
+  await leader.fastify.close();
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

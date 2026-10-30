@@ -302,6 +302,8 @@
 const me = getMe();
 let parsedRows = [];
 let uploadedFilename = '';
+let uploadedFile = null;     // { buffer: ArrayBuffer, type } —— 上傳時一起送，資料庫保留原檔
+let headerInfo = { unmatched: [], loose: [], hasSpec: true }; // 欄名對應結果（預覽時提醒用）
 
 // 權限檢查：只有生管 / admin 能進上傳頁（一般人員從即時頁直接填設備參數）
 if (!me) { location.href = 'index.html'; }
@@ -398,6 +400,7 @@ function handleFile(file) {
   $('fileName').textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
   const reader = new FileReader();
   reader.onload = e => {
+    uploadedFile = { buffer: e.target.result, type: file.type || '' };
     try {
       // raw: true → 拿 Excel 儲存格實際資料，避免「自訂格式」造假
       // 例如儲存格實際是數字 1159421004，自訂格式顯示成 F1159421004 → raw 模式下 orderNo 會是純數字 → 不通過格式檢查
@@ -421,11 +424,16 @@ function parseRows(json) {
   const headers = Object.keys(json[0]);
   const mapping = {};
   const unmatched = [];
+  // 比對不到時，再去掉欄名尾巴的日期／數字試一次（生管常把日期寫進欄名，例：「品名規格 1030」「品名規格10/30」）
+  const stripDate = k => k.replace(/[\d.]+(月[\d.]*日?|號|日)?$/, '');
+  const loose = [];
   headers.forEach(h => {
     const key = normHeader(h);
     if (normalizedFieldMap[key]) mapping[h] = normalizedFieldMap[key];
+    else if (normalizedFieldMap[stripDate(key)]) { mapping[h] = normalizedFieldMap[stripDate(key)]; loose.push(h); }
     else if (h.trim()) unmatched.push(h);
   });
+  headerInfo = { unmatched, loose, hasSpec: Object.values(mapping).includes('productSpec') };
   if (!Object.values(mapping).includes('orderNo')) {
     toast('找不到「製造單號」欄位，請確認 Excel 第一列有此欄位名', 'error');
     return;
@@ -485,7 +493,13 @@ function renderPreview() {
   const valid = parsedRows.filter(r => r._valid && !r._suspicious).length;
   const suspicious = parsedRows.filter(r => r._suspicious).length;
   const invalid = parsedRows.length - valid - suspicious;
-  $('statsRow').innerHTML = `
+  const noSpec = parsedRows.filter(r => r._valid && !r._suspicious && !String(r.productSpec || '').trim());
+  const warn = [];
+  if (!headerInfo.hasSpec) warn.push('⚠ 找不到「品名規格」（生產規格）欄，這次上傳的生產規格會全部是空的。');
+  if (headerInfo.unmatched.length) warn.push('⚠ 這些欄名系統認不得，資料會被略過：' + headerInfo.unmatched.map(h => '「' + escapeHtml(h.trim()) + '」').join('、'));
+  if (headerInfo.hasSpec && noSpec.length) warn.push('⚠ 有 ' + noSpec.length + ' 列沒有生產規格：' + noSpec.slice(0, 10).map(r => escapeHtml(r.orderNo)).join('、') + (noSpec.length > 10 ? '…' : ''));
+  if (headerInfo.loose.length) warn.push('ℹ 欄名後面帶日期或數字，已自動認成對應欄位：' + headerInfo.loose.map(h => '「' + escapeHtml(h.trim()) + '」').join('、'));
+  $('statsRow').innerHTML = (warn.length ? `<div style="width:100%;background:#fff8e8;color:#8a5a00;border:1px solid #f0ad4e;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:6px;">${warn.join('<br>')}</div>` : '') + `
     <div class="stat-pill">共 <strong>${parsedRows.length}</strong> 筆</div>
     <div class="stat-pill">有效 <strong>${valid}</strong></div>
     ${invalid ? `<div class="stat-pill" style="color:var(--brand);">格式錯誤 <strong>${invalid}</strong></div>` : ''}
@@ -537,6 +551,12 @@ $('uploadBtn').onclick = async () => {
   if (selectedDate && selectedDate !== ymd) {
     if (!confirm('你選的日期是 ' + selectedDate + '（非今日），確定要用這個日期上傳嗎？\n\n這是補上傳功能，工單的生產日期會標記為該日期。')) return;
   }
+  // 生產規格沒讀到（多半是欄名不對）→ 明確擋一下，避免整批單的規格變成空的
+  const noSpecRows = rows.filter(r => !String(r.productSpec || '').trim());
+  if (noSpecRows.length) {
+    const why = !headerInfo.hasSpec ? '找不到「品名規格」欄' + (headerInfo.unmatched.length ? '（認不得的欄名：' + headerInfo.unmatched.map(h => h.trim()).join('、') + '）' : '') : '這些列的品名規格是空白';
+    if (!confirm('⚠ 有 ' + noSpecRows.length + ' 列讀不到生產規格：' + why + '。\n\n建議先取消，把 Excel 的欄名改成「品名規格」後再上傳。\n確定仍要上傳嗎？')) return;
+  }
   $('uploadBtn').disabled = true;
   $('uploadBtn').textContent = '上傳中...';
   const clean = rows.map(r => {
@@ -544,7 +564,15 @@ $('uploadBtn').onclick = async () => {
     delete o._valid;
     return o;
   });
-  const res = await api('/api/orders/bulk-upload', { method: 'POST', body: { orders: clean, filename: uploadedFilename, uploadDate: $('uploadDate').value } });
+  // 原檔一起送（base64），資料庫保留一份，之後查問題用
+  let file = null;
+  if (uploadedFile && uploadedFile.buffer) {
+    const bytes = new Uint8Array(uploadedFile.buffer);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    file = { base64: btoa(bin), type: uploadedFile.type };
+  }
+  const res = await api('/api/orders/bulk-upload', { method: 'POST', body: { orders: clean, filename: uploadedFilename, uploadDate: $('uploadDate').value, file } });
   $('uploadBtn').disabled = false;
   $('uploadBtn').innerHTML = '&#128228; 確認上傳';
   if (!res.ok) {
@@ -570,6 +598,7 @@ $('uploadBtn').onclick = async () => {
   $('previewCard').style.display = 'none';
   $('fileName').textContent = '';
   uploadedFilename = '';
+  uploadedFile = null;
   fileInput.value = '';
   parsedRows = [];
   toast('上傳完成', 'success');
@@ -804,6 +833,7 @@ async function loadBatches() {
             </div>
           </div>
           <div style="display:flex;gap:8px;flex-shrink:0;">
+            ${b.hasFile ? `<button style="padding:6px 12px;font-size:12px;background:#fff;color:var(--ink);border:1.5px solid var(--border);border-radius:6px;cursor:pointer;" onclick="downloadBatchFile(${b.id}, ${escapeHtml(JSON.stringify(b.filename || 'upload.xlsx'))})">⬇ 原檔</button>` : ''}
             <button style="padding:6px 12px;font-size:12px;background:#fff;color:var(--ink);border:1.5px solid var(--border);border-radius:6px;cursor:pointer;" onclick="toggleBatchDetail(${b.id})">
               <span id="batch-arrow-${b.id}">▶</span> 明細
             </button>
@@ -827,6 +857,19 @@ async function loadBatches() {
       </div>
     `;
   }).join('');
+}
+
+// 下載這批上傳的原始 Excel（要帶登入憑證，不能直接用連結）
+async function downloadBatchFile(batchId, filename) {
+  try {
+    const res = await fetch(API_URL + '/api/orders/upload-batches/' + batchId + '/file', { headers: { Authorization: 'Bearer ' + (localStorage.getItem('token') || '') } });
+    if (!res.ok) { let msg = '下載失敗'; try { msg = (await res.json()).error || msg; } catch (e) {} toast(msg, 'error'); return; }
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement('a');
+    a.href = url; a.download = filename || 'upload.xlsx';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (e) { toast('下載失敗：' + e.message, 'error'); }
 }
 
 function toggleBatchDetail(id) {

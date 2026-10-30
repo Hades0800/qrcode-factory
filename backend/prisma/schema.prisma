@@ -216,8 +216,22 @@ model UploadBatch {
   uploadedAt     DateTime    @default(now())
   cancelledAt    DateTime?
   rows           UploadRow[]
+  file           UploadFile?
 
   @@index([uploadedAt])
+}
+
+/// 上傳的原始 Excel 檔（一批一檔）：瀏覽器只把認得的欄位送上來，原檔留著才查得到當時 Excel 長什麼樣
+/// 由後端啟動時自動建立（CREATE TABLE IF NOT EXISTS，見 routes/orders.js），不需手動 db:push
+model UploadFile {
+  id        Int         @id @default(autoincrement())
+  batchId   Int         @unique
+  batch     UploadBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  filename  String
+  mimeType  String?
+  size      Int
+  data      Bytes
+  createdAt DateTime    @default(now())
 }
 
 // 原始上傳資料（每一列 Excel 原封不動保存）
